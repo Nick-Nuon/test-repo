@@ -137,7 +137,7 @@ int enc_main(int argc, char **argv)
     const char *ciphername = NULL;
     char mbuf[sizeof(magic) - 1];
     OPTION_CHOICE o;
-    int bsize = BSIZE, verbose = 0, debug = 0, olb64 = 0, nosalt = 0;
+    int bsize = BSIZE, verbose = 0, debug = 0, nosalt = 0;
     int nl = 0;
     int enc = 1, printkey = 0, i, k;
     int base64 = 0, informat = FORMAT_BINARY, outformat = FORMAT_BINARY;
@@ -207,7 +207,7 @@ int enc_main(int argc, char **argv)
             goto end;
         case OPT_E:
             enc = 1;
-            break;
+            break;//
         case OPT_IN:
             infile = opt_arg();
             break;
@@ -245,7 +245,6 @@ int enc_main(int argc, char **argv)
             printkey = 2;
             break;
         case OPT_UPPER_A:
-            olb64 = 1;
             break;
         case OPT_UPPER_NL:
             nl = 1;
