@@ -83,7 +83,7 @@ const OPTIONS enc_options[] = {
     {"a", OPT_A, '-', "Base64 encode/decode, depending on encryption flag"},
     {"base64", OPT_A, '-', "Same as option -a"},
     {"A", OPT_UPPER_A, '-',
-     "Used with -[base64|a] to specify base64 buffer as a single line.Deprecated: now the default. The arg itself is kept for backward compatibility."},
+     "Used with -[base64|a] to specify base64 buffer as a single line.Deprecated: now the default. The arg itself is kept for backward compatibility but otherwise does nothing."},
     {"NL", OPT_UPPER_NL, '-',
      "Used with -[base64|a]. Takes line breaks into account to ensure compability with PEM and S/MIME format"},
 
