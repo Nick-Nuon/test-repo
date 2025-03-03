@@ -10,6 +10,24 @@
 // Include the test framework header
 #include "testutil.h"
 
+size_t maximal_binary_length_from_base64(const char *input, size_t length) {
+  size_t padding = 0;
+  if(length > 0) {
+    if(input[length - 1] == '=') {
+      padding++;
+      if(length > 1 && input[length - 2] == '=') {
+        padding++;
+      }
+    }
+  }
+  size_t actual_length = length - padding;
+  if(actual_length % 4 <= 1) {
+    return (actual_length / 4) * 3;
+  }
+  // When valid, remainder is 2 or 3, so subtract 1.
+  return (actual_length / 4) * 3 + (actual_length % 4) - 1;
+}
+
 // This test function always returns true
 static int test_decode_base64_cases_scalar_utf8(void)
 {
