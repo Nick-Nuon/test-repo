@@ -10,6 +10,9 @@
 // Include the test framework header
 #include "testutil.h"
 
+#define BUFMAX 0xa0000          /* Encode at most 640kB. */
+
+
 size_t maximal_binary_length_from_base64(const char *input, size_t length) {
   size_t padding = 0;
   if(length > 0) {
@@ -26,6 +29,109 @@ size_t maximal_binary_length_from_base64(const char *input, size_t length) {
   }
   // When valid, remainder is 2 or 3, so subtract 1.
   return (actual_length / 4) * 3 + (actual_length % 4) - 1;
+}
+
+// This function is not expected to be fast. Do not use in long loops.
+static inline int is_ascii_white_space(char c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f';
+}
+
+/* Generate `len` random octets */
+static unsigned char *genbytes(unsigned len)
+{
+    unsigned char *buf = NULL;
+
+    if (len > 0 && len <= BUFMAX && (buf = OPENSSL_malloc(len)) != NULL)
+        RAND_bytes(buf, len);
+
+    return buf;
+}
+
+/*
+ * Encode an octet string in base64, approximately `llen` bytes per line,
+ * with up to roughly `wscnt` additional space characters inserted at random
+ * before some of the base64 code points.
+ */
+static int encode(unsigned const char *buf, unsigned buflen, char *encoded,
+                  int trunc, unsigned llen, unsigned wscnt, BIO *mem)
+{
+    static const unsigned char b64[65] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    int pos = 0;
+    char nl = '\n';
+
+    /* Use a verbatim encoding when provided */
+    if (encoded != NULL) {
+        int elen = strlen(encoded);
+
+        return BIO_write(mem, encoded, elen) == elen;
+    }
+
+    /* Encode full 3-octet groups */
+    while (buflen > 2) {
+        unsigned long v = buf[0] << 16 | buf[1] << 8 | buf[2];
+
+        if (memoutws(mem, b64[v >> 18], wscnt, llen, &pos) == 0
+            || memoutws(mem, b64[(v >> 12) & 0x3f], wscnt, llen, &pos) == 0
+            || memoutws(mem, b64[(v >> 6) & 0x3f], wscnt, llen, &pos) == 0
+            || memoutws(mem, b64[v & 0x3f], wscnt, llen, &pos) == 0)
+            return 0;
+        buf += 3;
+        buflen -= 3;
+    }
+
+    /* Encode and pad final 1 or 2 octet group */
+    if (buflen == 2) {
+        unsigned long v = buf[0] << 8 | buf[1];
+
+        if (memoutws(mem, b64[(v >> 10) & 0x3f], wscnt, llen, &pos) == 0
+            || memoutws(mem, b64[(v >> 4) & 0x3f], wscnt, llen, &pos) == 0
+            || memoutws(mem, b64[(v & 0xf) << 2], wscnt, llen, &pos) == 0
+            || memoutws(mem, '=', wscnt, llen, &pos) == 0)
+            return 0;
+    } else if (buflen == 1) {
+        unsigned long v = buf[0];
+
+        if (memoutws(mem, b64[v >> 2], wscnt, llen, &pos) == 0
+            || memoutws(mem, b64[(v & 0x3) << 4], wscnt, llen, &pos) == 0
+            || memoutws(mem, '=', wscnt, llen, &pos) == 0
+            || memoutws(mem, '=', wscnt, llen, &pos) == 0)
+            return 0;
+    }
+
+    while (trunc-- > 0)
+        if (memoutws(mem, 'A', wscnt, llen, &pos) == 0)
+            return 0;
+
+    /* Terminate last line */
+    if (pos > 0 && BIO_write(mem, &nl, 1) != 1)
+        return 0;
+
+    return 1;
+}
+
+/* Append one base64 codepoint, adding newlines after every `llen` bytes */
+static int memout(BIO *mem, char c, int llen, int *pos)
+{
+    if (BIO_write(mem, &c, 1) != 1)
+        return 0;
+    if (++*pos == llen) {
+        *pos = 0;
+        c = '\n';
+        if (BIO_write(mem, &c, 1) != 1)
+            return 0;
+    }
+    return 1;
+}
+
+/* Encode and append one 6-bit slice, randomly prepending some whitespace */
+static int memoutws(BIO *mem, char c, unsigned wscnt, unsigned llen, int *pos)
+{
+    if (wscnt > 0
+        && (test_random() % llen) < wscnt
+        && memout(mem, ' ', llen, pos) == 0)
+        return 0;
+    return memout(mem, c, llen, pos);
 }
 
 // This test function always returns true
