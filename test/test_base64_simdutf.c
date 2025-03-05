@@ -9,9 +9,14 @@
 
 // Include the test framework header
 #include "testutil.h"
+#include <openssl/evp.h>
 
 #define BUFMAX 0xa0000          /* Encode at most 640kB. */
 
+/* Prototypes for encoding helper functions */
+static int memout(BIO *mem, char c, int llen, int *pos);
+static int memoutws(BIO *mem, char c, unsigned wscnt, unsigned llen, int *pos);
+int base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int length);
 
 size_t maximal_binary_length_from_base64(const char *input, size_t length) {
   size_t padding = 0;
@@ -45,6 +50,17 @@ static unsigned char *genbytes(unsigned len)
         RAND_bytes(buf, len);
 
     return buf;
+}
+
+
+/* Encode and append one 6-bit(2^6 = 64) slice, randomly prepending some whitespace */
+static int memoutws(BIO *mem, char c, unsigned wscnt, unsigned llen, int *pos)
+{
+    if (wscnt > 0
+        && (test_random() % llen) < wscnt
+        && memout(mem, ' ', llen, pos) == 0)
+        return 0;
+    return memout(mem, c, llen, pos);
 }
 
 /*
@@ -124,15 +140,6 @@ static int memout(BIO *mem, char c, int llen, int *pos)
     return 1;
 }
 
-/* Encode and append one 6-bit slice, randomly prepending some whitespace */
-static int memoutws(BIO *mem, char c, unsigned wscnt, unsigned llen, int *pos)
-{
-    if (wscnt > 0
-        && (test_random() % llen) < wscnt
-        && memout(mem, ' ', llen, pos) == 0)
-        return 0;
-    return memout(mem, c, llen, pos);
-}
 
 // This test function always returns true
 static int test_decode_base64_cases_scalar_utf8(void)
@@ -141,11 +148,56 @@ static int test_decode_base64_cases_scalar_utf8(void)
     return 1;
 }
 
+
+/*-------------------------------------------------------------
+ * Test Function: decode_base64_cases
+ *
+ *   For each test case (here, one case: {0x53, 0x53} equivalent to "SS"),
+ *   it computes the maximum binary length, decodes the Base64 tail using
+ *   base64_tail_decode, and asserts that the decoded byte count matches
+ *   the expected value (1) and that no error occurred.
+ *-------------------------------------------------------------*/
+static int test_decode_base64_cases(void)
+{
+    /* Define one test case: "SS" */
+    const char *cases[] = { "SS" };
+    const size_t expected_counts[] = { 1 };
+    size_t num_cases = sizeof(cases) / sizeof(cases[0]);
+
+    for (size_t i = 0; i < num_cases; i++) {
+        size_t len = strlen(cases[i]); /* Expecting len == 2 */
+        size_t max_len = maximal_binary_length_from_base64(cases[i], len);
+        unsigned char *buffer = OPENSSL_malloc(max_len);
+        if (buffer == NULL) {
+            TEST_error("Out of memory");
+            return 0;
+        }
+        /* Call base64_tail_decode with a NULL EVP_ENCODE_CTX.
+         * Our function returns the number of decoded bytes on success,
+         * or -1 on error.
+         */
+        int decoded = base64_tail_decode(NULL, (char *)buffer, cases[i], (int)len);
+        if (decoded < 0) {
+            TEST_error("base64_tail_decode error in test case %zu", i);
+            OPENSSL_free(buffer);
+            return 0;
+        }
+        if ((size_t)decoded != expected_counts[i]) {
+            TEST_error("Decoded byte count mismatch in test case %zu", i);
+            OPENSSL_free(buffer);
+            return 0;
+        }
+        OPENSSL_free(buffer);
+    }
+    return 1;
+}
+
+
 // The setup_tests() function is called by the test harness to register tests.
 int setup_tests(void)
 {
     // Register our sample test. The macro ADD_TEST() takes our test function.
-    ADD_TEST(test_decode_base64_cases_scalar_utf8);
+    ADD_TEST(test_decode_base64_cases);
 
     // Return 1 to indicate successful test setup.
     return 1;

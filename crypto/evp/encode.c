@@ -869,7 +869,7 @@ inline uint32_t swap_bytes(const uint32_t word) {
 
 // Returns 1 upon success. -1 upon error The destination buffer must be large enough.
 // This functions assumes that the padding (=) has been removed.
-static int base64_tail_decode(EVP_ENCODE_CTX *ctx,char *dst, const char *src, int length) {
+int base64_tail_decode(EVP_ENCODE_CTX *ctx,char *dst, const char *src, int length) {
   // This looks like 5 branches, but we expect the compiler to resolve this to a single branch:
   const uint8_t *to_base64 = to_base64_value;
   const uint32_t *d0 = d0;

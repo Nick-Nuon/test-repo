@@ -626,7 +626,7 @@ IF[{- !$disabled{tests} -}]
 
 SOURCE[test_base64_simdutf] = test_base64_simdutf.c
 INCLUDE[test_base64_simdutf] = ../include ../apps/include
-DEPEND[test_base64_simdutf] = ../libcrypto libtestutil.a
+DEPEND[test_base64_simdutf] = ../libcrypto libtestutil.a ../libcrypto.a
 
   SOURCE[bio_enc_test]=bio_enc_test.c
   INCLUDE[bio_enc_test]=../include ../apps/include
