@@ -12,6 +12,8 @@
 #include <openssl/evp.h>
 
 #define BUFMAX 0xa0000          /* Encode at most 640kB. */
+#define RED_TEXT(str) "\033[31m" str "\033[0m"
+
 
 /* Prototypes for encoding helper functions */
 static int memout(BIO *mem, char c, int llen, int *pos);
@@ -178,12 +180,14 @@ static int test_decode_base64_cases(void)
          */
         int decoded = base64_tail_decode(NULL, (char *)buffer, cases[i], (int)len);
         if (decoded < 0) {
-            TEST_error("base64_tail_decode error in test case %zu", i);
+            TEST_error(RED_TEXT("base64_tail_decode error in test case %zu"), i);
             OPENSSL_free(buffer);
             return 0;
         }
         if ((size_t)decoded != expected_counts[i]) {
-            TEST_error("Decoded byte count mismatch in test case %zu", i);
+            TEST_error(RED_TEXT("Decoded byte count mismatch: got %d, expected %zu"), decoded, expected_counts[i]);
+
+
             OPENSSL_free(buffer);
             return 0;
         }
