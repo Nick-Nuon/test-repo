@@ -932,13 +932,14 @@ int base64_tail_decode(EVP_ENCODE_CTX *ctx,char *dst, const char *src, int lengt
     if (idx != 4) {
       if (idx == 2) {
         uint32_t triple =
-            ((uint32_t)(buffer[0]) << 3 * 6) + ((uint32_t)(buffer[1]) << 2 * 6);        // if(match_system(endianness::BIG)) {
-          triple <<= 8;
-          memcpy(dst, &triple, 1);
+            ((uint32_t)(buffer[0]) << 3 * 6) + ((uint32_t)(buffer[1]) << 2 * 6);        
+        // if(match_system(endianness::BIG)) {
+        //   triple <<= 8;
+        //   memcpy(dst, &triple, 1);
         //  } //else {
-        //   triple = scalar::utf32::swap_bytes(triple);
-        //   triple >>= 8;
-        //   std::memcpy(dst, &triple, 1);
+          triple = swap_bytes(triple);
+          triple >>= 8;
+          memcpy(dst, &triple, 1);
         // }
         dst += 1;
 
@@ -947,12 +948,12 @@ int base64_tail_decode(EVP_ENCODE_CTX *ctx,char *dst, const char *src, int lengt
                           ((uint32_t)(buffer[1]) << 2 * 6) +
                           ((uint32_t)(buffer[2]) << 1 * 6);
         // if(match_system(endianness::BIG)) {
-          triple <<= 8;
-          memcpy(dst, &triple, 2);
+        //   triple <<= 8;
+        //   memcpy(dst, &triple, 2);
         // } else {
-          // triple = scalar::utf32::swap_bytes(triple);
-          // triple >>= 8;
-          // std::memcpy(dst, &triple, 2);
+          triple = swap_bytes(triple);
+          triple >>= 8;
+          memcpy(dst, &triple, 2);
         }
         dst += 2;
       } else if (idx == 1) {
