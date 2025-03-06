@@ -21,6 +21,12 @@ static int evp_encodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n);
 
+#define DEBUG 1  // Set to 1 to enable debug prints, 0 to disable
+#define RED_TEXT(str) "\033[31m" str "\033[0m"
+#define GREEN_TEXT(str) "\033[32m" str "\033[0m"
+
+
+
 #ifndef CHARSET_EBCDIC
 # define conv_bin2ascii(a, table)       ((table)[(a)&0x3f])
 #else
@@ -884,6 +890,17 @@ int base64_tail_decode(EVP_ENCODE_CTX *ctx,char *dst, const char *src, int lengt
   uint32_t x;
   size_t idx;
   uint8_t buffer[4];
+
+    #if DEBUG
+        printf( "\n");
+        printf(RED_TEXT("DEBUG: Starting base64_tail_decode\n"));
+        printf("DEBUG: Input (hex): ");
+        for (int i = 0; i < length; i++) {
+            printf(GREEN_TEXT("%02x "), (unsigned char)src[i]);
+        }
+        printf( "\n\n");
+    #endif
+
   while (1) {
     while (src + 4 <= srcend &&
            (x = d0[(uint8_t)(src[0])] | d1[(uint8_t)(src[1])] |
@@ -943,6 +960,17 @@ int base64_tail_decode(EVP_ENCODE_CTX *ctx,char *dst, const char *src, int lengt
         return -1;
       }
     //   return {SUCCESS, size_t(dst - dstinit)};
+            #if DEBUG
+                {
+                    int final_bytes = (size_t)(dst - dstinit);
+                    printf("DEBUG: Final output (hex): ");
+                    for (int j = 0; j < final_bytes; j++) {
+                        printf(GREEN_TEXT("%02x "), (unsigned char)dstinit[j]);
+                    }
+                    printf("\n\n");
+                }
+            #endif
+
           return (size_t)(dst - dstinit);
     }
 
