@@ -873,6 +873,52 @@ inline uint32_t swap_bytes(const uint32_t word) {
 }
 
 
+// This function is not expected to be fast. Do not use in long loops.
+static inline int is_ascii_white_space(char c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f';
+}
+
+int base64_to_binary_with_ws(EVP_ENCODE_CTX *ctx, char * input, size_t length, char* output) {
+    #if DEBUG
+        printf(GREEN_TEXT("DEBUG: Entered base64_to_binary_with_ws\n"));
+        printf(GREEN_TEXT("DEBUG: Input string: \"%s\", length: %d\n"), input, length);
+    #endif
+
+    while(length > 0 && is_ascii_white_space(input[length - 1])) {
+      length--;
+    }
+    size_t equallocation = length; // location of the first padding character if any
+    auto equalsigns = 0;
+    if(length > 0 && input[length - 1] == '=') {
+      length -= 1;
+      equalsigns++;
+      while(length > 0 && is_ascii_white_space(input[length - 1])) {
+        length--;
+      }
+      if(length > 0 && input[length - 1] == '=') {
+        equalsigns++;
+        length -= 1;
+      }
+    }
+    if(length == 0) {
+      if(equalsigns > 0) {
+        // return {INVALID_BASE64_CHARACTER, equallocation};
+        return -1;
+      }
+    //   return {SUCCESS, 0};
+      return 0;
+    }
+    int r = base64_tail_decode(ctx,output, input, length);
+    if(r > 1 && equalsigns > 0) {
+      // additional checks
+      if((r % 3 == 0) || ((r % 3) + 1 + equalsigns != 4)) {
+        // return {INVALID_BASE64_CHARACTER, equallocation};
+        return -1;
+      }
+    }
+    return r;
+  }
+
 // Returns 1 upon success. -1 upon error The destination buffer must be large enough.
 // This functions assumes that the padding (=) has been removed.
 int base64_tail_decode(EVP_ENCODE_CTX *ctx,char *dst, const char *src, int length) {
@@ -923,6 +969,7 @@ int base64_tail_decode(EVP_ENCODE_CTX *ctx,char *dst, const char *src, int lengt
       if (code <= 63) {
         idx++;
       } else if (code > 64) {
+        // INVALID_BASE64_CHARACTER
         return -1;
       } else {
         // We have a space or a newline. We ignore it.
