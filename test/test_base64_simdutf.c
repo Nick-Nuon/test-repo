@@ -13,6 +13,7 @@
 
 #define BUFMAX 0xa0000          /* Encode at most 640kB. */
 #define RED_TEXT(str) "\033[31m" str "\033[0m"
+#define GREEN_TEXT(str) "\033[32m" str "\033[0m"
 
 
 /* Prototypes for encoding helper functions */
@@ -36,11 +37,6 @@ size_t maximal_binary_length_from_base64(const char *input, size_t length) {
   }
   // When valid, remainder is 2 or 3, so subtract 1.
   return (actual_length / 4) * 3 + (actual_length % 4) - 1;
-}
-
-// This function is not expected to be fast. Do not use in long loops.
-static inline int is_ascii_white_space(char c) {
-    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f';
 }
 
 /* Generate `len` random octets */
@@ -161,13 +157,15 @@ static int test_decode_base64_cases_scalar_utf8(void)
  *-------------------------------------------------------------*/
 static int test_decode_base64_cases(void)
 {
+    printf(GREEN_TEXT("DEBUG: Entered Test\n"));
+
     /* Define one test case: "SS" */
     const char *cases[] = { "SS" };
     const size_t expected_counts[] = { 1 };
     size_t num_cases = sizeof(cases) / sizeof(cases[0]);
 
     for (size_t i = 0; i < num_cases; i++) {
-        size_t len = strlen(cases[i]); /* Expecting len == 2 */
+        size_t len = strlen(cases[i]); 
         size_t max_len = maximal_binary_length_from_base64(cases[i], len);
         unsigned char *buffer = OPENSSL_malloc(max_len);
         if (buffer == NULL) {
@@ -178,9 +176,11 @@ static int test_decode_base64_cases(void)
          * Our function returns the number of decoded bytes on success,
          * or -1 on error.
          */
-        int decoded = base64_tail_decode(NULL, (char *)buffer, cases[i], (int)len);
+        // TODO: the ctx isn't supposed to be NULL, come back to it when implementing the SRP alphabet/tables
+        // int decoded = base64_tail_decode_trim_end(NULL, (char *)buffer, cases[i], (int)len);
+        int decoded = base64_tail_decode_trim_end(NULL, cases[i], len, (char *)buffer);
         if (decoded < 0) {
-            TEST_error(RED_TEXT("base64_tail_decode error in test case %zu"), i);
+            TEST_error(RED_TEXT("base64_to_binary_with_ws error in test case %zu"), i);
             OPENSSL_free(buffer);
             return 0;
         }
