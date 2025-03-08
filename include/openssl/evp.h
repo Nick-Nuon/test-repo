@@ -919,6 +919,8 @@ int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned
                     char *out, int *outl);
 int EVP_DecodeBlock(unsigned char *t, const unsigned char *f, int n);
 int base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int length);
+int base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char * input, size_t length, char* output);
+
 
 # ifndef OPENSSL_NO_DEPRECATED_1_1_0
 #  define EVP_CIPHER_CTX_init(c)      EVP_CIPHER_CTX_reset(c)

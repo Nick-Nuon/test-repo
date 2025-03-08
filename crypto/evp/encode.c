@@ -878,9 +878,10 @@ static inline int is_ascii_white_space(char c) {
     return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f';
 }
 
-int base64_to_binary_with_ws(EVP_ENCODE_CTX *ctx, char * input, size_t length, char* output) {
+// removes padding and white spaces at the end
+int base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char * input, size_t length, char* output) {
     #if DEBUG
-        printf(GREEN_TEXT("DEBUG: Entered base64_to_binary_with_ws\n"));
+        printf("DEBUG: Entered base64_to_binary_with_ws\n");
         printf(GREEN_TEXT("DEBUG: Input string: \"%s\", length: %d\n"), input, length);
     #endif
 
@@ -916,6 +917,9 @@ int base64_to_binary_with_ws(EVP_ENCODE_CTX *ctx, char * input, size_t length, c
         return -1;
       }
     }
+    #if DEBUG
+        printf(GREEN_TEXT("DEBUG: Final r:%d\n"), r);
+    #endif
     return r;
   }
 
@@ -978,6 +982,9 @@ int base64_tail_decode(EVP_ENCODE_CTX *ctx,char *dst, const char *src, int lengt
     }
     if (idx != 4) {
       if (idx == 2) {
+        #if DEBUG
+            printf("idx == 2\n");
+        #endif
         uint32_t triple =
             ((uint32_t)(buffer[0]) << 3 * 6) + ((uint32_t)(buffer[1]) << 2 * 6);        
         // if(match_system(endianness::BIG)) {
@@ -990,7 +997,11 @@ int base64_tail_decode(EVP_ENCODE_CTX *ctx,char *dst, const char *src, int lengt
         // }
         dst += 1;
 
+
       } else if (idx == 3) {
+        #if DEBUG
+            printf("idx == 3\n");
+        #endif
         uint32_t triple = ((uint32_t)(buffer[0]) << 3 * 6) +
                           ((uint32_t)(buffer[1]) << 2 * 6) +
                           ((uint32_t)(buffer[2]) << 1 * 6);
@@ -1001,7 +1012,10 @@ int base64_tail_decode(EVP_ENCODE_CTX *ctx,char *dst, const char *src, int lengt
           triple = swap_bytes(triple);
           triple >>= 8;
           memcpy(dst, &triple, 2);
-        }
+        // }
+        #if DEBUG
+            printf("dst += 2\n");
+        #endif
         dst += 2;
       } else if (idx == 1) {
         // return {BASE64_INPUT_REMAINDER, size_t(dst - dstinit)};
@@ -1035,6 +1049,7 @@ int base64_tail_decode(EVP_ENCODE_CTX *ctx,char *dst, const char *src, int lengt
     // }
     dst += 3;
   }
+}
 
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n)
