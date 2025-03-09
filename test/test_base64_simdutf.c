@@ -138,15 +138,6 @@ static int memout(BIO *mem, char c, int llen, int *pos)
     return 1;
 }
 
-
-// This test function always returns true
-static int test_decode_base64_cases_scalar_utf8(void)
-{
-    // Simply return 1 to indicate success
-    return 1;
-}
-
-
 /*-------------------------------------------------------------
  * Test Function: decode_base64_cases
  *
@@ -196,12 +187,99 @@ static int test_decode_base64_cases(void)
     return 1;
 }
 
+static int test_complete_decode_base64_cases(void)
+{
+    printf(GREEN_TEXT("DEBUG: Entered complete_decode_base64_cases Test\n"));
+
+    /* Define one test case: expected decoded string "abcd", 
+       encoded string with extra whitespace and padding " Y\fW\tJ\njZ A=\r= " */
+    typedef struct {
+        const char *decoded;  /* expected output */
+        const char *encoded;  /* input Base64 string */
+    } case_pair;
+
+    case_pair cases[] = {
+        {"abcd", " Y\fW\tJ\njZ A=\r= "}
+    };
+    size_t num_cases = sizeof(cases) / sizeof(cases[0]);
+    size_t i;
+
+    /* First, test using base64_to_binary (normal decoding) */
+    for(i = 0; i < num_cases; i++) {
+        size_t enc_len = strlen(cases[i].encoded);
+        size_t max_len = maximal_binary_length_from_base64(cases[i].encoded, enc_len);
+        unsigned char *buffer = OPENSSL_malloc(max_len);
+        if(buffer == NULL) {
+            TEST_error("Out of memory");
+            return 0;
+        }
+        int r = base64_tail_decode_trim_end(NULL,cases[i].encoded, enc_len, (char *)buffer);
+        if(r < 0) {
+            TEST_error(RED_TEXT("base64_to_binary error in test case %zu"), i);
+            OPENSSL_free(buffer);
+            return 0;
+        }
+        if(r != strlen(cases[i].decoded)) {
+            TEST_error(RED_TEXT("Decoded byte count mismatch in test case %zu: got %zu, expected %zu"), 
+                       i, r, strlen(cases[i].decoded));
+            OPENSSL_free(buffer);
+            return 0;
+        }
+
+        for(size_t j = 0; j < r; j++) {
+            if(buffer[j] != cases[i].decoded[j]) {
+                TEST_error(RED_TEXT("Mismatch at index %zu in test case %zu: got %02x, expected %02x"), 
+                           j, i, (unsigned int)buffer[j], (unsigned int)cases[i].decoded[j]);
+                OPENSSL_free(buffer);
+                return 0;
+            }
+        }
+        OPENSSL_free(buffer);
+    }
+
+    printf(GREEN_TEXT(" --  "));
+
+    // /* Second, test using base64_to_binary_safe */
+    // for(i = 0; i < num_cases; i++) {
+    //     size_t enc_len = strlen(cases[i].encoded);
+    //     size_t max_len = maximal_binary_length_from_base64(cases[i].encoded, enc_len);
+    //     unsigned char *buffer = OPENSSL_malloc(max_len);
+    //     if(buffer == NULL) {
+    //         TEST_error("Out of memory");
+    //         return 0;
+    //     }
+    //     size_t out_len = max_len;
+    //     result r = base64_to_binary_safe(cases[i].encoded, enc_len, (char *)buffer, &out_len, 0);
+    //     if(r.error != SUCCESS) {
+    //         TEST_error(RED_TEXT("base64_to_binary_safe error in test case %zu"), i);
+    //         OPENSSL_free(buffer);
+    //         return 0;
+    //     }
+    //     if(out_len != strlen(cases[i].decoded)) {
+    //         TEST_error(RED_TEXT("Safe decoded byte count mismatch in test case %zu: got %zu, expected %zu"),
+    //                    i, out_len, strlen(cases[i].decoded));
+    //         OPENSSL_free(buffer);
+    //         return 0;
+    //     }
+    //     for(size_t j = 0; j < out_len; j++) {
+    //         if(buffer[j] != cases[i].decoded[j]) {
+    //             TEST_error(RED_TEXT("Safe mismatch at index %zu in test case %zu: got %02x, expected %02x"),
+    //                        j, i, (unsigned int)buffer[j], (unsigned int)cases[i].decoded[j]);
+    //             OPENSSL_free(buffer);
+    //             return 0;
+    //         }
+    //     }
+    //     OPENSSL_free(buffer);
+    // }
+    return 1;
+}
 
 // The setup_tests() function is called by the test harness to register tests.
 int setup_tests(void)
 {
     // Register our sample test. The macro ADD_TEST() takes our test function.
     ADD_TEST(test_decode_base64_cases);
+    ADD_TEST(test_complete_decode_base64_cases);
 
     // Return 1 to indicate successful test setup.
     return 1;
