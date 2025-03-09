@@ -923,133 +923,112 @@ int base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char * input, size_t length
     return r;
   }
 
-// Returns 1 upon success. -1 upon error The destination buffer must be large enough.
-// This functions assumes that the padding (=) has been removed.
-int base64_tail_decode(EVP_ENCODE_CTX *ctx,char *dst, const char *src, int length) {
-  // This looks like 5 branches, but we expect the compiler to resolve this to a single branch:
-  const uint8_t *to_base64 = to_base64_value;
-  const uint32_t *d0 = d0;
-  const uint32_t *d1 = d1;
-  const uint32_t *d2 = d2;
-  const uint32_t *d3 = d3;
+// Returns 1 upon success. -1 upon error. The destination buffer must be large enough.
+// This function assumes that the padding (=) has been removed.
+int base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int length) {
+    // Use local aliases for the global lookup tables.
+    const uint8_t *to_base64 = to_base64_value;
+    const uint32_t *p0 = d0;
+    const uint32_t *p1 = d1;
+    const uint32_t *p2 = d2;
+    const uint32_t *p3 = d3;
 
-  const char *srcend = src + length;
-  const char *srcinit = src;
-  const char *dstinit = dst;
+    const char *srcend = src + length;
+    const char *srcinit = src;
+    const char *dstinit = dst;
 
-  uint32_t x;
-  size_t idx;
-  uint8_t buffer[4];
+    uint32_t x;
+    size_t idx;
+    uint8_t buffer[4];
 
-    #if DEBUG
-        printf( "\n");
-        printf(RED_TEXT("DEBUG: Starting base64_tail_decode\n"));
-        printf("DEBUG: Input (hex): ");
-        for (int i = 0; i < length; i++) {
-            printf(GREEN_TEXT("%02x "), (unsigned char)src[i]);
+#if DEBUG
+    printf("\n");
+    printf(RED_TEXT("DEBUG: Starting base64_tail_decode\n"));
+    printf(GREEN_TEXT("DEBUG: Input string: \"%s\", length: %d\n"), src, length);
+    printf("DEBUG: Input (hex): ");
+    for (int i = 0; i < length; i++) {
+        printf(GREEN_TEXT("%02x "), (unsigned char)src[i]);
+    }
+    printf("\n\n");
+#endif
+
+    while (1) {
+#if DEBUG
+        printf("While (1) ");
+#endif
+        while (src + 4 <= srcend &&
+               (x = p0[(uint8_t)(src[0])] | p1[(uint8_t)(src[1])] |
+                    p2[(uint8_t)(src[2])] | p3[(uint8_t)(src[3])]) < 0x01FFFFFF) {
+#if DEBUG
+            printf("ping ");
+#endif
+            memcpy(dst, &x, 3); // Copy 3 bytes from the computed value.
+            dst += 3;
+            src += 4;
         }
-        printf( "\n\n");
-    #endif
-
-  while (1) {
-    while (src + 4 <= srcend &&
-           (x = d0[(uint8_t)(src[0])] | d1[(uint8_t)(src[1])] |
-                d2[(uint8_t)(src[2])] | d3[(uint8_t)(src[3])]) < 0x01FFFFFF) {   
-
-    // There is no mention of endianness in the immediate source code, I assume it is dealt with somewhere else
-      // if(match_system(endianness::BIG)) {
-      //   x = scalar::utf32::swap_bytes(x);
-      // }
-      memcpy(dst, &x, 3); // optimization opportunity: copy 4 bytes
-      dst += 3;
-      src += 4;
-    }
-    idx = 0;
-    // we need at least four characters.
-    while (idx < 4 && src < srcend) {
-      char c = *src;
-      uint8_t code = to_base64[(uint8_t)(c)];
-      buffer[idx] = (uint8_t)(code);
-      if (code <= 63) {
-        idx++;
-      } else if (code > 64) {
-        // INVALID_BASE64_CHARACTER
-        return -1;
-      } else {
-        // We have a space or a newline. We ignore it.
-      }
-      src++;
-    }
-    if (idx != 4) {
-      if (idx == 2) {
-        #if DEBUG
-            printf("idx == 2\n");
-        #endif
-        uint32_t triple =
-            ((uint32_t)(buffer[0]) << 3 * 6) + ((uint32_t)(buffer[1]) << 2 * 6);        
-        // if(match_system(endianness::BIG)) {
-        //   triple <<= 8;
-        //   memcpy(dst, &triple, 1);
-        //  } //else {
-          triple = swap_bytes(triple);
-          triple >>= 8;
-          memcpy(dst, &triple, 1);
-        // }
-        dst += 1;
-
-
-      } else if (idx == 3) {
-        #if DEBUG
-            printf("idx == 3\n");
-        #endif
-        uint32_t triple = ((uint32_t)(buffer[0]) << 3 * 6) +
-                          ((uint32_t)(buffer[1]) << 2 * 6) +
-                          ((uint32_t)(buffer[2]) << 1 * 6);
-        // if(match_system(endianness::BIG)) {
-        //   triple <<= 8;
-        //   memcpy(dst, &triple, 2);
-        // } else {
-          triple = swap_bytes(triple);
-          triple >>= 8;
-          memcpy(dst, &triple, 2);
-        // }
-        #if DEBUG
-            printf("dst += 2\n");
-        #endif
-        dst += 2;
-      } else if (idx == 1) {
-        // return {BASE64_INPUT_REMAINDER, size_t(dst - dstinit)};
-        return -1;
-      }
-    //   return {SUCCESS, size_t(dst - dstinit)};
-            #if DEBUG
-                {
-                    int final_bytes = (size_t)(dst - dstinit);
-                    printf("DEBUG: Final output (hex): ");
-                    for (int j = 0; j < final_bytes; j++) {
-                        printf(GREEN_TEXT("%02x "), (unsigned char)dstinit[j]);
-                    }
-                    printf("\n\n");
+        idx = 0;
+        // Gather up to four valid characters.
+        while (idx < 4 && src < srcend) {
+            char c = *src;
+            uint8_t code = to_base64[(uint8_t)(c)];
+            buffer[idx] = code;
+            if (code <= 63) {
+                idx++;
+            } else if (code > 64) {
+                // INVALID_BASE64_CHARACTER
+                return -1;
+            } else {
+                // A whitespace or newline; ignore it.
+            }
+            src++;
+        }
+        if (idx != 4) {
+            if (idx == 2) {
+#if DEBUG
+                printf("idx == 2\n");
+#endif
+                uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) + ((uint32_t)(buffer[1]) << (2 * 6));
+                // For little-endian system: swap and shift.
+                triple = swap_bytes(triple);
+                triple >>= 8;
+                memcpy(dst, &triple, 1);
+                dst += 1;
+            } else if (idx == 3) {
+#if DEBUG
+                printf("idx == 3\n");
+#endif
+                uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) +
+                                  ((uint32_t)(buffer[1]) << (2 * 6)) +
+                                  ((uint32_t)(buffer[2]) << (1 * 6));
+                triple = swap_bytes(triple);
+                triple >>= 8;
+                memcpy(dst, &triple, 2);
+                dst += 2;
+            } else if (idx == 1) {
+                return -1;
+            }
+#if DEBUG
+            {
+                int final_bytes = (int)(dst - dstinit);
+                printf("DEBUG: Final output (hex): ");
+                for (int j = 0; j < final_bytes; j++) {
+                    printf(GREEN_TEXT("%02x "), (unsigned char)dstinit[j]);
                 }
-            #endif
-
-          return (size_t)(dst - dstinit);
+                printf("\n\n");
+            }
+#endif
+            return (int)(dst - dstinit);
+        }
+        uint32_t triple =
+            ((uint32_t)(buffer[0]) << (3 * 6)) + ((uint32_t)(buffer[1]) << (2 * 6)) +
+            ((uint32_t)(buffer[2]) << (1 * 6)) + ((uint32_t)(buffer[3]) << (0 * 6));
+        triple = swap_bytes(triple);
+        triple >>= 8;
+        memcpy(dst, &triple, 3);
+        dst += 3;
     }
-
-    uint32_t triple =
-        ((uint32_t)((buffer)[0]) << 3 * 6) + ((uint32_t)((buffer)[1]) << 2 * 6) +
-        ((uint32_t)((buffer)[2]) << 1 * 6) + ((uint32_t)((buffer)[3]) << 0 * 6); 
-    // if(match_system(endianness::BIG)) {
-    //   triple <<= 8;
-    //   std::memcpy(dst, &triple, 3);
-    // } else {
-      triple = swap_bytes(triple);
-      triple >>= 8;
-      memcpy(dst, &triple, 3);
-    // }
-    dst += 3;
-  }
 }
+
 
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n)
