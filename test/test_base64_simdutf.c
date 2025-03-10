@@ -16,6 +16,41 @@
 #define GREEN_TEXT(str) "\033[32m" str "\033[0m"
 
 
+/* Example: ASSERT_EQUAL for integers */
+#define ASSERT_EQUAL_INT(actual, expected) do {                      \
+    if ((actual) != (expected)) {                                      \
+        TEST_error(RED_TEXT("Assertion failed: %s != %s, got %d, expected %d"), \
+                   #actual, #expected, (int)(actual), (int)(expected));\
+        return 0;                                                    \
+    }                                                                \
+} while(0)
+
+/* ASSERT_EQUAL for size_t values */
+#define ASSERT_EQUAL_SIZE(actual, expected) do {                     \
+    if ((actual) != (expected)) {                                      \
+        TEST_error(RED_TEXT("Assertion failed: %s != %s, got %zu, expected %zu"), \
+                   #actual, #expected, (actual), (expected));         \
+        return 0;                                                    \
+    }                                                                \
+} while(0)
+
+/* ASSERT_STREQ: compare two null-terminated strings */
+#define ASSERT_STREQ(actual, expected) do {                          \
+    if (strcmp((actual), (expected)) != 0) {                           \
+        TEST_error(RED_TEXT("Assertion failed: strings \"%s\" != \"%s\""), (actual), (expected)); \
+        return 0;                                                    \
+    }                                                                \
+} while(0)
+
+/* ASSERT_EQUAL_HEX: for comparing two byte values with an index context */
+#define ASSERT_EQUAL_HEX(idx, actual, expected) do {                 \
+    if ((unsigned int)(actual) != (unsigned int)(expected)) {          \
+        TEST_error(RED_TEXT("Mismatch at index %zu: got %02x, expected %02x"), \
+                   (idx), (unsigned int)(actual), (unsigned int)(expected)); \
+        return 0;                                                    \
+    }                                                                \
+} while(0)
+
 /* Prototypes for encoding helper functions */
 static int memout(BIO *mem, char c, int llen, int *pos);
 static int memoutws(BIO *mem, char c, unsigned wscnt, unsigned llen, int *pos);
@@ -187,16 +222,16 @@ static int test_decode_base64_cases(void)
     return 1;
 }
 
+/* Define one test case: expected decoded string "abcd", 
+    encoded string with extra whitespace and padding " Y\fW\tJ\njZ A=\r= " */
+typedef struct {
+    const char *decoded;  /* expected output */
+    const char *encoded;  /* input Base64 string */
+} case_pair;
+
 static int test_complete_decode_base64_cases(void)
 {
     printf(GREEN_TEXT("DEBUG: Entered complete_decode_base64_cases Test\n"));
-
-    /* Define one test case: expected decoded string "abcd", 
-       encoded string with extra whitespace and padding " Y\fW\tJ\njZ A=\r= " */
-    typedef struct {
-        const char *decoded;  /* expected output */
-        const char *encoded;  /* input Base64 string */
-    } case_pair;
 
     case_pair cases[] = {
         {"abcd", " Y\fW\tJ\njZ A=\r= "}
@@ -274,12 +309,71 @@ static int test_complete_decode_base64_cases(void)
     return 1;
 }
 
+static int test_encode_base64_cases(void)
+{
+    printf(GREEN_TEXT("DEBUG: Entered encode_base64_cases Test\n"));
+
+    /* Define test cases as an array of case_pair.
+       These mirror your C++ test cases.
+    */
+    case_pair cases[] = {
+        { "Hello, World!", "SGVsbG8sIFdvcmxkIQ==" },
+        { "GeeksforGeeks", "R2Vla3Nmb3JHZWVrcw==" },
+        { "123456", "MTIzNDU2" },
+        { "Base64 Encoding", "QmFzZTY0IEVuY29kaW5n" },
+        { "!R~J2jL&mI]O)3=c:G3Mo)oqmJdxoprTZDyxEvU0MI.'Ww5H{G>}y;;+B8E_Ah,Ed[ PdBqY'^N>O$4:7LK1<:|7)btV@|{YWR$$Er59-XjVrFl4L}~yzTEd4'E[@k",
+          "IVJ+SjJqTCZtSV1PKTM9YzpHM01vKW9xbUpkeG9wclRaRHl4RXZVME1JLidXdzVIe0c+fXk7OytCOEVfQWgsRWRbIFBkQnFZJ15OPk8kNDo3TEsxPDp8NylidFZAfHtZV1IkJEVyNTktWGpWckZsNEx9fnl6VEVkNCdFW0Br" }
+    };
+    size_t num_cases = sizeof(cases) / sizeof(cases[0]);
+    size_t i, j;
+
+    /* --- Part 2: Test base64_to_binary decoding (normal) --- */
+    printf(GREEN_TEXT(" -- Testing base64_to_binary decoding (normal)\n"));
+    for (i = 0; i < num_cases; i++) {
+        size_t enc_len = strlen(cases[i].encoded);
+        size_t expected_dec_len = strlen(cases[i].decoded);
+        size_t bufsize = maximal_binary_length_from_base64(cases[i].encoded, enc_len);
+        char *buffer = OPENSSL_malloc(bufsize);
+        if (!buffer) {
+            TEST_error("Out of memory in decoding test case %zu", i);
+            return 0;
+        }
+        int r = base64_tail_decode_trim_end(NULL,cases[i].encoded, enc_len, (char *)buffer);
+        if(r < 0) {
+            TEST_error(RED_TEXT("base64_to_binary error in test case %zu"), i);
+            OPENSSL_free(buffer);
+            return 0;
+        }
+        if(r != strlen(cases[i].decoded)) {
+            TEST_error(RED_TEXT("Decoded byte count mismatch in test case %zu: got %zu, expected %zu"), 
+                       i, r, strlen(cases[i].decoded));
+            OPENSSL_free(buffer);
+            return 0;
+        }
+
+        for(size_t j = 0; j < r; j++) {
+            if(buffer[j] != cases[i].decoded[j]) {
+                TEST_error(RED_TEXT("Mismatch at index %zu in test case %zu: got %02x, expected %02x"), 
+                           j, i, (unsigned int)buffer[j], (unsigned int)cases[i].decoded[j]);
+                OPENSSL_free(buffer);
+                return 0;
+            }
+        }
+        OPENSSL_free(buffer);
+    }
+
+    return 1;
+}
+
+
+
 // The setup_tests() function is called by the test harness to register tests.
 int setup_tests(void)
 {
     // Register our sample test. The macro ADD_TEST() takes our test function.
     ADD_TEST(test_decode_base64_cases);
     ADD_TEST(test_complete_decode_base64_cases);
+    ADD_TEST(test_encode_base64_cases);
 
     // Return 1 to indicate successful test setup.
     return 1;
