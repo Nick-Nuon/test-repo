@@ -920,6 +920,7 @@ int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned
 int EVP_DecodeBlock(unsigned char *t, const unsigned char *f, int n);
 int base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int length);
 int base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char * input, size_t length, char* output);
+int tail_encode_base64(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen); 
 
 
 # ifndef OPENSSL_NO_DEPRECATED_1_1_0
