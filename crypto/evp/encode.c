@@ -933,7 +933,7 @@ inline uint32_t swap_bytes(const uint32_t word) {
 
 // Returns the number of bytes written. The destination buffer must be large
 // enough. It will add padding (=) if needed.
-size_t tail_encode_base64(EVP_ENCODE_CTX *ctx,*dst, const char *src, size_t srclen) {
+size_t tail_encode_base64(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen) {
     // This looks like 3 branches, but we expect the compiler to resolve this to a single branch:
     const char *e0 = base64_e0;
     const char *e1 = base64_e1;
