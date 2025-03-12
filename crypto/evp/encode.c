@@ -931,49 +931,62 @@ inline uint32_t swap_bytes(const uint32_t word) {
          ((word << 24) & 0xff000000); // byte 0 to byte 3
 }
 
-// Returns the number of bytes written. The destination buffer must be large
-// enough. It will add padding (=) if needed.
-size_t tail_encode_base64(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen) {
-    // This looks like 3 branches, but we expect the compiler to resolve this to a single branch:
+// // Returns the number of bytes written. The destination buffer must be large
+// // enough. It will add padding (=) if needed.
+//  
+int tail_encode_base64(EVP_ENCODE_CTX *ctx, char *dst, const char *src, size_t srclen) {
+       // This looks like 3 branches, but we expect the compiler to resolve this to a single branch:
+    printf(RED_TEXT("DEBUG: Entering tail_encode_base64\n"));
     const char *e0 = base64_e0;
     const char *e1 = base64_e1;
     const char *e2 = base64_e2;
     char *out = dst;
     size_t i = 0;
     uint8_t t1, t2, t3;
+
+    printf(RED_TEXT("DEBUG: Source length = %zu\n"), srclen);
     for (; i + 2 < srclen; i += 3) {
-      t1 = (uint8_t)(src[i]);
-      t2 = (uint8_t)(src[i + 1]);
-      t3 = (uint8_t)(src[i + 2]);
-      *out++ = e0[t1];
-      *out++ = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
-      *out++ = e1[((t2 & 0x0F) << 2) | ((t3 >> 6) & 0x03)];
-      *out++ = e2[t3];
+        t1 = (uint8_t)src[i];
+        t2 = (uint8_t)src[i + 1];
+        t3 = (uint8_t)src[i + 2];
+        printf(RED_TEXT("DEBUG: Processing bytes at index %zu: %02x %02x %02x\n"), i, t1, t2, t3);
+
+        *out++ = e0[t1];
+        *out++ = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
+        *out++ = e1[((t2 & 0x0F) << 2) | ((t3 >> 6) & 0x03)];
+        *out++ = e2[t3];
+
+        printf(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst), dst);
     }
-    switch (srclen - i) {
+    size_t remaining = srclen - i;
+    printf(RED_TEXT("DEBUG: Remaining bytes = %zu\n"), remaining);
+    switch (remaining) {
     case 0:
-      break;
+        break;
     case 1:
-      t1 = (uint8_t)(src[i]);
-      *out++ = e0[t1];
-      *out++ = e1[(t1 & 0x03) << 4];
-    //   if((options & base64_url) == 0) {
+        t1 = (uint8_t)src[i];
+        printf(RED_TEXT("DEBUG: Processing last byte at index %zu: %02x\n"), i, t1);
+        *out++ = e0[t1];
+        *out++ = e1[(t1 & 0x03) << 4];
         *out++ = '=';
         *out++ = '=';
-    //   }
-      break;
-    default: /* case 2 */
-      t1 = (uint8_t)(src[i]);
-      t2 = (uint8_t)(src[i + 1]);
-      *out++ = e0[t1];
-      *out++ = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
-      *out++ = e2[(t2 & 0x0F) << 2];
-    //   if((options & base64_url) == 0) {
+        printf(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst), dst);
+        break;
+    case 2:
+        t1 = (uint8_t)src[i];
+        t2 = (uint8_t)src[i + 1];
+        printf(RED_TEXT("DEBUG: Processing last 2 bytes at index %zu: %02x %02x\n"), i, t1, t2);
+        *out++ = e0[t1];
+        *out++ = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
+        *out++ = e2[(t2 & 0x0F) << 2];
         *out++ = '=';
-    //   }
+        printf(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst), dst);
+        break;
     }
-    return (size_t)(out - dst);
-  }
+    int total = (int)(out - dst);
+    printf(RED_TEXT("DEBUG: Exiting tail_encode_base64, total output bytes = %d\n"), total);
+    return total;
+}
 
 
 // This function is not expected to be fast. Do not use in long loops.
@@ -982,7 +995,7 @@ static inline int is_ascii_white_space(char c) {
 }
 
 // removes padding and white spaces at the end
-int base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char * input, size_t length, char* output) {
+int base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char* output, char * input, size_t length) {
     #if DEBUG
         printf("DEBUG: Entered base64_to_binary_with_ws\n");
         printf(GREEN_TEXT("DEBUG: Input string: \"%s\", length: %d\n"), input, length);

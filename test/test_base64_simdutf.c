@@ -51,10 +51,23 @@
     }                                                                \
 } while(0)
 
+#define ASSERT_TRUE(cond) do {                        \
+    if (!(cond)) {                                    \
+        TEST_error(RED_TEXT("Assertion failed: %s is false at %s:%d"), \
+                   #cond, __FILE__, __LINE__);          \
+        return 0;                                   \
+    }                                               \
+} while(0)
+
+
 /* Prototypes for encoding helper functions */
 static int memout(BIO *mem, char c, int llen, int *pos);
 static int memoutws(BIO *mem, char c, unsigned wscnt, unsigned llen, int *pos);
 int base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int length);
+
+size_t base64_length_from_binary(size_t length) {
+    return (length + 2)/3 * 4; // We use padding to make the length a multiple of 4.
+  }
 
 size_t maximal_binary_length_from_base64(const char *input, size_t length) {
   size_t padding = 0;
@@ -96,69 +109,6 @@ static int memoutws(BIO *mem, char c, unsigned wscnt, unsigned llen, int *pos)
     return memout(mem, c, llen, pos);
 }
 
-/*
- * Encode an octet string in base64, approximately `llen` bytes per line,
- * with up to roughly `wscnt` additional space characters inserted at random
- * before some of the base64 code points.
- */
-static int encode(unsigned const char *buf, unsigned buflen, char *encoded,
-                  int trunc, unsigned llen, unsigned wscnt, BIO *mem)
-{
-    static const unsigned char b64[65] =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    int pos = 0;
-    char nl = '\n';
-
-    /* Use a verbatim encoding when provided */
-    if (encoded != NULL) {
-        int elen = strlen(encoded);
-
-        return BIO_write(mem, encoded, elen) == elen;
-    }
-
-    /* Encode full 3-octet groups */
-    while (buflen > 2) {
-        unsigned long v = buf[0] << 16 | buf[1] << 8 | buf[2];
-
-        if (memoutws(mem, b64[v >> 18], wscnt, llen, &pos) == 0
-            || memoutws(mem, b64[(v >> 12) & 0x3f], wscnt, llen, &pos) == 0
-            || memoutws(mem, b64[(v >> 6) & 0x3f], wscnt, llen, &pos) == 0
-            || memoutws(mem, b64[v & 0x3f], wscnt, llen, &pos) == 0)
-            return 0;
-        buf += 3;
-        buflen -= 3;
-    }
-
-    /* Encode and pad final 1 or 2 octet group */
-    if (buflen == 2) {
-        unsigned long v = buf[0] << 8 | buf[1];
-
-        if (memoutws(mem, b64[(v >> 10) & 0x3f], wscnt, llen, &pos) == 0
-            || memoutws(mem, b64[(v >> 4) & 0x3f], wscnt, llen, &pos) == 0
-            || memoutws(mem, b64[(v & 0xf) << 2], wscnt, llen, &pos) == 0
-            || memoutws(mem, '=', wscnt, llen, &pos) == 0)
-            return 0;
-    } else if (buflen == 1) {
-        unsigned long v = buf[0];
-
-        if (memoutws(mem, b64[v >> 2], wscnt, llen, &pos) == 0
-            || memoutws(mem, b64[(v & 0x3) << 4], wscnt, llen, &pos) == 0
-            || memoutws(mem, '=', wscnt, llen, &pos) == 0
-            || memoutws(mem, '=', wscnt, llen, &pos) == 0)
-            return 0;
-    }
-
-    while (trunc-- > 0)
-        if (memoutws(mem, 'A', wscnt, llen, &pos) == 0)
-            return 0;
-
-    /* Terminate last line */
-    if (pos > 0 && BIO_write(mem, &nl, 1) != 1)
-        return 0;
-
-    return 1;
-}
-
 /* Append one base64 codepoint, adding newlines after every `llen` bytes */
 static int memout(BIO *mem, char c, int llen, int *pos)
 {
@@ -172,6 +122,7 @@ static int memout(BIO *mem, char c, int llen, int *pos)
     }
     return 1;
 }
+
 
 /*-------------------------------------------------------------
  * Test Function: decode_base64_cases
@@ -204,7 +155,7 @@ static int test_decode_base64_cases(void)
          */
         // TODO: the ctx isn't supposed to be NULL, come back to it when implementing the SRP alphabet/tables
         // int decoded = base64_tail_decode_trim_end(NULL, (char *)buffer, cases[i], (int)len);
-        int decoded = base64_tail_decode_trim_end(NULL, cases[i], len, (char *)buffer);
+        int decoded = base64_tail_decode_trim_end(NULL, (char *)buffer, cases[i], len);
         if (decoded < 0) {
             TEST_error(RED_TEXT("base64_to_binary_with_ws error in test case %zu"), i);
             OPENSSL_free(buffer);
@@ -248,7 +199,7 @@ static int test_complete_decode_base64_cases(void)
             TEST_error("Out of memory");
             return 0;
         }
-        int r = base64_tail_decode_trim_end(NULL,cases[i].encoded, enc_len, (char *)buffer);
+        int r = base64_tail_decode_trim_end(NULL, (char *)buffer,cases[i].encoded, enc_len);
         if(r < 0) {
             TEST_error(RED_TEXT("base64_to_binary error in test case %zu"), i);
             OPENSSL_free(buffer);
@@ -271,41 +222,6 @@ static int test_complete_decode_base64_cases(void)
         }
         OPENSSL_free(buffer);
     }
-
-    printf(GREEN_TEXT(" --  "));
-
-    // /* Second, test using base64_to_binary_safe */
-    // for(i = 0; i < num_cases; i++) {
-    //     size_t enc_len = strlen(cases[i].encoded);
-    //     size_t max_len = maximal_binary_length_from_base64(cases[i].encoded, enc_len);
-    //     unsigned char *buffer = OPENSSL_malloc(max_len);
-    //     if(buffer == NULL) {
-    //         TEST_error("Out of memory");
-    //         return 0;
-    //     }
-    //     size_t out_len = max_len;
-    //     result r = base64_to_binary_safe(cases[i].encoded, enc_len, (char *)buffer, &out_len, 0);
-    //     if(r.error != SUCCESS) {
-    //         TEST_error(RED_TEXT("base64_to_binary_safe error in test case %zu"), i);
-    //         OPENSSL_free(buffer);
-    //         return 0;
-    //     }
-    //     if(out_len != strlen(cases[i].decoded)) {
-    //         TEST_error(RED_TEXT("Safe decoded byte count mismatch in test case %zu: got %zu, expected %zu"),
-    //                    i, out_len, strlen(cases[i].decoded));
-    //         OPENSSL_free(buffer);
-    //         return 0;
-    //     }
-    //     for(size_t j = 0; j < out_len; j++) {
-    //         if(buffer[j] != cases[i].decoded[j]) {
-    //             TEST_error(RED_TEXT("Safe mismatch at index %zu in test case %zu: got %02x, expected %02x"),
-    //                        j, i, (unsigned int)buffer[j], (unsigned int)cases[i].decoded[j]);
-    //             OPENSSL_free(buffer);
-    //             return 0;
-    //         }
-    //     }
-    //     OPENSSL_free(buffer);
-    // }
     return 1;
 }
 
@@ -327,6 +243,41 @@ static int test_encode_base64_cases(void)
     size_t num_cases = sizeof(cases) / sizeof(cases[0]);
     size_t i, j;
 
+        /* --- Part 1: Test binary => base64 (normal) --- */
+        printf(GREEN_TEXT(" -- Testing base64_to_binary decoding (normal)\n"));
+        for (i = 0; i < num_cases; i++) {
+            size_t enc_len = strlen(cases[i].encoded);
+            size_t expected_dec_len = strlen(cases[i].decoded);
+            size_t bufsize = base64_length_from_binary(strlen(cases[i].decoded));
+            char *buffer = OPENSSL_malloc(bufsize);
+            if (!buffer) {
+                TEST_error("Out of memory in decoding test case %zu", i);
+                return 0;
+            }
+            int r = tail_encode_base64(NULL, (char *)buffer,cases[i].decoded, strlen(cases[i].decoded));
+            if(r < 0) {
+                TEST_error(RED_TEXT("tail_encode_base64 error in test case %zu"), i);
+                OPENSSL_free(buffer);
+                return 0;
+            }
+            if(r != strlen(cases[i].encoded)) {
+                TEST_error(RED_TEXT("Encoded byte count mismatch in test case %zu: got %zu, expected %zu"), 
+                           i, r, strlen(cases[i].encoded));
+                OPENSSL_free(buffer);
+                return 0;
+            }
+    
+            for(size_t j = 0; j < r; j++) {
+                if(buffer[j] != cases[i].encoded[j]) {
+                    TEST_error(RED_TEXT("Encoded: Mismatch at index %zu in test case %zu: got %02x, expected %02x"), 
+                               j, i, (unsigned int)buffer[j], (unsigned int)cases[i].encoded[j]);
+                    OPENSSL_free(buffer);
+                    return 0;
+                }
+            }
+            OPENSSL_free(buffer);
+        }
+
     /* --- Part 2: Test base64_to_binary decoding (normal) --- */
     printf(GREEN_TEXT(" -- Testing base64_to_binary decoding (normal)\n"));
     for (i = 0; i < num_cases; i++) {
@@ -338,7 +289,7 @@ static int test_encode_base64_cases(void)
             TEST_error("Out of memory in decoding test case %zu", i);
             return 0;
         }
-        int r = base64_tail_decode_trim_end(NULL,cases[i].encoded, enc_len, (char *)buffer);
+        int r = base64_tail_decode_trim_end(NULL, (char *)buffer,cases[i].encoded, enc_len);
         if(r < 0) {
             TEST_error(RED_TEXT("base64_to_binary error in test case %zu"), i);
             OPENSSL_free(buffer);
@@ -353,7 +304,7 @@ static int test_encode_base64_cases(void)
 
         for(size_t j = 0; j < r; j++) {
             if(buffer[j] != cases[i].decoded[j]) {
-                TEST_error(RED_TEXT("Mismatch at index %zu in test case %zu: got %02x, expected %02x"), 
+                TEST_error(RED_TEXT("Decoded:Mismatch at index %zu in test case %zu: got %02x, expected %02x"), 
                            j, i, (unsigned int)buffer[j], (unsigned int)cases[i].decoded[j]);
                 OPENSSL_free(buffer);
                 return 0;
@@ -365,8 +316,6 @@ static int test_encode_base64_cases(void)
     return 1;
 }
 
-
-
 // The setup_tests() function is called by the test harness to register tests.
 int setup_tests(void)
 {
@@ -374,6 +323,7 @@ int setup_tests(void)
     ADD_TEST(test_decode_base64_cases);
     ADD_TEST(test_complete_decode_base64_cases);
     ADD_TEST(test_encode_base64_cases);
+    // ADD_TEST(test_roundtrip_base64);
 
     // Return 1 to indicate successful test setup.
     return 1;
