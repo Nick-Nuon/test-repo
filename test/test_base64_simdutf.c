@@ -123,7 +123,6 @@ static int memout(BIO *mem, char c, int llen, int *pos)
     return 1;
 }
 
-
 /*-------------------------------------------------------------
  * Test Function: decode_base64_cases
  *
@@ -316,6 +315,155 @@ static int test_encode_base64_cases(void)
     return 1;
 }
 
+/*
+ * add_simple_spaces:
+ * Inserts a given number of spaces at unique random positions into the input array.
+ *
+ * Parameters:
+ *   v              - The original array of characters.
+ *   v_len          - The number of elements in the array.
+ *   number_of_spaces - How many spaces to insert.
+ *   seed           - Pointer to an unsigned int used as the random seed.
+ *   result_len     - Output pointer that receives the length of the resulting array.
+ *
+ * Returns:
+ *   A newly allocated array containing the original elements plus extra spaces.
+ *   The caller is responsible for freeing the returned array using OPENSSL_free.
+ */
+char *add_simple_spaces(const char *v, size_t v_len, size_t number_of_spaces,
+                        //   unsigned int *seed, size_t *result_len) {
+                        unsigned int *seed) {
+    /* If there are no spaces to add or the array is empty, return a copy of v */
+    if (number_of_spaces == 0 || v_len == 0) {
+        char *copy = OPENSSL_malloc(v_len + 1);
+        if (copy) {
+            memcpy(copy, v, v_len);
+            copy[v_len] = '\0';
+        }
+        // if (result_len)
+        //     *result_len = v_len;
+        return copy;
+    }
+
+    size_t total = v_len + number_of_spaces;
+    /* Allocate a boolean array (using char) to mark positions for inserted spaces.
+       Initialize all positions to 0. */
+    char *positions = OPENSSL_zalloc(total * sizeof(char));
+    if (!positions)
+        return NULL;
+
+    size_t i;
+    /* Generate unique random positions for extra spaces */
+    for (i = 0; i < number_of_spaces; i++) {
+        size_t pos = rand_r(seed) % total;
+        while (positions[pos]) {
+            pos = rand_r(seed) % total;
+        }
+        positions[pos] = 1;  /* Mark this position to hold a space */
+    }
+
+    /* Allocate the result array */
+    char *result = OPENSSL_malloc(total + 1);
+    if (!result) {
+        OPENSSL_free(positions);
+        return NULL;
+    }
+
+    size_t pos_idx = 0;  /* Index for traversing the original array */
+    for (i = 0; i < total; i++) {
+        if (positions[i]) {
+            result[i] = ' ';
+        } else {
+            result[i] = v[pos_idx++];
+        }
+    }
+    result[total] = '\0';
+    // if (result_len)
+    //     *result_len = total;
+
+    OPENSSL_free(positions);
+    return result;
+}
+
+static int test_roundtrip_base64_with_lots_of_spaces(void) {
+    size_t len, trial, i;
+    unsigned int seed = 12345;  /* Fixed seed for reproducibility */
+    printf(GREEN_TEXT("DEBUG: Entered test_roundtrip_base64_with_lots_of_spaces\n"));
+
+    for (len = 0; len < 2048; len++) {
+        printf("DEBUG: Processing length = %zu\n", len);
+
+        /* Allocate source binary data */
+        char *source = (len > 0) ? OPENSSL_malloc(len) : NULL;
+        if (len > 0 && !source) {
+            TEST_error("Out of memory for source of length %zu", len);
+            return 0;
+        }
+        /* Fill source with random bytes */
+        for (i = 0; i < len; i++) {
+            source[i] = (char)(rand_r(&seed) % 256);
+        }
+        if (len > 0)
+            printf("DEBUG: Source data allocated (first 10 bytes):");
+        for (i = 0; i < len && i < 10; i++) {
+            printf(" %02x", (unsigned char)source[i]);
+        }
+        printf("\n");
+
+        /* Allocate buffer for Base64 conversion */
+        size_t b64_len_expected = base64_length_from_binary(len);
+        printf("DEBUG: Expected Base64 length = %zu\n", b64_len_expected);
+        char *buffer = OPENSSL_malloc(b64_len_expected + 1);
+        if (!buffer) {
+            TEST_error("Out of memory for Base64 buffer for length %zu", len);
+            if (source) OPENSSL_free(source);
+            return 0;
+        }
+        size_t s = tail_encode_base64(NULL, buffer, source, len);
+        // Optionally, null-termination is handled by tail_encode_base64 if needed.
+        buffer[s] = '\0';
+        printf("DEBUG: Base64 encoded result (length %zu): \"%s\"\n", s, buffer);
+
+        /* Insert extra spaces */
+        size_t spaces_to_add = 5 + 2 * len;
+        char *buffer_with_spaces = add_simple_spaces(buffer, s, spaces_to_add, &seed);
+        OPENSSL_free(buffer);
+        if (!buffer_with_spaces) {
+            TEST_error("Out of memory for buffer_with_spaces");
+            if (source) OPENSSL_free(source);
+            return 0;
+        }
+        size_t buffer_with_spaces_len = strlen(buffer_with_spaces);
+        printf("DEBUG: Buffer with spaces (length %zu): \"%s\"\n", buffer_with_spaces_len, buffer_with_spaces);
+
+        /* Allocate buffer for decoded binary data */
+        size_t back_bufsize = maximal_binary_length_from_base64(buffer_with_spaces, buffer_with_spaces_len);
+        printf("DEBUG: Back buffer size (maximal binary length) = %zu\n", back_bufsize);
+        char *back = OPENSSL_malloc(back_bufsize);
+        if (!back && back_bufsize !=0) {
+            TEST_error("Out of memory for back buffer");
+            OPENSSL_free(source);
+            OPENSSL_free(buffer_with_spaces);
+            return 0;
+        }
+
+        /* Decode the Base64 string (with extra spaces) */
+        size_t r = base64_tail_decode_trim_end(NULL, back, buffer_with_spaces, buffer_with_spaces_len);
+        printf("DEBUG: Decoded binary length = %zu\n", r);
+        ASSERT_EQUAL_SIZE(r, len);
+
+        for (size_t j = 0; j < len; j++) {
+            ASSERT_EQUAL_HEX(j, back[j], source[j]);
+        }
+        printf("DEBUG: Source and decoded data match for length %zu\n", len);
+
+        OPENSSL_free(source);
+        OPENSSL_free(buffer_with_spaces);
+        OPENSSL_free(back);
+    }
+    return 1;
+}
+
 // The setup_tests() function is called by the test harness to register tests.
 int setup_tests(void)
 {
@@ -323,7 +471,7 @@ int setup_tests(void)
     ADD_TEST(test_decode_base64_cases);
     ADD_TEST(test_complete_decode_base64_cases);
     ADD_TEST(test_encode_base64_cases);
-    // ADD_TEST(test_roundtrip_base64);
+    ADD_TEST(test_roundtrip_base64_with_lots_of_spaces);
 
     // Return 1 to indicate successful test setup.
     return 1;
