@@ -21,10 +21,16 @@ static int evp_encodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n);
 
-#define DEBUG 1  // Set to 1 to enable debug prints, 0 to disable
+#define DEBUG 0  // Set to 1 to enable debug prints, 0 to disable
 #define RED_TEXT(str) "\033[31m" str "\033[0m"
 #define GREEN_TEXT(str) "\033[32m" str "\033[0m"
 
+
+#if DEBUG
+    #define DEBUG_PRINT(fmt, ...) printf(fmt, ##__VA_ARGS__)
+#else
+    #define DEBUG_PRINT(fmt, ...)       
+#endif  
 
 
 #ifndef CHARSET_EBCDIC
@@ -936,7 +942,7 @@ inline uint32_t swap_bytes(const uint32_t word) {
 //  
 int tail_encode_base64(EVP_ENCODE_CTX *ctx, char *dst, const char *src, size_t srclen) {
        // This looks like 3 branches, but we expect the compiler to resolve this to a single branch:
-    printf(RED_TEXT("DEBUG: Entering tail_encode_base64\n"));
+    DEBUG_PRINT(RED_TEXT("DEBUG: Entering tail_encode_base64\n"));
     const char *e0 = base64_e0;
     const char *e1 = base64_e1;
     const char *e2 = base64_e2;
@@ -944,47 +950,47 @@ int tail_encode_base64(EVP_ENCODE_CTX *ctx, char *dst, const char *src, size_t s
     size_t i = 0;
     uint8_t t1, t2, t3;
 
-    printf(RED_TEXT("DEBUG: Source length = %zu\n"), srclen);
+    DEBUG_PRINT(RED_TEXT("DEBUG: Source length = %zu\n"), srclen);
     for (; i + 2 < srclen; i += 3) {
         t1 = (uint8_t)src[i];
         t2 = (uint8_t)src[i + 1];
         t3 = (uint8_t)src[i + 2];
-        printf(RED_TEXT("DEBUG: Processing bytes at index %zu: %02x %02x %02x\n"), i, t1, t2, t3);
+        DEBUG_PRINT(RED_TEXT("DEBUG: Processing bytes at index %zu: %02x %02x %02x\n"), i, t1, t2, t3);
 
         *out++ = e0[t1];
         *out++ = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
         *out++ = e1[((t2 & 0x0F) << 2) | ((t3 >> 6) & 0x03)];
         *out++ = e2[t3];
 
-        printf(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst), dst);
+        DEBUG_PRINT(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst), dst);
     }
     size_t remaining = srclen - i;
-    printf(RED_TEXT("DEBUG: Remaining bytes = %zu\n"), remaining);
+    DEBUG_PRINT(RED_TEXT("DEBUG: Remaining bytes = %zu\n"), remaining);
     switch (remaining) {
     case 0:
         break;
     case 1:
         t1 = (uint8_t)src[i];
-        printf(RED_TEXT("DEBUG: Processing last byte at index %zu: %02x\n"), i, t1);
+        DEBUG_PRINT(RED_TEXT("DEBUG: Processing last byte at index %zu: %02x\n"), i, t1);
         *out++ = e0[t1];
         *out++ = e1[(t1 & 0x03) << 4];
         *out++ = '=';
         *out++ = '=';
-        printf(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst), dst);
+        DEBUG_PRINT(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst), dst);
         break;
     case 2:
         t1 = (uint8_t)src[i];
         t2 = (uint8_t)src[i + 1];
-        printf(RED_TEXT("DEBUG: Processing last 2 bytes at index %zu: %02x %02x\n"), i, t1, t2);
+        DEBUG_PRINT(RED_TEXT("DEBUG: Processing last 2 bytes at index %zu: %02x %02x\n"), i, t1, t2);
         *out++ = e0[t1];
         *out++ = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
         *out++ = e2[(t2 & 0x0F) << 2];
         *out++ = '=';
-        printf(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst), dst);
+        DEBUG_PRINT(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst), dst);
         break;
     }
     int total = (int)(out - dst);
-    printf(RED_TEXT("DEBUG: Exiting tail_encode_base64, total output bytes = %d\n"), total);
+    DEBUG_PRINT(RED_TEXT("DEBUG: Exiting tail_encode_base64, total output bytes = %d\n"), total);
     return total;
 }
 
@@ -997,8 +1003,8 @@ static inline int is_ascii_white_space(char c) {
 // removes padding and white spaces at the end
 int base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char* output, char * input, size_t length) {
     #if DEBUG
-        printf("DEBUG: Entered base64_to_binary_with_ws\n");
-        printf(GREEN_TEXT("DEBUG: Input string: \"%s\", length: %d\n"), input, length);
+        DEBUG_PRINT("DEBUG: Entered base64_to_binary_with_ws\n");
+        DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string: \"%s\", length: %d\n"), input, length);
     #endif
 
     while(length > 0 && is_ascii_white_space(input[length - 1])) {
@@ -1034,7 +1040,7 @@ int base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char* output, char * input,
       }
     }
     #if DEBUG
-        printf(GREEN_TEXT("DEBUG: Final r:%d\n"), r);
+        DEBUG_PRINT(GREEN_TEXT("DEBUG: Final r:%d\n"), r);
     #endif
     return r;
   }
@@ -1058,25 +1064,25 @@ int base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int leng
     uint8_t buffer[4];
 
 #if DEBUG
-    printf("\n");
-    printf(RED_TEXT("DEBUG: Starting base64_tail_decode\n"));
-    printf(GREEN_TEXT("DEBUG: Input string: \"%s\", length: %d\n"), src, length);
-    printf("DEBUG: Input (hex): ");
+    DEBUG_PRINT("\n");
+    DEBUG_PRINT(RED_TEXT("DEBUG: Starting base64_tail_decode\n"));
+    DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string: \"%s\", length: %d\n"), src, length);
+    DEBUG_PRINT("DEBUG: Input (hex): ");
     for (int i = 0; i < length; i++) {
-        printf(GREEN_TEXT("%02x "), (unsigned char)src[i]);
+        DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)src[i]);
     }
-    printf("\n\n");
+    DEBUG_PRINT("\n\n");
 #endif
 
     while (1) {
 #if DEBUG
-        printf("While (1) ");
+        DEBUG_PRINT("While (1) ");
 #endif
         while (src + 4 <= srcend &&
                (x = p0[(uint8_t)(src[0])] | p1[(uint8_t)(src[1])] |
                     p2[(uint8_t)(src[2])] | p3[(uint8_t)(src[3])]) < 0x01FFFFFF) {
 #if DEBUG
-            printf("ping ");
+            DEBUG_PRINT("ping ");
 #endif
             memcpy(dst, &x, 3); // Copy 3 bytes from the computed value.
             dst += 3;
@@ -1101,7 +1107,7 @@ int base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int leng
         if (idx != 4) {
             if (idx == 2) {
 #if DEBUG
-                printf("idx == 2\n");
+                DEBUG_PRINT("idx == 2\n");
 #endif
                 uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) + ((uint32_t)(buffer[1]) << (2 * 6));
                 // For little-endian system: swap and shift.
@@ -1111,7 +1117,7 @@ int base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int leng
                 dst += 1;
             } else if (idx == 3) {
 #if DEBUG
-                printf("idx == 3\n");
+                DEBUG_PRINT("idx == 3\n");
 #endif
                 uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) +
                                   ((uint32_t)(buffer[1]) << (2 * 6)) +
@@ -1126,11 +1132,11 @@ int base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int leng
 #if DEBUG
             {
                 int final_bytes = (int)(dst - dstinit);
-                printf("DEBUG: Final output (hex): ");
+                DEBUG_PRINT("DEBUG: Final output (hex): ");
                 for (int j = 0; j < final_bytes; j++) {
-                    printf(GREEN_TEXT("%02x "), (unsigned char)dstinit[j]);
+                    DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)dstinit[j]);
                 }
-                printf("\n\n");
+                DEBUG_PRINT("\n\n");
             }
 #endif
             return (int)(dst - dstinit);

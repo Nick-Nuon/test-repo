@@ -15,6 +15,13 @@
 #define RED_TEXT(str) "\033[31m" str "\033[0m"
 #define GREEN_TEXT(str) "\033[32m" str "\033[0m"
 
+#define DEBUG 0
+
+#if DEBUG
+    #define DEBUG_PRINT(fmt, ...) printf(fmt, ##__VA_ARGS__)
+#else
+    #define DEBUG_PRINT(fmt, ...)       
+#endif  
 
 /* Example: ASSERT_EQUAL for integers */
 #define ASSERT_EQUAL_INT(actual, expected) do {                      \
@@ -133,7 +140,7 @@ static int memout(BIO *mem, char c, int llen, int *pos)
  *-------------------------------------------------------------*/
 static int test_decode_base64_cases(void)
 {
-    printf(GREEN_TEXT("DEBUG: Entered Test\n"));
+    DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered Test\n"));
 
     /* Define one test case: "SS" */
     const char *cases[] = { "SS" };
@@ -181,7 +188,7 @@ typedef struct {
 
 static int test_complete_decode_base64_cases(void)
 {
-    printf(GREEN_TEXT("DEBUG: Entered complete_decode_base64_cases Test\n"));
+    DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered complete_decode_base64_cases Test\n"));
 
     case_pair cases[] = {
         {"abcd", " Y\fW\tJ\njZ A=\r= "}
@@ -226,7 +233,7 @@ static int test_complete_decode_base64_cases(void)
 
 static int test_encode_base64_cases(void)
 {
-    printf(GREEN_TEXT("DEBUG: Entered encode_base64_cases Test\n"));
+    DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered encode_base64_cases Test\n"));
 
     /* Define test cases as an array of case_pair.
        These mirror your C++ test cases.
@@ -243,7 +250,7 @@ static int test_encode_base64_cases(void)
     size_t i, j;
 
         /* --- Part 1: Test binary => base64 (normal) --- */
-        printf(GREEN_TEXT(" -- Testing base64_to_binary decoding (normal)\n"));
+        DEBUG_PRINT(GREEN_TEXT(" -- Testing base64_to_binary decoding (normal)\n"));
         for (i = 0; i < num_cases; i++) {
             size_t enc_len = strlen(cases[i].encoded);
             size_t expected_dec_len = strlen(cases[i].decoded);
@@ -278,7 +285,7 @@ static int test_encode_base64_cases(void)
         }
 
     /* --- Part 2: Test base64_to_binary decoding (normal) --- */
-    printf(GREEN_TEXT(" -- Testing base64_to_binary decoding (normal)\n"));
+    DEBUG_PRINT(GREEN_TEXT(" -- Testing base64_to_binary decoding (normal)\n"));
     for (i = 0; i < num_cases; i++) {
         size_t enc_len = strlen(cases[i].encoded);
         size_t expected_dec_len = strlen(cases[i].decoded);
@@ -370,9 +377,11 @@ char *add_simple_spaces(const char *v, size_t v_len, size_t number_of_spaces,
     }
 
     size_t pos_idx = 0;  /* Index for traversing the original array */
+    const char whitespace[4] = { ' ', '\t', '\n', '\r' };
     for (i = 0; i < total; i++) {
         if (positions[i]) {
-            result[i] = ' ';
+            /* Choose a random whitespace character from the set */
+            result[i] = whitespace[rand_r(seed) % 4];
         } else {
             result[i] = v[pos_idx++];
         }
@@ -388,10 +397,10 @@ char *add_simple_spaces(const char *v, size_t v_len, size_t number_of_spaces,
 static int test_roundtrip_base64_with_lots_of_spaces(void) {
     size_t len, trial, i;
     unsigned int seed = 12345;  /* Fixed seed for reproducibility */
-    printf(GREEN_TEXT("DEBUG: Entered test_roundtrip_base64_with_lots_of_spaces\n"));
+    DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered test_roundtrip_base64_with_lots_of_spaces\n"));
 
     for (len = 0; len < 2048; len++) {
-        printf("DEBUG: Processing length = %zu\n", len);
+        DEBUG_PRINT("DEBUG: Processing length = %zu\n", len);
 
         /* Allocate source binary data */
         char *source = (len > 0) ? OPENSSL_malloc(len) : NULL;
@@ -404,15 +413,15 @@ static int test_roundtrip_base64_with_lots_of_spaces(void) {
             source[i] = (char)(rand_r(&seed) % 256);
         }
         if (len > 0)
-            printf("DEBUG: Source data allocated (first 10 bytes):");
+            DEBUG_PRINT("DEBUG: Source data allocated (first 10 bytes):");
         for (i = 0; i < len && i < 10; i++) {
-            printf(" %02x", (unsigned char)source[i]);
+            DEBUG_PRINT(" %02x", (unsigned char)source[i]);
         }
-        printf("\n");
+        DEBUG_PRINT("\n");
 
         /* Allocate buffer for Base64 conversion */
         size_t b64_len_expected = base64_length_from_binary(len);
-        printf("DEBUG: Expected Base64 length = %zu\n", b64_len_expected);
+        DEBUG_PRINT("DEBUG: Expected Base64 length = %zu\n", b64_len_expected);
         char *buffer = OPENSSL_malloc(b64_len_expected + 1);
         if (!buffer) {
             TEST_error("Out of memory for Base64 buffer for length %zu", len);
@@ -422,7 +431,7 @@ static int test_roundtrip_base64_with_lots_of_spaces(void) {
         size_t s = tail_encode_base64(NULL, buffer, source, len);
         // Optionally, null-termination is handled by tail_encode_base64 if needed.
         buffer[s] = '\0';
-        printf("DEBUG: Base64 encoded result (length %zu): \"%s\"\n", s, buffer);
+        DEBUG_PRINT("DEBUG: Base64 encoded result (length %zu): \"%s\"\n", s, buffer);
 
         /* Insert extra spaces */
         size_t spaces_to_add = 5 + 2 * len;
@@ -434,11 +443,11 @@ static int test_roundtrip_base64_with_lots_of_spaces(void) {
             return 0;
         }
         size_t buffer_with_spaces_len = strlen(buffer_with_spaces);
-        printf("DEBUG: Buffer with spaces (length %zu): \"%s\"\n", buffer_with_spaces_len, buffer_with_spaces);
+        // DEBUG_PRINT("DEBUG: Buffer with spaces (length %zu): \"%s\"\n", buffer_with_spaces_len, buffer_with_spaces);
 
         /* Allocate buffer for decoded binary data */
         size_t back_bufsize = maximal_binary_length_from_base64(buffer_with_spaces, buffer_with_spaces_len);
-        printf("DEBUG: Back buffer size (maximal binary length) = %zu\n", back_bufsize);
+        DEBUG_PRINT("DEBUG: Back buffer size (maximal binary length) = %zu\n", back_bufsize);
         char *back = OPENSSL_malloc(back_bufsize);
         if (!back && back_bufsize !=0) {
             TEST_error("Out of memory for back buffer");
@@ -449,13 +458,13 @@ static int test_roundtrip_base64_with_lots_of_spaces(void) {
 
         /* Decode the Base64 string (with extra spaces) */
         size_t r = base64_tail_decode_trim_end(NULL, back, buffer_with_spaces, buffer_with_spaces_len);
-        printf("DEBUG: Decoded binary length = %zu\n", r);
+        DEBUG_PRINT("DEBUG: Decoded binary length = %zu\n", r);
         ASSERT_EQUAL_SIZE(r, len);
 
         for (size_t j = 0; j < len; j++) {
             ASSERT_EQUAL_HEX(j, back[j], source[j]);
         }
-        printf("DEBUG: Source and decoded data match for length %zu\n", len);
+        DEBUG_PRINT("DEBUG: Source and decoded data match for length %zu\n", len);
 
         OPENSSL_free(source);
         OPENSSL_free(buffer_with_spaces);
@@ -463,6 +472,8 @@ static int test_roundtrip_base64_with_lots_of_spaces(void) {
     }
     return 1;
 }
+
+
 
 // The setup_tests() function is called by the test harness to register tests.
 int setup_tests(void)
