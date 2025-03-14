@@ -134,6 +134,50 @@ static int memout(BIO *mem, char c, int llen, int *pos)
     return 1;
 }
 
+size_t add_garbage(char **v, size_t *v_len, unsigned int *seed, const uint8_t *table) {
+    size_t i, len;
+    char *array = *v;
+    
+    /* Determine the upper bound for the insertion index:
+       If '=' is found, use its index; otherwise, use the full length.
+    */
+    len = *v_len;
+    for (i = 0; i < *v_len; i++) {
+        if (array[i] == '=') {
+            len = i;
+            break;
+        }
+    }
+    
+    /* Choose a random insertion index between 0 and len (inclusive) */
+    size_t index = rand_r(seed) % (len + 1);
+
+    /* Choose a random byte value between 0 and 255 until table[c] equals 255 */
+    uint8_t c = rand_r(seed) % 256;
+    while (table[c] != 255) {
+        c = rand_r(seed) % 256;
+    }
+    
+    /* Reallocate the array to make room for one extra character.
+       Note: Passing a pointer to the array pointer so that it can be updated.
+    */
+    char *new_v = OPENSSL_realloc(array, *v_len + 1);
+    if (new_v == NULL) {
+        /* Allocation failure */
+        return (size_t)-1;
+    }
+    
+    /* Shift the tail of the array one position to the right.
+       We move *v_len - index bytes starting at new_v[index].
+    */
+    memmove(new_v + index + 1, new_v + index, *v_len - index);
+    new_v[index] = (char)c;
+    
+    *v = new_v;
+    (*v_len)++;
+    return index;
+}
+
 /*-------------------------------------------------------------
  * Test Function: decode_base64_cases
  *
