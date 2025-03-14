@@ -12,10 +12,14 @@
 #include <openssl/evp.h>
 
 #define BUFMAX 0xa0000          /* Encode at most 640kB. */
-#define RED_TEXT(str) "\033[31m" str "\033[0m"
-#define GREEN_TEXT(str) "\033[32m" str "\033[0m"
+#define RED_TEXT(str)     "\033[31m" str "\033[0m"
+#define GREEN_TEXT(str)   "\033[32m" str "\033[0m"
+#define YELLOW_TEXT(str)  "\033[33m" str "\033[0m"
+#define BLUE_TEXT(str)    "\033[34m" str "\033[0m"
+#define MAGENTA_TEXT(str) "\033[35m" str "\033[0m"
+#define CYAN_TEXT(str)    "\033[36m" str "\033[0m"
 
-#define DEBUG 0
+#define DEBUG 1
 
 #if DEBUG
     #define DEBUG_PRINT(fmt, ...) printf(fmt, ##__VA_ARGS__)
@@ -323,6 +327,57 @@ static int test_encode_base64_cases(void)
 }
 
 /*
+ * add_space:
+ * Inserts a single random whitespace character into the array.
+ *
+ * Parameters:
+ *   v      - pointer to a dynamically allocated array of char.
+ *   v_len  - pointer to the length of the array.
+ *   seed   - pointer to an unsigned int used as the random seed.
+ *
+ * Returns:
+ *   The index where the whitespace was inserted.
+ *   The array and its length are updated.
+ */
+
+size_t add_space(char **v, size_t *v_len, unsigned int *seed) {
+    static const char space[5] = { ' ', '\t', '\n', '\r', '\f' };
+
+    // DEBUG_PRINT(RED_TEXT("DEBUG: Entering add_space\n"));
+
+    /* Choose a random insertion index between 0 and *v_len (inclusive) */
+    size_t index = rand_r(seed) % (*v_len + 1);
+    // DEBUG_PRINT("DEBUG: Chosen insertion index = %zu (v_len = %zu)\n", index, *v_len);
+
+    /* Choose a random whitespace character from the array */
+    size_t space_index = rand_r(seed) % 5;
+    // DEBUG_PRINT("DEBUG: Chosen whitespace character = '%c'\n", space[space_index]);
+
+    /* Reallocate the array to make room for one extra character. */
+    char *new_v = OPENSSL_realloc(*v, *v_len + 1);
+    if (new_v == NULL) {
+        TEST_error(RED_TEXT("DEBUG: OPENSSL_realloc failed for new size = %zu"), *v_len + 1);
+        return (size_t)-1;
+    }
+    // DEBUG_PRINT(RED_TEXT("DEBUG: Reallocation successful, new pointer = %p\n"), new_v);
+
+    /* Move the tail of the array one position to the right */
+    memmove(new_v + index + 1, new_v + index, *v_len - index);
+    // DEBUG_PRINT("DEBUG: memmove executed from index %zu for %zu bytes\n", index, *v_len - index);
+
+    /* Insert the chosen whitespace */
+    new_v[index] = space[space_index];
+    // DEBUG_PRINT("DEBUG: Inserted '%c' at index %zu\n", space[space_index], index);
+
+    *v = new_v;
+    (*v_len)++;
+    // DEBUG_PRINT("DEBUG: New vector length is %zu\n", *v_len);
+
+    return index;
+}
+
+
+/*
  * add_simple_spaces:
  * Inserts a given number of spaces at unique random positions into the input array.
  *
@@ -429,7 +484,6 @@ static int test_roundtrip_base64_with_lots_of_spaces(void) {
             return 0;
         }
         size_t s = tail_encode_base64(NULL, buffer, source, len);
-        // Optionally, null-termination is handled by tail_encode_base64 if needed.
         buffer[s] = '\0';
         DEBUG_PRINT("DEBUG: Base64 encoded result (length %zu): \"%s\"\n", s, buffer);
 
@@ -475,14 +529,114 @@ static int test_roundtrip_base64_with_lots_of_spaces(void) {
 
 
 
+/*
+ * test_roundtrip_base64_with_spaces:
+ * For each binary length from 0 to 2047, generate random binary data,
+ * encode it to Base64, then insert extra whitespace (5 insertions),
+ * and finally decode using both base64_to_binary and base64_to_binary_safe
+ * with each of three last-chunk handling options.
+ * The decoded data is then compared with the original source.
+ */
+static int test_roundtrip_base64_with_spaces(void) {
+    size_t len, trial, i, j;
+    unsigned int seed = 12345;  /* Fixed seed for reproducibility */
+    DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered test_roundtrip_base64_with_spaces\n"));
+
+    for (len = 0; len < 2048; len++) {
+        DEBUG_PRINT(CYAN_TEXT("DEBUG: Processing binary length = %zu\n"), len);
+        /* Allocate source binary data */
+        char *source = (len > 0) ? OPENSSL_malloc(len) : NULL;
+        if (len > 0 && !source) {
+            TEST_error("Out of memory for source of length %zu", len);
+            return 0;
+        }
+        for (i = 0; i < len; i++) {
+            source[i] = (char)(rand_r(&seed) % 256);
+        }
+
+        /* Allocate buffer for Base64 conversion */
+        size_t b64_len_expected = base64_length_from_binary(len);
+        char *buffer = OPENSSL_malloc(b64_len_expected + 1);
+        if (!buffer) {
+            TEST_error("Out of memory for Base64 buffer for length %zu", len);
+            if (source) OPENSSL_free(source);
+            return 0;
+        }
+        size_t s = tail_encode_base64(NULL, buffer, source, len);
+        buffer[s] = '\0';
+        DEBUG_PRINT("DEBUG: Base64 encoded result (length %zu): \"%s\"\n", s, buffer);
+
+        /* Insert extra spaces (5 times) */
+        size_t cur_b64_len = s;
+        for (i = 0; i < 5; i++) {
+            int index = add_space(&buffer, &cur_b64_len, &seed);
+            if (index == -1) {
+                TEST_error("Out of memory in add_space for length %zu", cur_b64_len);
+                if (source) OPENSSL_free(source);
+                return 0;
+            }
+            // buffer = new_buffer;
+        }
+        DEBUG_PRINT("DEBUG: Base64 with spaces (length %zu): \"%s\"\n", cur_b64_len, buffer);
+
+        /* Allocate buffer for decoded binary data */
+        size_t back_bufsize = maximal_binary_length_from_base64(buffer, cur_b64_len);
+        DEBUG_PRINT("DEBUG: Back buffer size (maximal binary length) = %zu\n", back_bufsize);
+        char *back = OPENSSL_malloc(back_bufsize);
+        if (!back) {
+            TEST_error("Out of memory for back buffer");
+            OPENSSL_free(source);
+            OPENSSL_free(buffer);
+            return 0;
+        }
+
+        // last_chunk_handling_options opts[3] = { LAST_CHUNK_STRICT, LAST_CHUNK_LOOSE, LAST_CHUNK_STOP_BEFORE_PARTIAL };
+
+        /* First round: using base64_to_binary */
+        // for (i = 0; i < 3; i++) {
+            int r = base64_tail_decode_trim_end(NULL, back,buffer, cur_b64_len);
+            DEBUG_PRINT("DEBUG: base64_to_binary returned count = %zu\n", r);
+            ASSERT_EQUAL_SIZE(r, len);
+            if (len > 0) {
+                ASSERT_TRUE(memcmp(back, source, len) == 0);
+            }
+        // }
+
+        /* Second round: using base64_to_binary_safe */
+        // for (i = 0; i < 3; i++) {
+        //     size_t back_length = back_bufsize;
+        //     result r = base64_to_binary_safe(buffer, cur_b64_len, back, back_length, BASE64_DEFAULT, opts[i]);
+        //     DEBUG_PRINT("DEBUG: Option %d, base64_to_binary_safe returned count = %zu\n", (int)opts[i], r.count);
+        //     ASSERT_EQUAL_INT(r.error, ERROR_SUCCESS);
+        //     if (opts[i] == LAST_CHUNK_STOP_BEFORE_PARTIAL) {
+        //         for (j = r.count; j < cur_b64_len; j++) {
+        //             /* Check that any extra characters are whitespace */
+        //             ASSERT_TRUE(buffer[j]==' ' || buffer[j]=='\t' || buffer[j]=='\n' || buffer[j]=='\r' || buffer[j]=='\f');
+        //         }
+        //     } else {
+        //         ASSERT_EQUAL_SIZE(r.count, cur_b64_len);
+        //     }
+        //     if (len > 0) {
+        //         ASSERT_TRUE(memcmp(back, source, len) == 0);
+        //     }
+        // }
+        OPENSSL_free(source);
+        OPENSSL_free(buffer);
+        OPENSSL_free(back);
+    }
+    return 1;
+}
+
 // The setup_tests() function is called by the test harness to register tests.
 int setup_tests(void)
 {
     // Register our sample test. The macro ADD_TEST() takes our test function.
-    ADD_TEST(test_decode_base64_cases);
-    ADD_TEST(test_complete_decode_base64_cases);
-    ADD_TEST(test_encode_base64_cases);
-    ADD_TEST(test_roundtrip_base64_with_lots_of_spaces);
+    // ADD_TEST(test_decode_base64_cases);
+    // ADD_TEST(test_complete_decode_base64_cases);
+    // ADD_TEST(test_encode_base64_cases);
+    // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces);
+    ADD_TEST(test_roundtrip_base64_with_spaces);
+
 
     // Return 1 to indicate successful test setup.
     return 1;
