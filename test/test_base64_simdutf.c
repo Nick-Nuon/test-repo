@@ -976,6 +976,80 @@ static int test_issue_520(void) {
     return 1;
 }
 
+/* 
+ * TEST(issue_509)
+ * Input: data = { ' ', '=' } (2 bytes)
+ * Expected: error INVALID_BASE64_CHARACTER and count = 1.
+ */
+static int test_issue_509(void) {
+    char data[] = { ' ', '=' };
+    size_t data_len = sizeof(data);
+    char out[1];  /* output buffer of length 1 */
+    
+    int r = base64_tail_decode_trim_end(NULL, out, (const char *)data, data_len);
+    ASSERT_EQUAL_SIZE(r,-1);
+    return 1;
+}
+
+/*
+ * TEST(issue_502_alt)
+ * For each nof_equals from 1 to 99, create a buffer of '=' characters.
+ * Expected: error INVALID_BASE64_CHARACTER
+ */
+static int test_issue_502_alt(void) {
+    for (size_t nof_equals = 1; nof_equals < 100; ++nof_equals) {
+        char *data = OPENSSL_malloc(nof_equals);
+        if (!data) {
+            TEST_error("Out of memory in issue_502_alt for nof_equals = %zu", nof_equals);
+        }
+        memset(data, '=', nof_equals);
+        char out[1];
+        int r = base64_tail_decode_trim_end(NULL, out, data, nof_equals);
+        ASSERT_EQUAL_SIZE(r, -1);
+    }
+    return 1;
+}
+
+/*
+ * TEST(issue_504_8bit)
+ * Use a char array with value 61 ('=')
+ * Expected: error INVALID_BASE64_CHARACTER and count = 0.
+ */
+static int test_issue_504_8bit(void) {
+    char data[1] = { 61 };
+    char out[1];
+    int r = base64_tail_decode_trim_end(NULL, out, data, sizeof(data));
+    ASSERT_EQUAL_SIZE(r, -1);
+    return 1;
+}
+
+/*
+ * TEST(issue_502)
+ * Use a std::array equivalent: a char array with a single '='.
+ * Expected: error INVALID_BASE64_CHARACTER and count = 0.
+ */
+static int test_issue_502(void) {
+    char data[1] = { '=' };
+    char out[1];
+    int r = base64_tail_decode_trim_end(NULL, out, data, sizeof(data));
+    ASSERT_EQUAL_SIZE(r, -1);
+    return 1;
+}
+
+/*
+ * TEST(issue_503)
+ * Use a 16-bit array with one element: 15626 (0x3D0A)
+ * Expected: error INVALID_BASE64_CHARACTER and count = 0.
+ */
+static int test_issue_503(void) {
+    uint16_t data[1] = { 15626 };  /* 0x3D0A */
+    char out[1];
+    int r = base64_tail_decode_trim_end(NULL, out, data, sizeof(data));
+    ASSERT_EQUAL_SIZE(r, -1);
+    return 1;
+}
+
+
 // The setup_tests() function is called by the test harness to register tests.
 int setup_tests(void)
 {
@@ -989,6 +1063,11 @@ int setup_tests(void)
     // ADD_TEST(test_base64_decode_just_one_padding_loose);
     // ADD_TEST(test_roundtrip_base64);
     ADD_TEST(test_issue_520);
+    ADD_TEST(test_issue_509);
+    ADD_TEST(test_issue_502_alt);
+    ADD_TEST(test_issue_504_8bit); 
+    ADD_TEST(test_issue_502);
+    ADD_TEST(test_issue_503);
 
     // Return 1 to indicate successful test setup.
     return 1;
