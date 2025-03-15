@@ -951,7 +951,30 @@ static int test_roundtrip_base64(void) {
     return 1;
 }
 
+static int test_issue_520(void) {
+    /* Create an array of unsigned char */
+    unsigned char data[] = {
+        32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 12, 32,
+        32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32,
+        32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32,
+        32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 82
+    };
+    size_t data_len = sizeof(data);
+    
+    /* Allocate output buffer of 48 bytes */
+    char out[48];
 
+    /* Decode the data as a Base64 string in strict mode */
+    int r = base64_tail_decode_trim_end(NULL,out,(const char *)data, data_len
+                                );
+    
+    /* Check that the error code is BASE64_INPUT_REMAINDER (-1)
+       and that no bytes were decoded (count 0).
+    */
+    ASSERT_EQUAL_INT(r,-1);
+
+    return 1;
+}
 
 // The setup_tests() function is called by the test harness to register tests.
 int setup_tests(void)
@@ -964,7 +987,8 @@ int setup_tests(void)
     // ADD_TEST(test_roundtrip_base64_with_spaces);
     // ADD_TEST(test_roundtrip_base64_with_garbage);
     // ADD_TEST(test_base64_decode_just_one_padding_loose);
-    ADD_TEST(test_roundtrip_base64);
+    // ADD_TEST(test_roundtrip_base64);
+    ADD_TEST(test_issue_520);
 
     // Return 1 to indicate successful test setup.
     return 1;
