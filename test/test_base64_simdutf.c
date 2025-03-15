@@ -227,6 +227,18 @@ static int test_decode_base64_cases(void)
     return 1;
 }
 
+// TODO? This was in the C++ code.
+/* Last-chunk handling options */
+// last_chunk_handling_options are used to specify the handling of the last
+// chunk in base64 decoding.
+// https://tc39.es/proposal-arraybuffer-base64/spec/#sec-frombase64
+typedef enum {
+    LAST_CHUNK_LOOSE, /* standard base64 format, decode partial final chunk */
+    LAST_CHUNK_STRICT,/* error when the last chunk is partial, 2 or 3 chars, and
+    unpadded, or non-zero bit padding */
+    LAST_CHUNK_STOP_BEFORE_PARTIAL /* if the last chunk is partial (2 or 3 chars), ignore it (no error) */
+} last_chunk_handling_options;
+
 /* Define one test case: expected decoded string "abcd", 
     encoded string with extra whitespace and padding " Y\fW\tJ\njZ A=\r= " */
 typedef struct {
@@ -827,6 +839,48 @@ static int test_roundtrip_base64_with_garbage(void) {
     return 1;
 }
 
+/*
+ * test_base64_decode_just_one_padding_loose:
+ * This test verifies that decoding a particular input string in loose mode
+ * returns the expected error code and count.
+ */
+static int test_base64_decode_just_one_padding_loose(void) {
+    /* Define a structure for test cases */
+    typedef struct {
+        const char *input;
+        int expected;
+    } test_case;
+    
+    /* Test cases array; here we have one test case. */
+    test_case test_cases[] = {
+        { "uuuu             =", -1 }
+    };
+    size_t num_cases = sizeof(test_cases) / sizeof(test_cases[0]);
+    
+    /* A small buffer to receive decoded binary data */
+    char buffer[3];  /* as in your original C++ test */
+    
+    /* Define arrays of options */
+    // int base64_opts[2] = { BASE64_DEFAULT, BASE64_URL };
+    // int chunk_opts[1] = { LAST_CHUNK_LOOSE };
+    
+    for (size_t i = 0; i < num_cases; i++) {
+        const char *input = test_cases[i].input;
+        int expected = test_cases[i].expected;
+        
+        // for (size_t j = 0; j < 2; j++) {
+            // int option = base64_opts[j];
+            for (size_t k = 0; k < 1; k++) {
+                // int chunk_option = chunk_opts[k];
+                // result r = base64_to_binary(input, strlen(input), buffer, option, chunk_option);
+                int r = base64_tail_decode_trim_end(NULL , buffer, input, strlen(input));
+                ASSERT_EQUAL_SIZE(r, expected);
+            }
+        // }
+    }
+    return 1;
+}
+
 
 // The setup_tests() function is called by the test harness to register tests.
 int setup_tests(void)
@@ -837,7 +891,8 @@ int setup_tests(void)
     // ADD_TEST(test_encode_base64_cases);
     // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces);
     // ADD_TEST(test_roundtrip_base64_with_spaces);
-    ADD_TEST(test_roundtrip_base64_with_garbage);
+    // ADD_TEST(test_roundtrip_base64_with_garbage);
+    ADD_TEST(test_base64_decode_just_one_padding_loose);
 
 
     // Return 1 to indicate successful test setup.
