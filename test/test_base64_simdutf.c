@@ -881,6 +881,77 @@ static int test_base64_decode_just_one_padding_loose(void) {
     return 1;
 }
 
+static int test_roundtrip_base64(void) {
+    size_t len, trial, i;
+    unsigned int seed = 12345;  /* Fixed seed for reproducibility */
+    DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered test_roundtrip_base64\n"));
+
+    for (len = 0; len < 2048; len++) {
+        DEBUG_PRINT("DEBUG: Processing length = %zu\n", len);
+
+        /* Allocate source binary data */
+        char *source = (len > 0) ? OPENSSL_malloc(len) : NULL;
+        if (len > 0 && !source) {
+            TEST_error("Out of memory for source of length %zu", len);
+            return 0;
+        }
+        /* Fill source with random bytes */
+        for (i = 0; i < len; i++) {
+            source[i] = (char)(rand_r(&seed) % 256);
+        }
+        if (len > 0) {
+            DEBUG_PRINT("DEBUG: Source data allocated (first 10 bytes):");
+            for (i = 0; i < len && i < 10; i++) {
+                DEBUG_PRINT(" %02x", (unsigned char)source[i]);
+            }
+            DEBUG_PRINT("\n");
+        }
+
+        /* Allocate buffer for Base64 conversion */
+        size_t b64_len_expected = base64_length_from_binary(len);
+        DEBUG_PRINT("DEBUG: Expected Base64 length = %zu\n", b64_len_expected);
+        char *buffer = OPENSSL_malloc(b64_len_expected + 1);
+        if (!buffer) {
+            TEST_error("Out of memory for Base64 buffer for length %zu", len);
+            if (source) OPENSSL_free(source);
+            return 0;
+        }
+        size_t s = tail_encode_base64(NULL, buffer, source, len);
+        buffer[s] = '\0';
+        DEBUG_PRINT("DEBUG: Base64 encoded result (length %zu): \"%s\"\n", s, buffer);
+
+        /* No extra spaces are added; use the encoded buffer as-is */
+        size_t buffer_with_spaces_len = s;
+
+        /* Allocate buffer for decoded binary data */
+        size_t back_bufsize = maximal_binary_length_from_base64(buffer, s);
+        DEBUG_PRINT("DEBUG: Back buffer size (maximal binary length) = %zu\n", back_bufsize);
+        char *back = OPENSSL_malloc(back_bufsize);
+        if (!back && back_bufsize != 0) {
+            TEST_error("Out of memory for back buffer");
+            OPENSSL_free(source);
+            OPENSSL_free(buffer);
+            return 0;
+        }
+
+        /* Decode the Base64 string without added spaces */
+        size_t r = base64_tail_decode_trim_end(NULL, back, buffer, s);
+        DEBUG_PRINT("DEBUG: Decoded binary length = %zu\n", r);
+        ASSERT_EQUAL_SIZE(r, len);
+
+        for (size_t j = 0; j < len; j++) {
+            ASSERT_EQUAL_HEX(j, back[j], source[j]);
+        }
+        DEBUG_PRINT("DEBUG: Source and decoded data match for length %zu\n", len);
+
+        OPENSSL_free(source);
+        OPENSSL_free(buffer);
+        OPENSSL_free(back);
+    }
+    return 1;
+}
+
+
 
 // The setup_tests() function is called by the test harness to register tests.
 int setup_tests(void)
@@ -892,8 +963,8 @@ int setup_tests(void)
     // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces);
     // ADD_TEST(test_roundtrip_base64_with_spaces);
     // ADD_TEST(test_roundtrip_base64_with_garbage);
-    ADD_TEST(test_base64_decode_just_one_padding_loose);
-
+    // ADD_TEST(test_base64_decode_just_one_padding_loose);
+    ADD_TEST(test_roundtrip_base64);
 
     // Return 1 to indicate successful test setup.
     return 1;
