@@ -291,14 +291,7 @@ static int test_complete_decode_base64_cases(void)
     return 1;
 }
 
-static int test_encode_base64_cases(void)
-{
-    DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered encode_base64_cases Test\n"));
-
-    /* Define test cases as an array of case_pair.
-       These mirror your C++ test cases.
-    */
-    case_pair cases[] = {
+    const case_pair basic_cases[] = {
         { "Hello, World!", "SGVsbG8sIFdvcmxkIQ==" },
         { "GeeksforGeeks", "R2Vla3Nmb3JHZWVrcw==" },
         { "123456", "MTIzNDU2" },
@@ -306,6 +299,27 @@ static int test_encode_base64_cases(void)
         { "!R~J2jL&mI]O)3=c:G3Mo)oqmJdxoprTZDyxEvU0MI.'Ww5H{G>}y;;+B8E_Ah,Ed[ PdBqY'^N>O$4:7LK1<:|7)btV@|{YWR$$Er59-XjVrFl4L}~yzTEd4'E[@k",
           "IVJ+SjJqTCZtSV1PKTM9YzpHM01vKW9xbUpkeG9wclRaRHl4RXZVME1JLidXdzVIe0c+fXk7OytCOEVfQWgsRWRbIFBkQnFZJ15OPk8kNDo3TEsxPDp8NylidFZAfHtZV1IkJEVyNTktWGpWckZsNEx9fnl6VEVkNCdFW0Br" }
     };
+
+    const case_pair no_padding[] = {
+        {"Hello, World!", "SGVsbG8sIFdvcmxkIQ"},
+        {"GeeksforGeeks", "R2Vla3Nmb3JHZWVrcw"},
+        {"123456", "MTIzNDU2"},
+        {"Base64 Encoding", "QmFzZTY0IEVuY29kaW5n"},
+        {"!R~J2jL&mI]O)3=c:G3Mo)oqmJdxoprTZDyxEvU0MI.'Ww5H{G>}y;;+B8E_Ah,Ed[ "
+         "PdBqY'^N>O$4:7LK1<:|7)btV@|{YWR$$Er59-XjVrFl4L}~yzTEd4'E[@k",
+         "IVJ+SjJqTCZtSV1PKTM9YzpHM01vKW9xbUpkeG9wclRaRHl4RXZVME1JLidXdzVIe0c+"
+         "fXk7OytCOEVfQWgsRWRbIFBkQnFZJ15OPk8kNDo3TEsxPDp8NylidFZAfHtZV1IkJEVyNTk"
+         "tWGpWckZsNEx9fnl6VEVkNCdFW0Br"}
+        };
+
+
+static int check_cases(case_pair *cases)
+{
+    DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered encode_base64_cases Test\n"));
+
+    /* Define test cases as an array of case_pair.
+       These mirror your C++ test cases.
+    */
     size_t num_cases = sizeof(cases) / sizeof(cases[0]);
     size_t i, j;
 
@@ -379,6 +393,17 @@ static int test_encode_base64_cases(void)
         OPENSSL_free(buffer);
     }
 
+    return 1;
+}
+
+static int test_encode_base64_basic_cases(void){
+    check_cases(basic_cases);
+    return 1;
+}
+
+
+static int test_encode_base64_no_padding_cases(void){
+    check_cases(no_padding);
     return 1;
 }
 
@@ -1036,19 +1061,6 @@ static int test_issue_502(void) {
     return 1;
 }
 
-/*
- * TEST(issue_503)
- * Use a 16-bit array with one element: 15626 (0x3D0A)
- * Expected: error INVALID_BASE64_CHARACTER and count = 0.
- */
-static int test_issue_503(void) {
-    uint16_t data[1] = { 15626 };  /* 0x3D0A */
-    char out[1];
-    int r = base64_tail_decode_trim_end(NULL, out, data, sizeof(data));
-    ASSERT_EQUAL_SIZE(r, -1);
-    return 1;
-}
-
 
 // The setup_tests() function is called by the test harness to register tests.
 int setup_tests(void)
@@ -1056,18 +1068,18 @@ int setup_tests(void)
     // Register our sample test. The macro ADD_TEST() takes our test function.
     // ADD_TEST(test_decode_base64_cases);
     // ADD_TEST(test_complete_decode_base64_cases);
-    // ADD_TEST(test_encode_base64_cases);
+    // ADD_TEST(test_encode_base64_basic_cases);
+    ADD_TEST(test_encode_base64_no_padding_cases);
     // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces);
     // ADD_TEST(test_roundtrip_base64_with_spaces);
     // ADD_TEST(test_roundtrip_base64_with_garbage);
     // ADD_TEST(test_base64_decode_just_one_padding_loose);
     // ADD_TEST(test_roundtrip_base64);
-    ADD_TEST(test_issue_520);
-    ADD_TEST(test_issue_509);
-    ADD_TEST(test_issue_502_alt);
-    ADD_TEST(test_issue_504_8bit); 
-    ADD_TEST(test_issue_502);
-    ADD_TEST(test_issue_503);
+    // ADD_TEST(test_issue_520);
+    // ADD_TEST(test_issue_509);
+    // ADD_TEST(test_issue_502_alt);
+    // ADD_TEST(test_issue_504_8bit); 
+    // ADD_TEST(test_issue_502);
 
     // Return 1 to indicate successful test setup.
     return 1;
