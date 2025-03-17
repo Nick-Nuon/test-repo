@@ -19,7 +19,35 @@
 #define MAGENTA_TEXT(str) "\033[35m" str "\033[0m"
 #define CYAN_TEXT(str)    "\033[36m" str "\033[0m"
 
-#define DEBUG 1
+// Standard Colors
+#define BLACK_TEXT(str)   "\033[30m" str "\033[0m"
+#define WHITE_TEXT(str)   "\033[37m" str "\033[0m"
+
+// Bright Colors
+#define BRIGHT_RED_TEXT(str)     "\033[91m" str "\033[0m"
+#define BRIGHT_GREEN_TEXT(str)   "\033[92m" str "\033[0m"
+#define BRIGHT_YELLOW_TEXT(str)  "\033[93m" str "\033[0m"
+#define BRIGHT_BLUE_TEXT(str)    "\033[94m" str "\033[0m"
+#define BRIGHT_MAGENTA_TEXT(str) "\033[95m" str "\033[0m"
+#define BRIGHT_CYAN_TEXT(str)    "\033[96m" str "\033[0m"
+#define BRIGHT_WHITE_TEXT(str)   "\033[97m" str "\033[0m"
+
+
+// Background Colors (Bright)
+#define BRIGHT_BLACK_BG(str)   "\033[100m" str "\033[0m"
+#define BRIGHT_RED_BG(str)     "\033[101m" str "\033[0m"
+#define BRIGHT_GREEN_BG(str)   "\033[102m" str "\033[0m"
+#define BRIGHT_YELLOW_BG(str)  "\033[103m" str "\033[0m"
+#define BRIGHT_BLUE_BG(str)    "\033[104m" str "\033[0m"
+#define BRIGHT_MAGENTA_BG(str) "\033[105m" str "\033[0m"
+#define BRIGHT_CYAN_BG(str)    "\033[106m" str "\033[0m"
+#define BRIGHT_WHITE_BG(str)   "\033[107m" str "\033[0m"
+
+#define BOLD_TEXT(str)       "\033[1m" str "\033[0m"
+#define UNDERLINE_TEXT(str)  "\033[4m" str "\033[0m"
+#define BLINK_TEXT(str)      "\033[5m" str "\033[0m"  // May not work on all terminals
+
+#define DEBUG 0
 
 #if DEBUG
     #define DEBUG_PRINT(fmt, ...) printf(fmt, ##__VA_ARGS__)
@@ -291,28 +319,6 @@ static int test_complete_decode_base64_cases(void)
     return 1;
 }
 
-    const case_pair basic_cases[] = {
-        { "Hello, World!", "SGVsbG8sIFdvcmxkIQ==" },
-        { "GeeksforGeeks", "R2Vla3Nmb3JHZWVrcw==" },
-        { "123456", "MTIzNDU2" },
-        { "Base64 Encoding", "QmFzZTY0IEVuY29kaW5n" },
-        { "!R~J2jL&mI]O)3=c:G3Mo)oqmJdxoprTZDyxEvU0MI.'Ww5H{G>}y;;+B8E_Ah,Ed[ PdBqY'^N>O$4:7LK1<:|7)btV@|{YWR$$Er59-XjVrFl4L}~yzTEd4'E[@k",
-          "IVJ+SjJqTCZtSV1PKTM9YzpHM01vKW9xbUpkeG9wclRaRHl4RXZVME1JLidXdzVIe0c+fXk7OytCOEVfQWgsRWRbIFBkQnFZJ15OPk8kNDo3TEsxPDp8NylidFZAfHtZV1IkJEVyNTktWGpWckZsNEx9fnl6VEVkNCdFW0Br" }
-    };
-
-    const case_pair no_padding[] = {
-        {"Hello, World!", "SGVsbG8sIFdvcmxkIQ"},
-        {"GeeksforGeeks", "R2Vla3Nmb3JHZWVrcw"},
-        {"123456", "MTIzNDU2"},
-        {"Base64 Encoding", "QmFzZTY0IEVuY29kaW5n"},
-        {"!R~J2jL&mI]O)3=c:G3Mo)oqmJdxoprTZDyxEvU0MI.'Ww5H{G>}y;;+B8E_Ah,Ed[ "
-         "PdBqY'^N>O$4:7LK1<:|7)btV@|{YWR$$Er59-XjVrFl4L}~yzTEd4'E[@k",
-         "IVJ+SjJqTCZtSV1PKTM9YzpHM01vKW9xbUpkeG9wclRaRHl4RXZVME1JLidXdzVIe0c+"
-         "fXk7OytCOEVfQWgsRWRbIFBkQnFZJ15OPk8kNDo3TEsxPDp8NylidFZAfHtZV1IkJEVyNTk"
-         "tWGpWckZsNEx9fnl6VEVkNCdFW0Br"}
-        };
-
-
 static int check_cases(case_pair *cases)
 {
     DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered encode_base64_cases Test\n"));
@@ -396,6 +402,31 @@ static int check_cases(case_pair *cases)
     return 1;
 }
 
+const case_pair basic_cases[] = {
+    { "Hello, World!", "SGVsbG8sIFdvcmxkIQ==" },
+    { "GeeksforGeeks", "R2Vla3Nmb3JHZWVrcw==" },
+    { "123456", "MTIzNDU2" },
+    { "Base64 Encoding", "QmFzZTY0IEVuY29kaW5n" },
+    { "!R~J2jL&mI]O)3=c:G3Mo)oqmJdxoprTZDyxEvU0MI.'Ww5H{G>}y;;+B8E_Ah,Ed[ PdBqY'^N>O$4:7LK1<:|7)btV@|{YWR$$Er59-XjVrFl4L}~yzTEd4'E[@k",
+      "IVJ+SjJqTCZtSV1PKTM9YzpHM01vKW9xbUpkeG9wclRaRHl4RXZVME1JLidXdzVIe0c+fXk7OytCOEVfQWgsRWRbIFBkQnFZJ15OPk8kNDo3TEsxPDp8NylidFZAfHtZV1IkJEVyNTktWGpWckZsNEx9fnl6VEVkNCdFW0Br" }
+};
+
+const case_pair no_padding[] = {
+    {"Hello, World!", "SGVsbG8sIFdvcmxkIQ"},
+    {"GeeksforGeeks", "R2Vla3Nmb3JHZWVrcw"},
+    {"123456", "MTIzNDU2"},
+    {"Base64 Encoding", "QmFzZTY0IEVuY29kaW5n"},
+    {"!R~J2jL&mI]O)3=c:G3Mo)oqmJdxoprTZDyxEvU0MI.'Ww5H{G>}y;;+B8E_Ah,Ed[ "
+     "PdBqY'^N>O$4:7LK1<:|7)btV@|{YWR$$Er59-XjVrFl4L}~yzTEd4'E[@k",
+     "IVJ+SjJqTCZtSV1PKTM9YzpHM01vKW9xbUpkeG9wclRaRHl4RXZVME1JLidXdzVIe0c+"
+     "fXk7OytCOEVfQWgsRWRbIFBkQnFZJ15OPk8kNDo3TEsxPDp8NylidFZAfHtZV1IkJEVyNTk"
+     "tWGpWckZsNEx9fnl6VEVkNCdFW0Br"}
+    };
+
+const case_pair whitespaces[] = {
+        {"abcd", " Y\fW\tJ\njZ A=\r= "},
+    };
+
 static int test_encode_base64_basic_cases(void){
     check_cases(basic_cases);
     return 1;
@@ -404,6 +435,11 @@ static int test_encode_base64_basic_cases(void){
 
 static int test_encode_base64_no_padding_cases(void){
     check_cases(no_padding);
+    return 1;
+}
+
+static int test_encode_base64_whitespace_cases(void){
+    check_cases(whitespaces);
     return 1;
 }
 
@@ -1062,6 +1098,207 @@ static int test_issue_502(void) {
 }
 
 
+/*
+ * TEST(bad_padding_base64)
+ *
+ * For each binary length from 0 to 2047, generate random binary data,
+ * encode it to Base64, then adjust the padding by appending or removing '='
+ * and inserting extra whitespace (5 insertions), and then decode.
+ * The expected result is that the decoder returns an error (INVALID_BASE64_CHARACTER).
+ */
+static int test_bad_padding_base64(void) {
+    size_t len, trial, i;
+    unsigned int seed = 12345;  /* Fixed seed for reproducibility */
+    DEBUG_PRINT(CYAN_TEXT("DEBUG: Entered test_bad_padding_base64\n"));
+
+    for (len = 0; len < 2048; len++) {
+        DEBUG_PRINT(BRIGHT_YELLOW_BG(BRIGHT_WHITE_TEXT("DEBUG: Processing length = %zu\n")), len);
+
+        /* Allocate source binary data */
+        char *source = (len > 0) ? OPENSSL_malloc(len) : NULL;
+        if (len > 0 && !source) {
+            TEST_error("Out of memory for source of length %zu", len);
+            return 0;
+        }
+        for (i = 0; i < len; i++) {
+            source[i] = (char)(rand_r(&seed) % 256);
+        }
+
+        /* Allocate buffer for Base64 conversion */
+        size_t b64_len_expected = base64_length_from_binary(len);
+        char *buffer = OPENSSL_malloc(b64_len_expected + 1);
+        if (!buffer) {
+            TEST_error("Out of memory for Base64 buffer for length %zu", len);
+            if (source) OPENSSL_free(source);
+            return 0;
+        }
+        size_t s = tail_encode_base64(NULL, buffer, source, len);
+        buffer[s] = '\0';
+        DEBUG_PRINT("DEBUG: Base64 encoded result (length %zu): \"%s\"\n", s, buffer);
+
+        /* Determine padding count in the encoded string */
+        size_t padding = 0;
+        if (s > 0 && buffer[s - 1] == '=') {
+            padding++;
+            if (s > 1 && buffer[s - 2] == '=') {
+                padding++;
+            }
+        }
+        /* "Resize" the vector to the actual length s */
+        // char *temp = OPENSSL_realloc(buffer, s);
+        // if (temp) {
+        //     buffer = temp;
+        // }
+
+        if (s != 0) {
+            char *temp = OPENSSL_realloc(buffer, s);
+            if (temp)
+                buffer = temp;
+        } else {
+            /* If s is zero, keep the original allocation intact. Realloc acts as free when second arg is 0 and this causes double freeing error */
+        }
+        
+
+        /* Allocate back buffer for decoded binary data */
+        size_t back_bufsize = maximal_binary_length_from_base64(buffer, s);
+        DEBUG_PRINT("DEBUG: Back buffer size (maximal binary length) = %zu\n", back_bufsize);
+        char *back = OPENSSL_malloc(back_bufsize);
+        if (!back && back_bufsize != 0) {
+            TEST_error("Out of memory for back buffer");
+            OPENSSL_free(source);
+            OPENSSL_free(buffer);
+            return 0;
+        }
+
+        if (padding == 1) {
+            /* Case: one padding character exists.
+             * Append an extra '=' and then insert 5 spaces. It should break
+             */
+            char *copy = OPENSSL_malloc(s + 1);
+            if (!copy) {
+                TEST_error("Out of memory for copy");
+                OPENSSL_free(source);
+                OPENSSL_free(buffer);
+                return 0;
+            }
+            memcpy(copy, buffer, s);
+            copy[s] = '=';
+            size_t copy_len = s + 1;
+            for (i = 0; i < 5; i++) {
+                size_t pos = add_space(&copy, &copy_len, &seed);
+                if (pos == (size_t)-1) {
+                    TEST_error("Out of memory in add_space for length %zu", copy_len);
+                    OPENSSL_free(source);
+                    OPENSSL_free(buffer);
+                    OPENSSL_free(copy);
+                    return 0;
+                }
+            }
+            int r = base64_tail_decode_trim_end(NULL, back,copy, copy_len);
+            ASSERT_EQUAL_INT(r, -1);
+            OPENSSL_free(copy);
+        } else if (padding == 2) {
+            /* Case: two padding characters exist.
+             * Subcase 1: adding padding should break.
+             */
+            {
+                DEBUG_PRINT("Subcase 1: adding padding should break.\n");
+
+                char *copy = OPENSSL_malloc(s + 1);
+                if (!copy) {
+                    TEST_error("Out of memory for copy");
+                    OPENSSL_free(source);
+                    OPENSSL_free(buffer);
+                    return 0;
+                }
+                memcpy(copy, buffer, s);
+                copy[s] = '=';
+                size_t copy_len = s + 1;
+                for (i = 0; i < 5; i++) {
+                    size_t pos = add_space(&copy, &copy_len, &seed);
+                    if (pos == (size_t)-1) {
+                        TEST_error("Out of memory in add_space for length %zu", copy_len);
+                        OPENSSL_free(source);
+                        OPENSSL_free(buffer);
+                        OPENSSL_free(copy);
+                        return 0;
+                    }
+                }
+                int r = base64_tail_decode_trim_end(NULL, back,copy, copy_len);
+                ASSERT_EQUAL_INT(r, -1);
+                OPENSSL_free(copy);
+            }
+            /* Subcase 2: removing one padding character should break. */
+            {
+                DEBUG_PRINT("Subcase 2: removing one padding character should break \n");
+                char *copy = OPENSSL_malloc(s);
+                if (!copy) {
+                    TEST_error("Out of memory for copy");
+                    OPENSSL_free(source);
+                    OPENSSL_free(buffer);
+                    return 0;
+                }
+                memcpy(copy, buffer, s);
+                size_t copy_len = s - 1;  /* remove last character */
+                copy = OPENSSL_realloc(copy, copy_len);
+                if (!copy && copy_len != 0) {
+                    TEST_error("Out of memory in realloc for copy");
+                    OPENSSL_free(source);
+                    OPENSSL_free(buffer);
+                    return 0;
+                }
+                for (i = 0; i < 5; i++) {
+                    size_t pos = add_space(&copy, &copy_len, &seed);
+                    if (pos == (size_t)-1) {
+                        TEST_error("Out of memory in add_space for length %zu", copy_len);
+                        OPENSSL_free(source);
+                        OPENSSL_free(buffer);
+                        OPENSSL_free(copy);
+                        return 0;
+                    }
+                }
+                int r = base64_tail_decode_trim_end(NULL, back,copy, copy_len);
+                ASSERT_EQUAL_INT(r, -1);
+                OPENSSL_free(copy);
+            }
+        } else {
+            /* Case: no padding found. */
+            {
+                char *copy = OPENSSL_malloc(s + 1);
+                if (!copy) {
+                    TEST_error("Out of memory for copy");
+                    OPENSSL_free(source);
+                    OPENSSL_free(buffer);
+                    return 0;
+                }
+                memcpy(copy, buffer, s);
+                copy[s] = '=';
+                size_t copy_len = s + 1;
+                for (i = 0; i < 5; i++) {
+                    size_t pos = add_space(&copy, &copy_len, &seed);
+                    if (pos == (size_t)-1) {
+                        TEST_error("Out of memory in add_space for length %zu", copy_len);
+                        OPENSSL_free(source);
+                        OPENSSL_free(buffer);
+                        OPENSSL_free(copy);
+                        return 0;
+                    }
+                }
+                int r = base64_tail_decode_trim_end(NULL, back,copy, copy_len);
+                ASSERT_EQUAL_INT(r, -1);
+                OPENSSL_free(copy);
+            }
+        }
+
+        OPENSSL_free(source);
+        OPENSSL_free(buffer);
+        OPENSSL_free(back);
+    }
+    return 1;
+}
+
+
+
 // The setup_tests() function is called by the test harness to register tests.
 int setup_tests(void)
 {
@@ -1069,7 +1306,7 @@ int setup_tests(void)
     // ADD_TEST(test_decode_base64_cases);
     // ADD_TEST(test_complete_decode_base64_cases);
     // ADD_TEST(test_encode_base64_basic_cases);
-    ADD_TEST(test_encode_base64_no_padding_cases);
+    // ADD_TEST(test_encode_base64_no_padding_cases);
     // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces);
     // ADD_TEST(test_roundtrip_base64_with_spaces);
     // ADD_TEST(test_roundtrip_base64_with_garbage);
@@ -1080,6 +1317,7 @@ int setup_tests(void)
     // ADD_TEST(test_issue_502_alt);
     // ADD_TEST(test_issue_504_8bit); 
     // ADD_TEST(test_issue_502);
+    ADD_TEST(test_bad_padding_base64);
 
     // Return 1 to indicate successful test setup.
     return 1;
