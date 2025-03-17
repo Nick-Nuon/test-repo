@@ -26,6 +26,34 @@ static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
 #define GREEN_TEXT(str) "\033[32m" str "\033[0m"
 
 
+// Standard Colors
+#define BLACK_TEXT(str)   "\033[30m" str "\033[0m"
+#define WHITE_TEXT(str)   "\033[37m" str "\033[0m"
+
+// Bright Colors
+#define BRIGHT_RED_TEXT(str)     "\033[91m" str "\033[0m"
+#define BRIGHT_GREEN_TEXT(str)   "\033[92m" str "\033[0m"
+#define BRIGHT_YELLOW_TEXT(str)  "\033[93m" str "\033[0m"
+#define BRIGHT_BLUE_TEXT(str)    "\033[94m" str "\033[0m"
+#define BRIGHT_MAGENTA_TEXT(str) "\033[95m" str "\033[0m"
+#define BRIGHT_CYAN_TEXT(str)    "\033[96m" str "\033[0m"
+#define BRIGHT_WHITE_TEXT(str)   "\033[97m" str "\033[0m"
+
+
+// Background Colors (Bright)
+#define BRIGHT_BLACK_BG(str)   "\033[100m" str "\033[0m"
+#define BRIGHT_RED_BG(str)     "\033[101m" str "\033[0m"
+#define BRIGHT_GREEN_BG(str)   "\033[102m" str "\033[0m"
+#define BRIGHT_YELLOW_BG(str)  "\033[103m" str "\033[0m"
+#define BRIGHT_BLUE_BG(str)    "\033[104m" str "\033[0m"
+#define BRIGHT_MAGENTA_BG(str) "\033[105m" str "\033[0m"
+#define BRIGHT_CYAN_BG(str)    "\033[106m" str "\033[0m"
+#define BRIGHT_WHITE_BG(str)   "\033[107m" str "\033[0m"
+
+#define BOLD_TEXT(str)       "\033[1m" str "\033[0m"
+#define UNDERLINE_TEXT(str)  "\033[4m" str "\033[0m"
+#define BLINK_TEXT(str)      "\033[5m" str "\033[0m"  // May not work on all terminals
+
 #if DEBUG
     #define DEBUG_PRINT(fmt, ...) printf(fmt, ##__VA_ARGS__)
 #else
@@ -1003,23 +1031,25 @@ static inline int is_ascii_white_space(char c) {
 // removes padding and white spaces at the end
 int base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char* output, char * input, size_t length) {
     #if DEBUG
-        DEBUG_PRINT("DEBUG: Entered base64_to_binary_with_ws\n");
+        DEBUG_PRINT(BRIGHT_YELLOW_TEXT("DEBUG: Entered base64_tail_decode_trim_end\n"));
         DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string: \"%s\", length: %d\n"), input, length);
     #endif
 
     while(length > 0 && is_ascii_white_space(input[length - 1])) {
       length--;
     }
-    size_t equallocation = length; // location of the first padding character if any
     auto equalsigns = 0;
     if(length > 0 && input[length - 1] == '=') {
       length -= 1;
       equalsigns++;
+      DEBUG_PRINT("Found = sign: %d", equalsigns);
+
       while(length > 0 && is_ascii_white_space(input[length - 1])) {
         length--;
       }
       if(length > 0 && input[length - 1] == '=') {
         equalsigns++;
+        DEBUG_PRINT("Found = sign: %d", equalsigns);
         length -= 1;
       }
     }
@@ -1032,16 +1062,14 @@ int base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char* output, char * input,
       return 0;
     }
     int r = base64_tail_decode(ctx,output, input, length);
-    if(r > 1 && equalsigns > 0) {
+    if(r >= 1 && equalsigns > 0) {
       // additional checks
       if((r % 3 == 0) || ((r % 3) + 1 + equalsigns != 4)) {
         // return {INVALID_BASE64_CHARACTER, equallocation};
         return -1;
       }
     }
-    #if DEBUG
         DEBUG_PRINT(GREEN_TEXT("DEBUG: Final r:%d\n"), r);
-    #endif
     return r;
   }
 
@@ -1075,15 +1103,9 @@ int base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int leng
 #endif
 
     while (1) {
-#if DEBUG
-        DEBUG_PRINT("While (1) ");
-#endif
         while (src + 4 <= srcend &&
                (x = p0[(uint8_t)(src[0])] | p1[(uint8_t)(src[1])] |
                     p2[(uint8_t)(src[2])] | p3[(uint8_t)(src[3])]) < 0x01FFFFFF) {
-#if DEBUG
-            DEBUG_PRINT("ping ");
-#endif
             memcpy(dst, &x, 3); // Copy 3 bytes from the computed value.
             dst += 3;
             src += 4;
@@ -1100,15 +1122,14 @@ int base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int leng
                 // INVALID_BASE64_CHARACTER
                 return -1;
             } else {
+                DEBUG_PRINT("WS detected!!!!\n");
                 // A whitespace or newline; ignore it.
             }
             src++;
         }
         if (idx != 4) {
             if (idx == 2) {
-#if DEBUG
                 DEBUG_PRINT("idx == 2\n");
-#endif
                 uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) + ((uint32_t)(buffer[1]) << (2 * 6));
                 // For little-endian system: swap and shift.
                 triple = swap_bytes(triple);
@@ -1116,9 +1137,7 @@ int base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int leng
                 memcpy(dst, &triple, 1);
                 dst += 1;
             } else if (idx == 3) {
-#if DEBUG
                 DEBUG_PRINT("idx == 3\n");
-#endif
                 uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) +
                                   ((uint32_t)(buffer[1]) << (2 * 6)) +
                                   ((uint32_t)(buffer[2]) << (1 * 6));
