@@ -1029,17 +1029,18 @@ static inline int is_ascii_white_space(char c) {
 }
 
 // removes padding and white spaces at the end
-int base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char* output, char * input, size_t length) {
-    #if DEBUG
-        DEBUG_PRINT(BRIGHT_YELLOW_TEXT("DEBUG: Entered base64_tail_decode_trim_end\n"));
-        DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string: \"%s\", length: %d\n"), input, length);
-    #endif
+result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char* output, char * input, size_t length) {
+    DEBUG_PRINT(BRIGHT_YELLOW_TEXT("DEBUG: Entered base64_tail_decode_trim_end\n"));
+    DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string: \"%s\", length: %d\n"), input, length);
 
     while(length > 0 && is_ascii_white_space(input[length - 1])) {
       length--;
     }
+    size_t equallocation = length; // location of the first padding character if any
+
     auto equalsigns = 0;
     if(length > 0 && input[length - 1] == '=') {
+      equallocation = length - 1;
       length -= 1;
       equalsigns++;
       DEBUG_PRINT("Found = sign: %d", equalsigns);
@@ -1048,6 +1049,7 @@ int base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char* output, char * input,
         length--;
       }
       if(length > 0 && input[length - 1] == '=') {
+        equallocation = length - 1;
         equalsigns++;
         DEBUG_PRINT("Found = sign: %d", equalsigns);
         length -= 1;
@@ -1055,27 +1057,27 @@ int base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char* output, char * input,
     }
     if(length == 0) {
       if(equalsigns > 0) {
-        // return {INVALID_BASE64_CHARACTER, equallocation};
-        return -1;
+        return (result) {INVALID_BASE64_CHARACTER, equallocation};
+        // return -1;
       }
-    //   return {SUCCESS, 0};
-      return 0;
+      return (result) {BASE64_SUCCESS, 0};
+    //   return 0;
     }
-    int r = base64_tail_decode(ctx,output, input, length);
-    if(r >= 1 && equalsigns > 0) {
+    full_result r = base64_tail_decode(ctx,output, input, length);
+    if(r.error == BASE64_SUCCESS && equalsigns > 0) {
       // additional checks
-      if((r % 3 == 0) || ((r % 3) + 1 + equalsigns != 4)) {
-        // return {INVALID_BASE64_CHARACTER, equallocation};
-        return -1;
+      if((r.output_count % 3 == 0) || ((r.output_count % 3) + 1 + equalsigns != 4)) {
+        return (result) {INVALID_BASE64_CHARACTER, equallocation};
+        // return -1;
       }
     }
         DEBUG_PRINT(GREEN_TEXT("DEBUG: Final r:%d\n"), r);
-    return r;
+    return (result){r.error, (size_t) r.output_count};
   }
 
-// Returns 1 upon success. -1 upon error. The destination buffer must be large enough.
+// Returns 1 upon BASE64_SUCCESS. -1 upon error. The destination buffer must be large enough.
 // This function assumes that the padding (=) has been removed.
-int base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int length) {
+full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int length) {
     // Use local aliases for the global lookup tables.
     const uint8_t *to_base64 = to_base64_value;
     const uint32_t *p0 = d0;
@@ -1120,7 +1122,8 @@ int base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int leng
                 idx++;
             } else if (code > 64) {
                 // INVALID_BASE64_CHARACTER
-                return -1;
+                return (full_result){INVALID_BASE64_CHARACTER, (size_t)(src - srcinit),
+                    (size_t)(dst - dstinit)};
             } else {
                 DEBUG_PRINT("WS detected!!!!\n");
                 // A whitespace or newline; ignore it.
@@ -1146,7 +1149,8 @@ int base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int leng
                 memcpy(dst, &triple, 2);
                 dst += 2;
             } else if (idx == 1) {
-                return -1;
+                return (full_result){BASE64_INPUT_REMAINDER, (size_t)(src - srcinit),
+                    (size_t)(dst - dstinit)};
             }
 #if DEBUG
             {
@@ -1158,7 +1162,8 @@ int base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int leng
                 DEBUG_PRINT("\n\n");
             }
 #endif
-            return (int)(dst - dstinit);
+            return (full_result){BASE64_SUCCESS, (size_t)(src - srcinit), (size_t)(dst - dstinit)};
+            // return (int)(dst - dstinit);
         }
         uint32_t triple =
             ((uint32_t)(buffer[0]) << (3 * 6)) + ((uint32_t)(buffer[1]) << (2 * 6)) +
@@ -1229,8 +1234,8 @@ int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
 
     *outl = 0;
     if (ctx->num != 0) {
-        // i = evp_decodeblock_int(ctx, out, ctx->enc_data, ctx->num);
-        i = base64_tail_decode(ctx, out, ctx->enc_data, ctx->num);
+        i = evp_decodeblock_int(ctx, out, ctx->enc_data, ctx->num);
+        // i = base64_tail_decode(ctx, out, ctx->enc_data, ctx->num);
         if (i < 0)
             return -1;
         ctx->num = 0;

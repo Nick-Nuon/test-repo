@@ -102,7 +102,7 @@
 /* Prototypes for encoding helper functions */
 static int memout(BIO *mem, char c, int llen, int *pos);
 static int memoutws(BIO *mem, char c, unsigned wscnt, unsigned llen, int *pos);
-int base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int length);
+// result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int length);
 
 size_t base64_length_from_binary(size_t length) {
     return (length + 2)/3 * 4; // We use padding to make the length a multiple of 4.
@@ -237,13 +237,13 @@ static int test_decode_base64_cases(void)
          */
         // TODO: the ctx isn't supposed to be NULL, come back to it when implementing the SRP alphabet/tables
         // int decoded = base64_tail_decode_trim_end(NULL, (char *)buffer, cases[i], (int)len);
-        int decoded = base64_tail_decode_trim_end(NULL, (char *)buffer, cases[i], len);
-        if (decoded < 0) {
+        result decoded = base64_tail_decode_trim_end(NULL, (char *)buffer, cases[i], len);
+        if (decoded.error != BASE64_SUCCESS) {
             TEST_error(RED_TEXT("base64_to_binary_with_ws error in test case %zu"), i);
             OPENSSL_free(buffer);
             return 0;
         }
-        if ((size_t)decoded != expected_counts[i]) {
+        if ((size_t)decoded.count != expected_counts[i]) {
             TEST_error(RED_TEXT("Decoded byte count mismatch: got %d, expected %zu"), decoded, expected_counts[i]);
 
 
@@ -260,12 +260,12 @@ static int test_decode_base64_cases(void)
 // last_chunk_handling_options are used to specify the handling of the last
 // chunk in base64 decoding.
 // https://tc39.es/proposal-arraybuffer-base64/spec/#sec-frombase64
-typedef enum {
-    LAST_CHUNK_LOOSE, /* standard base64 format, decode partial final chunk */
-    LAST_CHUNK_STRICT,/* error when the last chunk is partial, 2 or 3 chars, and
-    unpadded, or non-zero bit padding */
-    LAST_CHUNK_STOP_BEFORE_PARTIAL /* if the last chunk is partial (2 or 3 chars), ignore it (no error) */
-} last_chunk_handling_options;
+// typedef enum {
+//     LAST_CHUNK_LOOSE, /* standard base64 format, decode partial final chunk */
+//     LAST_CHUNK_STRICT,/* error when the last chunk is partial, 2 or 3 chars, and
+//     unpadded, or non-zero bit padding */
+//     LAST_CHUNK_STOP_BEFORE_PARTIAL /* if the last chunk is partial (2 or 3 chars), ignore it (no error) */
+// } last_chunk_handling_options;
 
 /* Define one test case: expected decoded string "abcd", 
     encoded string with extra whitespace and padding " Y\fW\tJ\njZ A=\r= " */
@@ -293,20 +293,20 @@ static int test_complete_decode_base64_cases(void)
             TEST_error("Out of memory");
             return 0;
         }
-        int r = base64_tail_decode_trim_end(NULL, (char *)buffer,cases[i].encoded, enc_len);
-        if(r < 0) {
+        result r = base64_tail_decode_trim_end(NULL, (char *)buffer,cases[i].encoded, enc_len);
+        if(r.error != BASE64_SUCCESS) {
             TEST_error(RED_TEXT("base64_to_binary error in test case %zu"), i);
             OPENSSL_free(buffer);
             return 0;
         }
-        if(r != strlen(cases[i].decoded)) {
+        if(r.count != strlen(cases[i].decoded)) {
             TEST_error(RED_TEXT("Decoded byte count mismatch in test case %zu: got %zu, expected %zu"), 
                        i, r, strlen(cases[i].decoded));
             OPENSSL_free(buffer);
             return 0;
         }
 
-        for(size_t j = 0; j < r; j++) {
+        for(size_t j = 0; j < r.count; j++) {
             if(buffer[j] != cases[i].decoded[j]) {
                 TEST_error(RED_TEXT("Mismatch at index %zu in test case %zu: got %02x, expected %02x"), 
                            j, i, (unsigned int)buffer[j], (unsigned int)cases[i].decoded[j]);
@@ -375,20 +375,20 @@ static int check_cases(case_pair *cases)
             TEST_error("Out of memory in decoding test case %zu", i);
             return 0;
         }
-        int r = base64_tail_decode_trim_end(NULL, (char *)buffer,cases[i].encoded, enc_len);
-        if(r < 0) {
+        result r = base64_tail_decode_trim_end(NULL, (char *)buffer,cases[i].encoded, enc_len);
+        if(r.error != BASE64_SUCCESS) {
             TEST_error(RED_TEXT("base64_to_binary error in test case %zu"), i);
             OPENSSL_free(buffer);
             return 0;
         }
-        if(r != strlen(cases[i].decoded)) {
+        if(r.count != strlen(cases[i].decoded)) {
             TEST_error(RED_TEXT("Decoded byte count mismatch in test case %zu: got %zu, expected %zu"), 
                        i, r, strlen(cases[i].decoded));
             OPENSSL_free(buffer);
             return 0;
         }
 
-        for(size_t j = 0; j < r; j++) {
+        for(size_t j = 0; j < r.count; j++) {
             if(buffer[j] != cases[i].decoded[j]) {
                 TEST_error(RED_TEXT("Decoded:Mismatch at index %zu in test case %zu: got %02x, expected %02x"), 
                            j, i, (unsigned int)buffer[j], (unsigned int)cases[i].decoded[j]);
@@ -628,9 +628,10 @@ static int test_roundtrip_base64_with_lots_of_spaces(void) {
         }
 
         /* Decode the Base64 string (with extra spaces) */
-        size_t r = base64_tail_decode_trim_end(NULL, back, buffer_with_spaces, buffer_with_spaces_len);
+        result r = base64_tail_decode_trim_end(NULL, back, buffer_with_spaces, buffer_with_spaces_len);
         DEBUG_PRINT("DEBUG: Decoded binary length = %zu\n", r);
-        ASSERT_EQUAL_SIZE(r, len);
+        ASSERT_TRUE(r.error == BASE64_SUCCESS);
+        ASSERT_EQUAL_SIZE(r.count, len);
 
         for (size_t j = 0; j < len; j++) {
             ASSERT_EQUAL_HEX(j, back[j], source[j]);
@@ -711,9 +712,10 @@ static int test_roundtrip_base64_with_spaces(void) {
 
         /* First round: using base64_to_binary */
         // for (i = 0; i < 3; i++) {
-            int r = base64_tail_decode_trim_end(NULL, back,buffer, cur_b64_len);
+            result r = base64_tail_decode_trim_end(NULL, back,buffer, cur_b64_len);
             DEBUG_PRINT("DEBUG: base64_to_binary returned count = %zu\n", r);
-            ASSERT_EQUAL_SIZE(r, len);
+            ASSERT_TRUE(r.error == BASE64_SUCCESS);
+            ASSERT_EQUAL_SIZE(r.count, len);
             if (len > 0) {
                 ASSERT_TRUE(memcmp(back, source, len) == 0);
             }
@@ -799,7 +801,8 @@ const static uint8_t to_base64_value[] = {
  * each of three last-chunk handling options. The decoded data is compared
  * with the original source.
  */
-static int test_roundtrip_base64_doomed(void) {
+// this is true in the original
+static int test_roundtrip_base64_with_garbage(void) {
     size_t len, trial, i, j;
     unsigned int seed = 12345;  /* Fixed seed for reproducibility */
     DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered test_roundtrip_base64_with_garbage\n"));
@@ -859,14 +862,14 @@ static int test_roundtrip_base64_doomed(void) {
 
         /* First round: using base64_to_binary */
         // for (i = 0; i < 3; i++) {
-            int r = base64_tail_decode_trim_end(NULL,back, buffer, cur_b64_len);
+            result r = base64_tail_decode_trim_end(NULL,back, buffer, cur_b64_len);
                                         //   BASE64_DEFAULT_ACCEPT_GARBAGE, opts[i]);
             // DEBUG_PRINT("DEBUG: Option %d, base64_to_binary returned count = %zu\n",
             //             (int)opts[i], r);
             DEBUG_PRINT("DEBUG: base64_to_binary returned count = %zu\n",
                  r);
 
-            ASSERT_EQUAL_SIZE(r, -1);
+            ASSERT_TRUE(r.error != BASE64_SUCCESS);
             // if (len > 0) {
             //     ASSERT_TRUE(memcmp(back, source, len) == 0);
             // }
@@ -909,13 +912,15 @@ static int test_base64_decode_just_one_padding_loose(void) {
     /* Define a structure for test cases */
     typedef struct {
         const char *input;
+        error_code error;
         int expected;
     } test_case;
     
     /* Test cases array; here we have one test case. */
     test_case test_cases[] = {
-        { "uuuu             =", -1 }
+        { "uuuu             =", INVALID_BASE64_CHARACTER, 17 }
     };
+
     size_t num_cases = sizeof(test_cases) / sizeof(test_cases[0]);
     
     /* A small buffer to receive decoded binary data */
@@ -927,6 +932,7 @@ static int test_base64_decode_just_one_padding_loose(void) {
     
     for (size_t i = 0; i < num_cases; i++) {
         const char *input = test_cases[i].input;
+        error_code error = test_cases[i].error;
         int expected = test_cases[i].expected;
         
         // for (size_t j = 0; j < 2; j++) {
@@ -934,8 +940,9 @@ static int test_base64_decode_just_one_padding_loose(void) {
             for (size_t k = 0; k < 1; k++) {
                 // int chunk_option = chunk_opts[k];
                 // result r = base64_to_binary(input, strlen(input), buffer, option, chunk_option);
-                int r = base64_tail_decode_trim_end(NULL , buffer, input, strlen(input));
-                ASSERT_EQUAL_SIZE(r, expected);
+                result r = base64_tail_decode_trim_end(NULL , buffer, input, strlen(input));
+                ASSERT_EQUAL_SIZE( r.error , error);
+                ASSERT_EQUAL_SIZE(r.count, expected);
             }
         // }
     }
@@ -996,9 +1003,10 @@ static int test_roundtrip_base64(void) {
         }
 
         /* Decode the Base64 string without added spaces */
-        size_t r = base64_tail_decode_trim_end(NULL, back, buffer, s);
+        result r = base64_tail_decode_trim_end(NULL, back, buffer, s);
         DEBUG_PRINT("DEBUG: Decoded binary length = %zu\n", r);
-        ASSERT_EQUAL_SIZE(r, len);
+        ASSERT_TRUE(r.error == BASE64_SUCCESS);
+        ASSERT_EQUAL_SIZE(r.count, len);
 
         for (size_t j = 0; j < len; j++) {
             ASSERT_EQUAL_HEX(j, back[j], source[j]);
@@ -1026,13 +1034,14 @@ static int test_issue_520(void) {
     char out[48];
 
     /* Decode the data as a Base64 string in strict mode */
-    int r = base64_tail_decode_trim_end(NULL,out,(const char *)data, data_len
+    result r = base64_tail_decode_trim_end(NULL,out,(const char *)data, data_len
                                 );
     
     /* Check that the error code is BASE64_INPUT_REMAINDER (-1)
        and that no bytes were decoded (count 0).
     */
-    ASSERT_EQUAL_INT(r,-1);
+    ASSERT_EQUAL_INT(r.error, BASE64_INPUT_REMAINDER);
+    ASSERT_EQUAL_INT(r.count,0);
 
     return 1;
 }
@@ -1047,8 +1056,9 @@ static int test_issue_509(void) {
     size_t data_len = sizeof(data);
     char out[1];  /* output buffer of length 1 */
     
-    int r = base64_tail_decode_trim_end(NULL, out, (const char *)data, data_len);
-    ASSERT_EQUAL_SIZE(r,-1);
+    result r = base64_tail_decode_trim_end(NULL, out, (const char *)data, data_len);
+    ASSERT_EQUAL_SIZE(r.error,INVALID_BASE64_CHARACTER);
+    ASSERT_EQUAL_SIZE(r.count,1);
     return 1;
 }
 
@@ -1065,8 +1075,9 @@ static int test_issue_502_alt(void) {
         }
         memset(data, '=', nof_equals);
         char out[1];
-        int r = base64_tail_decode_trim_end(NULL, out, data, nof_equals);
-        ASSERT_EQUAL_SIZE(r, -1);
+        result r = base64_tail_decode_trim_end(NULL, out, data, nof_equals);
+        ASSERT_EQUAL_SIZE(r.error,INVALID_BASE64_CHARACTER);
+        ASSERT_EQUAL_SIZE(r.count,0);
     }
     return 1;
 }
@@ -1079,8 +1090,9 @@ static int test_issue_502_alt(void) {
 static int test_issue_504_8bit(void) {
     char data[1] = { 61 };
     char out[1];
-    int r = base64_tail_decode_trim_end(NULL, out, data, sizeof(data));
-    ASSERT_EQUAL_SIZE(r, -1);
+    result r = base64_tail_decode_trim_end(NULL, out, data, sizeof(data));
+    ASSERT_EQUAL_SIZE(r.error,INVALID_BASE64_CHARACTER);
+    ASSERT_EQUAL_SIZE(r.count,0);
     return 1;
 }
 
@@ -1092,10 +1104,22 @@ static int test_issue_504_8bit(void) {
 static int test_issue_502(void) {
     char data[1] = { '=' };
     char out[1];
-    int r = base64_tail_decode_trim_end(NULL, out, data, sizeof(data));
-    ASSERT_EQUAL_SIZE(r, -1);
+    result r = base64_tail_decode_trim_end(NULL, out, data, sizeof(data));
+    ASSERT_EQUAL_SIZE(r.error,INVALID_BASE64_CHARACTER);
+    ASSERT_EQUAL_SIZE(r.count,0);
     return 1;
 }
+
+// static int test_issue_502_alt(void) {
+//     for (size_t nof_equals = 1; nof_equals < 100; ++nof_equals) {
+//         char data[1] = {nof_equals, '=' };
+//         char out[1];
+//         result r = base64_tail_decode_trim_end(NULL, out, data, sizeof(data));
+//         ASSERT_EQUAL_SIZE(r.error,INVALID_BASE64_CHARACTER);
+//         ASSERT_EQUAL_SIZE(r.count,0);
+//     }
+//     return 1;
+// }
 
 
 /*
@@ -1194,8 +1218,8 @@ static int test_bad_padding_base64(void) {
                     return 0;
                 }
             }
-            int r = base64_tail_decode_trim_end(NULL, back,copy, copy_len);
-            ASSERT_EQUAL_INT(r, -1);
+            result r = base64_tail_decode_trim_end(NULL, back,copy, copy_len);
+            ASSERT_EQUAL_INT(r.error, INVALID_BASE64_CHARACTER);
             OPENSSL_free(copy);
         } else if (padding == 2) {
             /* Case: two padding characters exist.
@@ -1224,8 +1248,8 @@ static int test_bad_padding_base64(void) {
                         return 0;
                     }
                 }
-                int r = base64_tail_decode_trim_end(NULL, back,copy, copy_len);
-                ASSERT_EQUAL_INT(r, -1);
+                result r = base64_tail_decode_trim_end(NULL, back,copy, copy_len);
+                ASSERT_EQUAL_INT(r.error, INVALID_BASE64_CHARACTER);
                 OPENSSL_free(copy);
             }
             /* Subcase 2: removing one padding character should break. */
@@ -1257,8 +1281,8 @@ static int test_bad_padding_base64(void) {
                         return 0;
                     }
                 }
-                int r = base64_tail_decode_trim_end(NULL, back,copy, copy_len);
-                ASSERT_EQUAL_INT(r, -1);
+                result r = base64_tail_decode_trim_end(NULL, back,copy, copy_len);
+                ASSERT_EQUAL_INT(r.error, INVALID_BASE64_CHARACTER);
                 OPENSSL_free(copy);
             }
         } else {
@@ -1284,8 +1308,8 @@ static int test_bad_padding_base64(void) {
                         return 0;
                     }
                 }
-                int r = base64_tail_decode_trim_end(NULL, back,copy, copy_len);
-                ASSERT_EQUAL_INT(r, -1);
+                result r = base64_tail_decode_trim_end(NULL, back,copy, copy_len);
+                ASSERT_EQUAL_INT(r.error, INVALID_BASE64_CHARACTER);
                 OPENSSL_free(copy);
             }
         }
@@ -1356,8 +1380,8 @@ static int test_doomed_truncated_base64_roundtrip(void)
                 return 0;
             }
             /* Attempt to decode using the normal path */
-            int r = base64_tail_decode_trim_end(NULL, back,buffer, truncated);
-            ASSERT_EQUAL_INT(r, -1);
+            result r = base64_tail_decode_trim_end(NULL, back,buffer, truncated);
+            ASSERT_EQUAL_INT(r.error, BASE64_INPUT_REMAINDER);
             /* Test the safe decoding path with each last-chunk handling option */
             // for (i = 0; i < num_options; i++) {
             //     size_t safe_back_len = back_bufsize;
@@ -1374,25 +1398,115 @@ static int test_doomed_truncated_base64_roundtrip(void)
 }
 
 
+/*-------------------------------------------------------------------------
+  Test: streaming_base64_roundtrip
+
+  For a fixed source length (2048 bytes), this test generates random binary data,
+  encodes it to Base64, then simulates streaming decoding by processing the
+  Base64 string in windows. For each window size (from 16 to 2048, stepping by 7),
+  the test decodes the Base64 data in chunks. If a chunk does not complete a full
+  4‑character block, it adjusts the position (simulating re‑processing of tail bytes).
+  Finally, the decoded output is compared with the original source.
+-------------------------------------------------------------------------*/
+// static int test_streaming_base64_roundtrip(void)
+// {
+//     size_t len = 2048;
+//     size_t i, pos, outpos, window;
+//     unsigned int seed = 12345;  /* fixed seed for reproducibility */
+
+//     /* Allocate source buffer */
+//     char *source = OPENSSL_malloc(len);
+//     if (!source) {
+//         TEST_error("Out of memory for source");
+//         return 0;
+//     }
+//     /* Fill source with random bytes */
+//     for (i = 0; i < len; i++) {
+//         source[i] = (char)(rand_r(&seed) % 256);
+//     }
+
+//     /* Allocate Base64 buffer */
+//     size_t b64_size = base64_length_from_binary(len);
+//     char *buffer = OPENSSL_malloc(b64_size + 1);
+//     if (!buffer) {
+//         TEST_error("Out of memory for Base64 buffer");
+//         OPENSSL_free(source);
+//         return 0;
+//     }
+//     size_t size = tail_encode_base64(NULL, buffer, source, len);
+//     buffer[size] = '\0'; /* null-terminate */
+
+//     /* Process the encoded Base64 in streaming windows */
+//     for (window = 16; window <= 2048; window += 7) {
+//         /* Allocate back buffer for decoded binary data */
+//         char *back = OPENSSL_malloc(len);
+//         if (!back) {
+//             TEST_error("Out of memory for back buffer");
+//             OPENSSL_free(source);
+//             OPENSSL_free(buffer);
+//             return 0;
+//         }
+//         outpos = 0;
+//         /* Process the Base64 encoded string in chunks of "window" size */
+//         for (pos = 0; pos < size; pos += window) {
+//             size_t count = (window < (size - pos)) ? window : (size - pos);
+//             result r = base64_to_binary(NULL, back + outpos,buffer + pos, count);
+//             /* Ensure we did not get an error indicating invalid character */
+//             ASSERT_TRUE(r != -1);
+//             if (pos + count == size) {
+//                 /* Last chunk: expect a complete decode (SUCCESS) */
+//                 ASSERT_EQUAL_INT(r, 1);
+//             } else {
+//                 size_t tail_bytes_to_reprocess = 0;
+//                 if (r.error == BASE64_INPUT_REMAINDER) {
+//                     tail_bytes_to_reprocess = 1;
+//                 } else {
+//                     tail_bytes_to_reprocess = ((r.count % 3) == 0) ? 0 : (r.count % 3) + 1;
+//                 }
+//                 /* Adjust position backwards by tail_bytes_to_reprocess */
+//                 pos = (pos >= tail_bytes_to_reprocess) ? pos - tail_bytes_to_reprocess : 0;
+//                 /* Also remove incomplete bytes from r.count */
+//                 r.count -= (r.count % 3);
+//             }
+//             outpos += r.count;
+//         }
+//         /* Check that the total decoded bytes match the original source length */
+//         ASSERT_EQUAL_SIZE(outpos, len);
+//         if (memcmp(back, source, len) != 0) {
+//             TEST_error(RED_TEXT("Streaming decode content mismatch for window %zu"), window);
+//             OPENSSL_free(back);
+//             OPENSSL_free(source);
+//             OPENSSL_free(buffer);
+//             return 0;
+//         }
+//         OPENSSL_free(back);
+//     }
+
+//     OPENSSL_free(source);
+//     OPENSSL_free(buffer);
+//     return 1;
+// }
+
+
 // The setup_tests() function is called by the test harness to register tests.
 int setup_tests(void)
 {
     // Register our sample test. The macro ADD_TEST() takes our test function.
-    // ADD_TEST(test_decode_base64_cases);
-    // ADD_TEST(test_complete_decode_base64_cases);
-    // ADD_TEST(test_encode_base64_basic_cases);
-    // ADD_TEST(test_encode_base64_no_padding_cases);
-    // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces);
-    // ADD_TEST(test_roundtrip_base64_with_spaces);
-    // ADD_TEST(test_roundtrip_base64_doomed);
-    // ADD_TEST(test_base64_decode_just_one_padding_loose);
-    // ADD_TEST(test_roundtrip_base64);
-    // ADD_TEST(test_issue_520);
-    // ADD_TEST(test_issue_509);
-    // ADD_TEST(test_issue_502_alt);
-    // ADD_TEST(test_issue_504_8bit); 
-    // ADD_TEST(test_issue_502);
-    // ADD_TEST(test_bad_padding_base64);
+    ADD_TEST(test_decode_base64_cases);
+    ADD_TEST(test_complete_decode_base64_cases);
+    ADD_TEST(test_encode_base64_basic_cases);
+    ADD_TEST(test_encode_base64_no_padding_cases);
+    ADD_TEST(test_roundtrip_base64_with_lots_of_spaces);
+    ADD_TEST(test_roundtrip_base64_with_spaces);
+    ADD_TEST(test_roundtrip_base64_with_garbage);
+    ADD_TEST(test_base64_decode_just_one_padding_loose);
+    ADD_TEST(test_roundtrip_base64);
+    ADD_TEST(test_issue_520);
+    ADD_TEST(test_issue_509);
+    ADD_TEST(test_issue_504_8bit); 
+    ADD_TEST(test_issue_502);
+    ADD_TEST(test_issue_502_alt);
+    ADD_TEST(test_bad_padding_base64);
     ADD_TEST(test_doomed_truncated_base64_roundtrip);
 
     // Return 1 to indicate successful test setup.
