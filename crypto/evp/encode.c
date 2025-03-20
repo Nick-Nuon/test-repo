@@ -1071,8 +1071,15 @@ result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char* output, char * inp
         // return -1;
       }
     }
-        DEBUG_PRINT(GREEN_TEXT("DEBUG: Final r:%d\n"), r);
-    return (result){r.error, (size_t) r.output_count};
+        // DEBUG_PRINT(GREEN_TEXT("DEBUG: Final r.count:%d\n"), r.input_count);
+
+    // return (result){r.error, (size_t) r.input_count};
+    if (r.error == BASE64_SUCCESS | r.error == BASE64_INPUT_REMAINDER) {
+        return (result){r.error, (size_t) r.output_count};
+    } else {
+        return (result){r.error, (size_t) r.input_count};
+    }
+    
   }
 
 // Returns 1 upon BASE64_SUCCESS. -1 upon error. The destination buffer must be large enough.
