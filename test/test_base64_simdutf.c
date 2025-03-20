@@ -1585,84 +1585,156 @@ static int test_doomed_truncated_base64_roundtrip(void)
   4‑character block, it adjusts the position (simulating re‑processing of tail bytes).
   Finally, the decoded output is compared with the original source.
 -------------------------------------------------------------------------*/
-// static int test_streaming_base64_roundtrip(void)
-// {
-//     size_t len = 2048;
-//     size_t i, pos, outpos, window;
-//     unsigned int seed = 12345;  /* fixed seed for reproducibility */
+static int test_streaming_base64_roundtrip(void)
+{
+    size_t len = 2048;
+    size_t i, pos, outpos, window;
+    unsigned int seed = 12345;  /* fixed seed for reproducibility */
 
-//     /* Allocate source buffer */
-//     char *source = OPENSSL_malloc(len);
-//     if (!source) {
-//         TEST_error("Out of memory for source");
-//         return 0;
-//     }
-//     /* Fill source with random bytes */
-//     for (i = 0; i < len; i++) {
-//         source[i] = (char)(rand_r(&seed) % 256);
-//     }
+    /* Allocate source buffer */
+    char *source = OPENSSL_malloc(len);
+    if (!source) {
+        TEST_error("Out of memory for source");
+        return 0;
+    }
+    /* Fill source with random bytes */
+    for (i = 0; i < len; i++) {
+        source[i] = (char)(rand_r(&seed) % 256);
+    }
 
-//     /* Allocate Base64 buffer */
-//     size_t b64_size = base64_length_from_binary(len);
-//     char *buffer = OPENSSL_malloc(b64_size + 1);
-//     if (!buffer) {
-//         TEST_error("Out of memory for Base64 buffer");
-//         OPENSSL_free(source);
-//         return 0;
-//     }
-//     size_t size = tail_encode_base64(NULL, buffer, source, len);
-//     buffer[size] = '\0'; /* null-terminate */
+    /* Allocate Base64 buffer */
+    size_t b64_size = base64_length_from_binary(len);
+    char *buffer = OPENSSL_malloc(b64_size + 1);
+    if (!buffer) {
+        TEST_error("Out of memory for Base64 buffer");
+        OPENSSL_free(source);
+        return 0;
+    }
+    size_t size = tail_encode_base64(NULL, buffer, source, len);
+    buffer[size] = '\0'; /* null-terminate */
 
-//     /* Process the encoded Base64 in streaming windows */
-//     for (window = 16; window <= 2048; window += 7) {
-//         /* Allocate back buffer for decoded binary data */
-//         char *back = OPENSSL_malloc(len);
-//         if (!back) {
-//             TEST_error("Out of memory for back buffer");
-//             OPENSSL_free(source);
-//             OPENSSL_free(buffer);
-//             return 0;
-//         }
-//         outpos = 0;
-//         /* Process the Base64 encoded string in chunks of "window" size */
-//         for (pos = 0; pos < size; pos += window) {
-//             size_t count = (window < (size - pos)) ? window : (size - pos);
-//             result r = base64_to_binary(NULL, back + outpos,buffer + pos, count);
-//             /* Ensure we did not get an error indicating invalid character */
-//             ASSERT_TRUE(r != -1);
-//             if (pos + count == size) {
-//                 /* Last chunk: expect a complete decode (SUCCESS) */
-//                 ASSERT_EQUAL_INT(r, 1);
-//             } else {
-//                 size_t tail_bytes_to_reprocess = 0;
-//                 if (r.error == BASE64_INPUT_REMAINDER) {
-//                     tail_bytes_to_reprocess = 1;
-//                 } else {
-//                     tail_bytes_to_reprocess = ((r.count % 3) == 0) ? 0 : (r.count % 3) + 1;
-//                 }
-//                 /* Adjust position backwards by tail_bytes_to_reprocess */
-//                 pos = (pos >= tail_bytes_to_reprocess) ? pos - tail_bytes_to_reprocess : 0;
-//                 /* Also remove incomplete bytes from r.count */
-//                 r.count -= (r.count % 3);
-//             }
-//             outpos += r.count;
-//         }
-//         /* Check that the total decoded bytes match the original source length */
-//         ASSERT_EQUAL_SIZE(outpos, len);
-//         if (memcmp(back, source, len) != 0) {
-//             TEST_error(RED_TEXT("Streaming decode content mismatch for window %zu"), window);
-//             OPENSSL_free(back);
-//             OPENSSL_free(source);
-//             OPENSSL_free(buffer);
-//             return 0;
-//         }
-//         OPENSSL_free(back);
-//     }
+    /* Process the encoded Base64 in streaming windows */
+    for (window = 16; window <= 2048; window += 7) {
+        /* Allocate back buffer for decoded binary data */
+        char *back = OPENSSL_malloc(len);
+        if (!back) {
+            TEST_error("Out of memory for back buffer");
+            OPENSSL_free(source);
+            OPENSSL_free(buffer);
+            return 0;
+        }
+        outpos = 0;
+        /* Process the Base64 encoded string in chunks of "window" size */
+        for (pos = 0; pos < size; pos += window) {
+            size_t count = (window < (size - pos)) ? window : (size - pos);
+            result r = base64_tail_decode_trim_end(NULL, back + outpos,buffer + pos, count);
+            /* Ensure we did not get an error indicating invalid character */
+            ASSERT_TRUE(r.error != INVALID_BASE64_CHARACTER);
+            if (pos + count == size) {
+                /* Last chunk: expect a complete decode (SUCCESS) */
+                ASSERT_EQUAL_INT(r.error, BASE64_SUCCESS);
+            } else {
+                size_t tail_bytes_to_reprocess = 0;
+                if (r.error == BASE64_INPUT_REMAINDER) {
+                    tail_bytes_to_reprocess = 1;
+                } else {
+                    tail_bytes_to_reprocess = ((r.count % 3) == 0) ? 0 : (r.count % 3) + 1;
+                }
+                /* Adjust position backwards by tail_bytes_to_reprocess */
+                // pos = (pos >= tail_bytes_to_reprocess) ? pos - tail_bytes_to_reprocess : 0;
+                pos -= tail_bytes_to_reprocess;
+                /* Also remove incomplete bytes from r.count */
+                r.count -= (r.count % 3);
+            }
+            outpos += r.count;
+        }
+        /* Check that the total decoded bytes match the original source length */
+        ASSERT_EQUAL_SIZE(outpos, len);
+        if (memcmp(back, source, len) != 0) {
+            TEST_error(RED_TEXT("Streaming decode content mismatch for window %zu"), window);
+            OPENSSL_free(back);
+            OPENSSL_free(source);
+            OPENSSL_free(buffer);
+            return 0;
+        }
+        OPENSSL_free(back);
+    }
 
-//     OPENSSL_free(source);
-//     OPENSSL_free(buffer);
-//     return 1;
-// }
+    OPENSSL_free(source);
+    OPENSSL_free(buffer);
+    return 1;
+}
+
+
+static int test_readme_test(void)
+{
+    size_t len = 2048;
+    size_t i, pos, outpos, window;
+
+    /* Allocate and fill the Base64 string with 'a' */
+    char *base64 = OPENSSL_malloc(len);
+    if (!base64) {
+        TEST_error("Out of memory for base64 buffer");
+        return 0;
+    }
+    for (i = 0; i < len; i++) {
+        base64[i] = 'a';
+    }
+    
+    /* Allocate back buffer for decoded binary data */
+    size_t back_buf_size = ((len + 3) / 4) * 3;
+    char *back = OPENSSL_malloc(back_buf_size);
+    if (!back) {
+        TEST_error("Out of memory for back buffer");
+        OPENSSL_free(base64);
+        return 0;
+    }
+    
+    outpos = 0;
+    window = 512;
+    for (pos = 0; pos < len; pos += window) {
+        size_t count = (window < (len - pos)) ? window : (len - pos);
+        result r = base64_tail_decode_trim_end(NULL, back + outpos,base64 + pos, count);
+        if (r.error == INVALID_BASE64_CHARACTER) {
+            TEST_error("Invalid base64 character at position %zu\n", pos + r.count);
+            OPENSSL_free(back);
+            OPENSSL_free(base64);
+            return 0;
+        }
+        // If we arrived at the end of the base64 input, we must check that the
+        // number of characters processed is a multiple of 4, or that we have a
+        // remainder of 0, 2 or 3.
+        if (pos + count == len && r.error == BASE64_INPUT_REMAINDER) {
+            TEST_error("The base64 input contained an invalid number of characters");
+        }
+        // If we are not at then end, we may have to reprocess either 1, 2 or 3
+        // bytes, and to drop the last 0, 2 or 3 bytes decoded.
+        size_t tail_bytes_to_reprocess = 0;
+        if (r.error == BASE64_INPUT_REMAINDER) {
+            tail_bytes_to_reprocess = 1;
+        } else {
+            tail_bytes_to_reprocess = (r.count % 3 == 0) ? 0 : (r.count % 3) + 1;
+        }
+        // if (pos >= tail_bytes_to_reprocess)
+            pos -= tail_bytes_to_reprocess;
+        // else
+            // pos = 0;
+        r.count -= (r.count % 3);
+        outpos += r.count;
+    }
+    /* Optionally, reallocate the back buffer to outpos */
+    // char *new_back = OPENSSL_realloc(back, outpos);
+    // if (new_back != NULL) {
+    //     back = new_back;
+    // }
+    
+    DEBUG_PRINT(GREEN_TEXT("Decoded result length: %zu\n"), outpos);
+    
+    /* Use back as needed; here we simply free it */
+    OPENSSL_free(back);
+    OPENSSL_free(base64);
+    return 1;
+}
 
 
 // The setup_tests() function is called by the test harness to register tests.
@@ -1686,6 +1758,8 @@ int setup_tests(void)
     ADD_TEST(test_bad_padding_base64);
     ADD_TEST(test_doomed_truncated_base64_roundtrip);
     ADD_TEST(test_doomed_base64_roundtrip);
+    ADD_TEST(test_streaming_base64_roundtrip);
+    ADD_TEST(test_readme_test);
 
     // Return 1 to indicate successful test setup.
     return 1;
