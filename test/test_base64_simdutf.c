@@ -73,14 +73,6 @@
     }                                                                \
 } while(0)
 
-/* ASSERT_STREQ: compare two null-terminated strings */
-#define ASSERT_STREQ(actual, expected) do {                          \
-    if (strcmp((actual), (expected)) != 0) {                           \
-        TEST_error(RED_TEXT("Assertion failed: strings \"%s\" != \"%s\""), (actual), (expected)); \
-        return 0;                                                    \
-    }                                                                \
-} while(0)
-
 /* ASSERT_EQUAL_HEX: for comparing two byte values with an index context */
 #define ASSERT_EQUAL_HEX(idx, actual, expected) do {                 \
     if ((unsigned int)(actual) != (unsigned int)(expected)) {          \
@@ -179,7 +171,6 @@ static int test_decode_base64_cases(void)
 {
     DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered Test\n"));
 
-    /* Define one test case: "SS" */
     const char *cases[] = { "SS" };
     const size_t expected_counts[] = { 1 };
     size_t num_cases = sizeof(cases) / sizeof(cases[0]);
@@ -192,12 +183,11 @@ static int test_decode_base64_cases(void)
             TEST_error("Out of memory");
             return 0;
         }
-        /* Call base64_tail_decode with a NULL EVP_ENCODE_CTX.
+        /* 
          * Our function returns the number of decoded bytes on success,
          * or -1 on error.
          */
         // TODO: the ctx isn't supposed to be NULL, come back to it when implementing the SRP alphabet/tables
-        // int decoded = base64_tail_decode_trim_end(NULL, (char *)buffer, cases[i], (int)len);
         result decoded = base64_tail_decode_trim_end(NULL, (char *)buffer, cases[i], len);
         if (decoded.error != BASE64_SUCCESS) {
             TEST_error(RED_TEXT("base64_to_binary_with_ws error in test case %zu"), i);
@@ -206,8 +196,6 @@ static int test_decode_base64_cases(void)
         }
         if ((size_t)decoded.count != expected_counts[i]) {
             TEST_error(RED_TEXT("Decoded byte count mismatch: got %d, expected %zu"), decoded, expected_counts[i]);
-
-
             OPENSSL_free(buffer);
             return 0;
         }
@@ -480,8 +468,6 @@ char *add_simple_spaces(const char *v, size_t v_len, size_t number_of_spaces,
             memcpy(copy, v, v_len);
             copy[v_len] = '\0';
         }
-        // if (result_len)
-        //     *result_len = v_len;
         return copy;
     }
 
@@ -520,9 +506,6 @@ char *add_simple_spaces(const char *v, size_t v_len, size_t number_of_spaces,
         }
     }
     result[total] = '\0';
-    // if (result_len)
-    //     *result_len = total;
-
     OPENSSL_free(positions);
     return result;
 }
@@ -762,7 +745,7 @@ const static uint8_t to_base64_value[] = {
  * each of three last-chunk handling options. The decoded data is compared
  * with the original source.
  */
-// this is true in the original
+// this is true in the original, the original tests the ignore_garbage option
 static int test_roundtrip_base64_with_garbage(void) {
     size_t len, trial, i, j;
     unsigned int seed = 12345;  /* Fixed seed for reproducibility */
@@ -1004,11 +987,7 @@ static int test_issue_520(void) {
     return 1;
 }
 
-/* 
- * TEST(issue_509)
- * Input: data = { ' ', '=' } (2 bytes)
- * Expected: error INVALID_BASE64_CHARACTER and count = 1.
- */
+
 static int test_issue_509(void) {
     char data[] = { ' ', '=' };
     size_t data_len = sizeof(data);
@@ -1020,11 +999,6 @@ static int test_issue_509(void) {
     return 1;
 }
 
-/*
- * TEST(issue_502_alt)
- * For each nof_equals from 1 to 99, create a buffer of '=' characters.
- * Expected: error INVALID_BASE64_CHARACTER
- */
 static int test_issue_502_alt(void) {
     for (size_t nof_equals = 1; nof_equals < 100; ++nof_equals) {
         char *data = OPENSSL_malloc(nof_equals);
@@ -1040,11 +1014,6 @@ static int test_issue_502_alt(void) {
     return 1;
 }
 
-/*
- * TEST(issue_504_8bit)
- * Use a char array with value 61 ('=')
- * Expected: error INVALID_BASE64_CHARACTER and count = 0.
- */
 static int test_issue_504_8bit(void) {
     char data[1] = { 61 };
     char out[1];
@@ -1054,11 +1023,6 @@ static int test_issue_504_8bit(void) {
     return 1;
 }
 
-/*
- * TEST(issue_502)
- * Use a std::array equivalent: a char array with a single '='.
- * Expected: error INVALID_BASE64_CHARACTER and count = 0.
- */
 static int test_issue_502(void) {
     char data[1] = { '=' };
     char out[1];
@@ -1279,94 +1243,6 @@ static int test_bad_padding_base64(void) {
     return 1;
 }
 
-/*------------------------------------------------------------------
-  Test: doomed_base64_roundtrip
-  For each length from 0 to 2047, we:
-    - Generate random binary data.
-    - Encode it to Base64.
-    - Inject one garbage insertion (recording its location).
-    - Decode the resulting string (normal and safe modes).
-    - Assert that the error is INVALID_BASE64_CHARACTER and that the count
-      equals the insertion location.
-------------------------------------------------------------------*/
-// static int test_doomed_base64_roundtrip(void)
-// {
-//     size_t len, trial, i;
-//     unsigned int seed = 12345;  /* fixed seed for reproducibility */
-
-//     for (len = 0; len < 2048; len++) {
-//         /* Allocate source data (if len == 0, source may be NULL) */
-//         char *source = (len > 0) ? OPENSSL_malloc(len) : NULL;
-//         if (len > 0 && source == NULL) {
-//             TEST_error("Out of memory for source of length %zu", len);
-//             return 0;
-//         }
-//         /* Allocate a Base64 buffer of sufficient size */
-//         size_t b64_size = base64_length_from_binary(len);
-//         char *buffer = OPENSSL_malloc(b64_size + 1); /* +1 for null-terminator */
-//         if (buffer == NULL) {
-//             TEST_error("Out of memory for Base64 buffer of length %zu", b64_size + 1);
-//             if (source) OPENSSL_free(source);
-//             return 0;
-//         }
-
-//         for (trial = 0; trial < 10; trial++) {
-//             /* Fill source with random bytes (if len > 0) */
-//             if (len > 0) {
-//                 for (i = 0; i < len; i++) {
-//                     source[i] = (char)(rand_r(&seed) % 256);
-//                 }
-//             }
-//             /* Encode source to Base64 */
-//             size_t size = tail_encode_base64(NULL, buffer,source, len);
-//             buffer[size] = '\0';
-//             /* "Resize" the buffer: in C we simply record the new effective length */
-//             size_t effective_b64_len = size;
-
-//             /* Inject garbage into the Base64 string.
-//                add_garbage takes a pointer to the pointer and a pointer to its length,
-//                and returns the insertion location.
-//             */
-//             size_t location = add_garbage(&buffer, &effective_b64_len, &seed, to_base64_value);
-
-//             /* Allocate back buffer for decoded binary data */
-//             size_t back_bufsize = maximal_binary_length_from_base64(buffer, effective_b64_len);
-//             char *back = (back_bufsize > 0) ? OPENSSL_malloc(back_bufsize) : NULL;
-//             if (back_bufsize > 0 && back == NULL) {
-//                 TEST_error("Out of memory for back buffer (length %zu)", back_bufsize);
-//                 if (source) OPENSSL_free(source);
-//                 OPENSSL_free(buffer);
-//                 return 0;
-//             }
-
-//             /* Call normal decode function */
-//             result r = base64_tail_decode_trim_end(NULL, back,buffer, effective_b64_len);
-//             ASSERT_EQUAL_INT(r.error, INVALID_BASE64_CHARACTER);
-//             ASSERT_EQUAL_SIZE(r.count, location);
-
-//             // /* Try safe decoding with different last-chunk handling options */
-//             // for (i = 0; i < 3; i++) {
-//             //     last_chunk_handling_options opt;
-//             //     if (i == 0) {
-//             //         opt = STRICT;
-//             //     } else if (i == 1) {
-//             //         opt = LOOSE;
-//             //     } else {
-//             //         opt = STOP_BEFORE_PARTIAL;
-//             //     }
-//             //     size_t safe_back_len = back_bufsize;
-//             //     result r2 = base64_to_binary_safe(buffer, effective_b64_len, back, &safe_back_len, 0, opt);
-//             //     ASSERT_EQUAL_INT(r2.error, INVALID_BASE64_CHARACTER);
-//             //     ASSERT_EQUAL_SIZE(r2.count, location);
-//             // }
-//             if (back) OPENSSL_free(back);
-//         }
-//         if (source) OPENSSL_free(source);
-//         OPENSSL_free(buffer);
-//     }
-//     return 1;
-// }
-
 static int test_doomed_base64_roundtrip(void)
 {
     size_t len, trial, i;
@@ -1463,7 +1339,6 @@ static int test_doomed_base64_roundtrip(void)
  *
  * For each length from 1 to 2047, generate random binary data,
  * encode it to Base64, then truncate the encoded string by removing the last 3 characters.
- * Then, for each last-chunk handling option, attempt to decode.
  * The expectation is that the decoder will return an error 
  * (BASE64_INPUT_REMAINDER) and the count of processed characters should be as expected.
  */
@@ -1682,11 +1557,6 @@ static int test_readme_test(void)
         r.count -= (r.count % 3);
         outpos += r.count;
     }
-    /* Optionally, reallocate the back buffer to outpos */
-    // char *new_back = OPENSSL_realloc(back, outpos);
-    // if (new_back != NULL) {
-    //     back = new_back;
-    // }
     
     DEBUG_PRINT(GREEN_TEXT("Decoded result length: %zu\n"), outpos);
     
@@ -1695,136 +1565,6 @@ static int test_readme_test(void)
     OPENSSL_free(base64);
     return 1;
 }
-
-
-/*------------------------------------------------------------------
-  Test: doomed_partial_buffer_utf8
-  This port mirrors the C# test “DoomedPartialBufferUTF8” by:
-   - Generating random binary source.
-   - Encoding it to Base64.
-   - Inserting garbage and then 1–5 copies of a fixed 16‑byte vector
-     right before the garbage.
-   - Decoding using both the normal and safe decode functions,
-     and asserting that decoding fails with an INVALID_BASE64_CHARACTER error
-     at the expected location.
-------------------------------------------------------------------*/
-// static int test_doomed_partial_buffer_utf8(void)
-// {
-//     /* Fixed 16-byte vector to be inserted */
-//     unsigned char vectorToBeCompressed[16] = {
-//         0x6D, 0x6A, 0x6D, 0x73, 0x41, 0x71, 0x39, 0x75,
-//         0x76, 0x6C, 0x77, 0x48, 0x20, 0x77, 0x33, 0x53
-//     };
-
-//     unsigned int seed = 12345;  /* Fixed seed for reproducibility */
-//     size_t len, trial, i;
-
-//     for (len = 0; len < 2048; len++) {
-//         char *source = (len > 0) ? OPENSSL_malloc(len) : NULL;
-//         if (len > 0 && source == NULL) {
-//             TEST_error(RED_TEXT("Out of memory for source of length %zu\n"), len);
-//             return 0;
-//         }
-//         for (trial = 0; trial < 10; trial++) {
-//             DEBUG_PRINT(BRIGHT_YELLOW_BG("New trial\n"));
-
-//             int bytesConsumed = 0, bytesWritten = 0;
-//             int bytesConsumedSafe = 0, bytesWrittenSafe = 0;
-
-//             /* Fill source with random bytes */
-//             if (len > 0) {
-//                 for (i = 0; i < len; i++) {
-//                     source[i] = (char)(rand_r(&seed) % 256);
-//                 }
-//             }
-
-//             /* Encode source to Base64 */
-//             size_t b64_size = maximal_binary_length_from_base64(source, len);
-//             char *base64 = OPENSSL_malloc(b64_size + 1);
-//             if (base64 == NULL) {
-//                 TEST_error(RED_TEXT("Out of memory for Base64 buffer of length %zu\n"), b64_size + 1);
-//                 if (source) OPENSSL_free(source);
-//                 return 0;
-//             }
-//             size_t size = tail_encode_base64(NULL, base64, source, len);
-//             base64[size] = '\0';
-//             DEBUG_PRINT(GREEN_TEXT("DEBUG: Base64 encoded result (length %zu): \"%s\"\n"), size, base64);
-
-//             /* Inject garbage into the Base64 string */
-//             size_t effective_b64_len = size;
-//             size_t location = add_garbage(&base64, &effective_b64_len, &seed, to_base64_value);
-//             DEBUG_PRINT(YELLOW_TEXT("DEBUG: After add_garbage, effective_b64_len=%zu, garbage location=%zu\n"),
-//                         effective_b64_len, location);
-
-//             /* Insert 1 to 5 copies of the vector before the garbage */
-//             int numberOfCopies = (rand_r(&seed) % 5) + 1; /* random between 1 and 5 */
-//             DEBUG_PRINT(BLUE_TEXT("DEBUG: numberOfCopies = %d\n"), numberOfCopies);
-//             int insertPosition = (int)location;
-//             DEBUG_PRINT(BLUE_TEXT("DEBUG: initial insertPosition = %d\n"), insertPosition);
-//             for (i = 0; i < (size_t)numberOfCopies; i++) {
-//                 DEBUG_PRINT(BLUE_TEXT("DEBUG: Insertion iteration %zu\n"), i);
-
-//                 /* Reallocate the buffer to make room for 16 extra bytes */
-//                 char *new_buffer = OPENSSL_realloc(base64, effective_b64_len + 16);
-//                 if (new_buffer == NULL) {
-//                     TEST_error(RED_TEXT("Out of memory during insertion\n"));
-//                     OPENSSL_free(base64);
-//                     if (source) OPENSSL_free(source);
-//                     return 0;
-//                 }
-//                 base64 = new_buffer;
-//                 DEBUG_PRINT(BLUE_TEXT("DEBUG: After realloc, new effective buffer size will be %zu\n"), effective_b64_len + 16);
-
-//                 /* Shift the tail to the right by 16 bytes */
-//                 DEBUG_PRINT(BLUE_TEXT("DEBUG: Shifting tail from index %d for %zu bytes\n"), 
-//                             insertPosition, effective_b64_len - insertPosition);
-//                 memmove(base64 + insertPosition + 16, base64 + insertPosition, effective_b64_len - insertPosition);
-
-//                 /* Insert the fixed vector */
-//                 memcpy(base64 + insertPosition, vectorToBeCompressed, 16);
-//                 effective_b64_len += 16;
-//                 insertPosition += 16;
-//                 DEBUG_PRINT(BLUE_TEXT("DEBUG: After iteration %zu, effective_b64_len = %zu, updated insertPosition = %d\n"),
-//                             i, effective_b64_len, insertPosition);
-//             }
-//             /* Update garbage location to reflect new insertions.
-//                (If garbage was inserted before the padding, this adjustment makes sure that our test knows its new position.)
-//             */
-//             location = insertPosition;
-//             DEBUG_PRINT(YELLOW_TEXT("DEBUG: Updated garbage location = %zu\n"), location);
-
-//             /* Allocate a back buffer for decoding */
-//             size_t back_bufsize = maximal_binary_length_from_base64(base64, effective_b64_len);
-//             DEBUG_PRINT(GREEN_TEXT("DEBUG: Back buffer size = %zu\n"), back_bufsize);
-//             char *back = (back_bufsize > 0) ? OPENSSL_malloc(back_bufsize) : NULL;
-//             if (back_bufsize > 0 && back == NULL) {
-//                 TEST_error(RED_TEXT("Out of memory for back buffer (length %zu)\n"), back_bufsize);
-//                 OPENSSL_free(base64);
-//                 if (source) OPENSSL_free(source);
-//                 return 0;
-//             }
-
-//             /* Call normal decode function (expected to fail with INVALID_BASE64_CHARACTER) */
-//             result status = base64_tail_decode_trim_end(NULL, back, base64, effective_b64_len);
-//             DEBUG_PRINT(GREEN_TEXT("DEBUG: Normal decode result: error=%d, count=%d\n"), status.error, (int)status.count);
-//             ASSERT_EQUAL_INT(status.error, INVALID_BASE64_CHARACTER);
-//             ASSERT_EQUAL_INT(status.count, location);
-
-//             /* Also test safe decoding path (if implemented) */
-//             /*
-//             size_t safe_back_len = back_bufsize;
-//             result safe_status = base64_to_binary_safe(base64, effective_b64_len, back, &safe_back_len, BASE64_DEFAULT, LOOSE);
-//             ASSERT_EQUAL_INT(safe_status.error, INVALID_BASE64_CHARACTER);
-//             ASSERT_EQUAL_INT(safe_status.count, insertPosition);
-//             */
-
-//             OPENSSL_free(back);
-//             OPENSSL_free(base64);
-//         }
-//         if (source) OPENSSL_free(source);
-//     }
-//     return 1;
-// }
 
 static int test_doomed_partial_buffer_utf8(void)
 {
@@ -1941,25 +1681,25 @@ static int test_doomed_partial_buffer_utf8(void)
 int setup_tests(void)
 {
     // // Register our sample test. The macro ADD_TEST() takes our test function.
-    // ADD_TEST(test_decode_base64_cases);
-    // ADD_TEST(test_complete_decode_base64_cases);
-    // ADD_TEST(test_encode_base64_basic_cases);
-    // ADD_TEST(test_encode_base64_no_padding_cases);
-    // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces);
-    // ADD_TEST(test_roundtrip_base64_with_spaces);
-    // ADD_TEST(test_roundtrip_base64_with_garbage);
-    // ADD_TEST(test_base64_decode_just_one_padding_loose);
-    // ADD_TEST(test_roundtrip_base64);
-    // ADD_TEST(test_issue_520);
-    // ADD_TEST(test_issue_509);
-    // ADD_TEST(test_issue_504_8bit); 
-    // ADD_TEST(test_issue_502);
-    // ADD_TEST(test_issue_502_alt);
-    // ADD_TEST(test_bad_padding_base64);
-    // ADD_TEST(test_doomed_truncated_base64_roundtrip);
-    // ADD_TEST(test_doomed_base64_roundtrip);
-    // ADD_TEST(test_streaming_base64_roundtrip);
-    // ADD_TEST(test_readme_test);
+    ADD_TEST(test_decode_base64_cases);
+    ADD_TEST(test_complete_decode_base64_cases);
+    ADD_TEST(test_encode_base64_basic_cases);
+    ADD_TEST(test_encode_base64_no_padding_cases);
+    ADD_TEST(test_roundtrip_base64_with_lots_of_spaces);
+    ADD_TEST(test_roundtrip_base64_with_spaces);
+    ADD_TEST(test_roundtrip_base64_with_garbage);
+    ADD_TEST(test_base64_decode_just_one_padding_loose);
+    ADD_TEST(test_roundtrip_base64);
+    ADD_TEST(test_issue_520);
+    ADD_TEST(test_issue_509);
+    ADD_TEST(test_issue_504_8bit); 
+    ADD_TEST(test_issue_502);
+    ADD_TEST(test_issue_502_alt);
+    ADD_TEST(test_bad_padding_base64);
+    ADD_TEST(test_doomed_truncated_base64_roundtrip);
+    ADD_TEST(test_doomed_base64_roundtrip);
+    ADD_TEST(test_streaming_base64_roundtrip);
+    ADD_TEST(test_readme_test);
     ADD_TEST(test_doomed_partial_buffer_utf8);
 
     // Return 1 to indicate successful test setup.
