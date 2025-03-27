@@ -7,12 +7,12 @@
  * https://www.openssl.org/source/license.html
  */
 
-#include <stdio.h>
-#include <limits.h>
-#include "internal/cryptlib.h"
-#include <openssl/evp.h>
 #include "crypto/evp.h"
 #include "evp_local.h"
+#include "internal/cryptlib.h"
+#include <limits.h>
+#include <openssl/evp.h>
+#include <stdio.h>
 
 static unsigned char conv_ascii2bin(unsigned char a,
                                     const unsigned char *table);
@@ -21,48 +21,67 @@ static int evp_encodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n);
 
-#define DEBUG 0  // Set to 1 to enable debug prints, 0 to disable
+#define DEBUG 1 // Set to 1 to enable debug prints, 0 to disable
 #define RED_TEXT(str) "\033[31m" str "\033[0m"
 #define GREEN_TEXT(str) "\033[32m" str "\033[0m"
 
-
 // Standard Colors
-#define BLACK_TEXT(str)   "\033[30m" str "\033[0m"
-#define WHITE_TEXT(str)   "\033[37m" str "\033[0m"
+#define BLACK_TEXT(str) "\033[30m" str "\033[0m"
+#define WHITE_TEXT(str) "\033[37m" str "\033[0m"
 
 // Bright Colors
-#define BRIGHT_RED_TEXT(str)     "\033[91m" str "\033[0m"
-#define BRIGHT_GREEN_TEXT(str)   "\033[92m" str "\033[0m"
-#define BRIGHT_YELLOW_TEXT(str)  "\033[93m" str "\033[0m"
-#define BRIGHT_BLUE_TEXT(str)    "\033[94m" str "\033[0m"
+#define BRIGHT_RED_TEXT(str) "\033[91m" str "\033[0m"
+#define BRIGHT_GREEN_TEXT(str) "\033[92m" str "\033[0m"
+#define BRIGHT_YELLOW_TEXT(str) "\033[93m" str "\033[0m"
+#define BRIGHT_BLUE_TEXT(str) "\033[94m" str "\033[0m"
 #define BRIGHT_MAGENTA_TEXT(str) "\033[95m" str "\033[0m"
-#define BRIGHT_CYAN_TEXT(str)    "\033[96m" str "\033[0m"
-#define BRIGHT_WHITE_TEXT(str)   "\033[97m" str "\033[0m"
-
+#define BRIGHT_CYAN_TEXT(str) "\033[96m" str "\033[0m"
+#define BRIGHT_WHITE_TEXT(str) "\033[97m" str "\033[0m"
 
 // Background Colors (Bright)
-#define BRIGHT_BLACK_BG(str)   "\033[100m" str "\033[0m"
-#define BRIGHT_RED_BG(str)     "\033[101m" str "\033[0m"
-#define BRIGHT_GREEN_BG(str)   "\033[102m" str "\033[0m"
-#define BRIGHT_YELLOW_BG(str)  "\033[103m" str "\033[0m"
-#define BRIGHT_BLUE_BG(str)    "\033[104m" str "\033[0m"
+#define BRIGHT_BLACK_BG(str) "\033[100m" str "\033[0m"
+#define BRIGHT_RED_BG(str) "\033[101m" str "\033[0m"
+#define BRIGHT_GREEN_BG(str) "\033[102m" str "\033[0m"
+#define BRIGHT_YELLOW_BG(str) "\033[103m" str "\033[0m"
+#define BRIGHT_BLUE_BG(str) "\033[104m" str "\033[0m"
 #define BRIGHT_MAGENTA_BG(str) "\033[105m" str "\033[0m"
-#define BRIGHT_CYAN_BG(str)    "\033[106m" str "\033[0m"
-#define BRIGHT_WHITE_BG(str)   "\033[107m" str "\033[0m"
+#define BRIGHT_CYAN_BG(str) "\033[106m" str "\033[0m"
+#define BRIGHT_WHITE_BG(str) "\033[107m" str "\033[0m"
 
-#define BOLD_TEXT(str)       "\033[1m" str "\033[0m"
-#define UNDERLINE_TEXT(str)  "\033[4m" str "\033[0m"
-#define BLINK_TEXT(str)      "\033[5m" str "\033[0m"  // May not work on all terminals
+#define BOLD_TEXT(str) "\033[1m" str "\033[0m"
+#define UNDERLINE_TEXT(str) "\033[4m" str "\033[0m"
+#define BLINK_TEXT(str) "\033[5m" str "\033[0m" // May not work on all terminals
+
+// #if DEBUG
+// #define DEBUG_PRINT(fmt, ...) printf(fmt, ##__VA_ARGS__)
+// #else
+// #define DEBUG_PRINT(fmt, ...)
+// #endif
+
+#define DEBUG_CHECK_NULL(ptr)                                         \
+    do {                                                              \
+        if (!(ptr)) {                                                 \
+            fprintf(stderr,                                           \
+                    "DEBUG: Pointer '%s' is NULL at %s:%d in %s()\n",  \
+                    #ptr, __FILE__, __LINE__, __func__);              \
+        }                                                             \
+    } while (0)
+
+
 
 #if DEBUG
-    #define DEBUG_PRINT(fmt, ...) printf(fmt, ##__VA_ARGS__)
+    #define DEBUG_PRINT(fmt, ...) \
+        do { \
+            fprintf(stderr, fmt, ##__VA_ARGS__); \
+            fflush(stderr); \
+        } while (0)
 #else
-    #define DEBUG_PRINT(fmt, ...)       
-#endif  
+    #define DEBUG_PRINT(fmt, ...)
+#endif
 
 
 #ifndef CHARSET_EBCDIC
-# define conv_bin2ascii(a, table)       ((table)[(a)&0x3f])
+#define conv_bin2ascii(a, table) ((table)[(a) & 0x3f])
 #else
 /*
  * We assume that PEM encoded files are EBCDIC files (i.e., printable text
@@ -70,7 +89,7 @@ static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
  * (text) format again. (No need for conversion in the conv_bin2ascii macro,
  * as the underlying textstring data_bin2ascii[] is already EBCDIC)
  */
-# define conv_bin2ascii(a, table)       ((table)[(a)&0x3f])
+#define conv_bin2ascii(a, table) ((table)[(a) & 0x3f])
 #endif
 
 /*-
@@ -81,9 +100,9 @@ static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
  * 2 bytes => xxx=
  * 3 bytes => xxxx
  */
-#define BIN_PER_LINE    (64/4*3)
-#define CHUNKS_PER_LINE (64/4)
-#define CHAR_PER_LINE   (64+1)
+#define BIN_PER_LINE (64 / 4 * 3)
+#define CHUNKS_PER_LINE (64 / 4)
+#define CHAR_PER_LINE (64 + 1)
 
 static const unsigned char data_bin2ascii[65] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -91,7 +110,6 @@ static const unsigned char data_bin2ascii[65] =
 /* SRP uses a different base64 alphabet */
 static const unsigned char srpdata_bin2ascii[65] =
     "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz./";
-
 
 /*-
  * 0xF0 is a EOLN
@@ -101,225 +119,198 @@ static const unsigned char srpdata_bin2ascii[65] =
  * 0xFF is error
  */
 
-#define B64_EOLN                0xF0
-#define B64_CR                  0xF1
-#define B64_EOF                 0xF2
-#define B64_WS                  0xE0
-#define B64_ERROR               0xFF
-#define B64_NOT_BASE64(a)       (((a)|0x13) == 0xF3)
-#define B64_BASE64(a)           (!B64_NOT_BASE64(a))
+#define B64_EOLN 0xF0
+#define B64_CR 0xF1
+#define B64_EOF 0xF2
+#define B64_WS 0xE0
+#define B64_ERROR 0xFF
+#define B64_NOT_BASE64(a) (((a) | 0x13) == 0xF3)
+#define B64_BASE64(a) (!B64_NOT_BASE64(a))
 
 static const unsigned char data_ascii2bin[128] = {
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xE0, 0xF0, 0xFF, 0xFF, 0xF1, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xE0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0x3E, 0xFF, 0xF2, 0xFF, 0x3F,
-    0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x3B,
-    0x3C, 0x3D, 0xFF, 0xFF, 0xFF, 0x00, 0xFF, 0xFF,
-    0xFF, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
-    0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
-    0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16,
-    0x17, 0x18, 0x19, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20,
-    0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28,
-    0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F, 0x30,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xE0, 0xF0, 0xFF,
+    0xFF, 0xF1, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xE0, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x3E, 0xFF, 0xF2, 0xFF, 0x3F,
+    0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0xFF, 0xFF,
+    0xFF, 0x00, 0xFF, 0xFF, 0xFF, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
+    0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12,
+    0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20, 0x21, 0x22, 0x23, 0x24,
+    0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F, 0x30,
     0x31, 0x32, 0x33, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 };
 
 static const unsigned char srpdata_ascii2bin[128] = {
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xE0, 0xF0, 0xFF, 0xFF, 0xF1, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xE0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF2, 0x3E, 0x3F,
-    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-    0x08, 0x09, 0xFF, 0xFF, 0xFF, 0x00, 0xFF, 0xFF,
-    0xFF, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10,
-    0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
-    0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x20,
-    0x21, 0x22, 0x23, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A,
-    0x2B, 0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32,
-    0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xE0, 0xF0, 0xFF,
+    0xFF, 0xF1, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xE0, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF2, 0x3E, 0x3F,
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0xFF, 0xFF,
+    0xFF, 0x00, 0xFF, 0xFF, 0xFF, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10,
+    0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C,
+    0x1D, 0x1E, 0x1F, 0x20, 0x21, 0x22, 0x23, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E,
+    0x2F, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A,
     0x3B, 0x3C, 0x3D, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 };
 
 #ifndef CHARSET_EBCDIC
-static unsigned char conv_ascii2bin(unsigned char a, const unsigned char *table)
-{
-    if (a & 0x80)
-        return B64_ERROR;
-    return table[a];
+static unsigned char conv_ascii2bin(unsigned char a,
+                                    const unsigned char *table) {
+  if (a & 0x80)
+    return B64_ERROR;
+  return table[a];
 }
 #else
-static unsigned char conv_ascii2bin(unsigned char a, const unsigned char *table)
-{
-    a = os_toascii[a];
-    if (a & 0x80)
-        return B64_ERROR;
-    return table[a];
+static unsigned char conv_ascii2bin(unsigned char a,
+                                    const unsigned char *table) {
+  a = os_toascii[a];
+  if (a & 0x80)
+    return B64_ERROR;
+  return table[a];
 }
 #endif
 
-EVP_ENCODE_CTX *EVP_ENCODE_CTX_new(void)
-{
-    return OPENSSL_zalloc(sizeof(EVP_ENCODE_CTX));
+EVP_ENCODE_CTX *EVP_ENCODE_CTX_new(void) {
+  return OPENSSL_zalloc(sizeof(EVP_ENCODE_CTX));
 }
 
-void EVP_ENCODE_CTX_free(EVP_ENCODE_CTX *ctx)
-{
-    OPENSSL_free(ctx);
+void EVP_ENCODE_CTX_free(EVP_ENCODE_CTX *ctx) { OPENSSL_free(ctx); }
+
+int EVP_ENCODE_CTX_copy(EVP_ENCODE_CTX *dctx, const EVP_ENCODE_CTX *sctx) {
+  memcpy(dctx, sctx, sizeof(EVP_ENCODE_CTX));
+
+  return 1;
 }
 
-int EVP_ENCODE_CTX_copy(EVP_ENCODE_CTX *dctx, const EVP_ENCODE_CTX *sctx)
-{
-    memcpy(dctx, sctx, sizeof(EVP_ENCODE_CTX));
+int EVP_ENCODE_CTX_num(EVP_ENCODE_CTX *ctx) { return ctx->num; }
 
-    return 1;
+void evp_encode_ctx_set_flags(EVP_ENCODE_CTX *ctx, unsigned int flags) {
+  ctx->flags = flags;
 }
 
-int EVP_ENCODE_CTX_num(EVP_ENCODE_CTX *ctx)
-{
-    return ctx->num;
-}
-
-void evp_encode_ctx_set_flags(EVP_ENCODE_CTX *ctx, unsigned int flags)
-{
-    ctx->flags = flags;
-}
-
-void EVP_EncodeInit(EVP_ENCODE_CTX *ctx)
-{
-    ctx->length = 48;
-    ctx->num = 0;
-    ctx->line_num = 0;
-    ctx->flags = 0;
+void EVP_EncodeInit(EVP_ENCODE_CTX *ctx) {
+  ctx->length = 48;
+  ctx->num = 0;
+  ctx->line_num = 0;
+  ctx->flags = 0;
 }
 
 int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
-                      const unsigned char *in, int inl)
-{
-    int i, j;
-    size_t total = 0;
+                     const unsigned char *in, int inl) {
+  int i, j;
+  size_t total = 0;
 
-    *outl = 0;
-    if (inl <= 0)
-        return 0;
-    OPENSSL_assert(ctx->length <= (int)sizeof(ctx->enc_data));
-    if (ctx->length - ctx->num > inl) {
-        memcpy(&(ctx->enc_data[ctx->num]), in, inl);
-        ctx->num += inl;
-        return 1;
-    }
-    if (ctx->num != 0) {
-        i = ctx->length - ctx->num;
-        memcpy(&(ctx->enc_data[ctx->num]), in, i);
-        in += i;
-        inl -= i;
-        j = evp_encodeblock_int(ctx, out, ctx->enc_data, ctx->length);
-        ctx->num = 0;
-        out += j;
-        total = j;
-        if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
-            *(out++) = '\n';
-            total++;
-        }
-        *out = '\0';
-    }
-    while (inl >= ctx->length && total <= INT_MAX) {
-        j = evp_encodeblock_int(ctx, out, in, ctx->length);
-        in += ctx->length;
-        inl -= ctx->length;
-        out += j;
-        total += j;
-        if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
-            *(out++) = '\n';
-            total++;
-        }
-        *out = '\0';
-    }
-    if (total > INT_MAX) {
-        /* Too much output data! */
-        *outl = 0;
-        return 0;
-    }
-    if (inl != 0)
-        memcpy(&(ctx->enc_data[0]), in, inl);
-    ctx->num = inl;
-    *outl = total;
-
+  *outl = 0;
+  if (inl <= 0)
+    return 0;
+  OPENSSL_assert(ctx->length <= (int)sizeof(ctx->enc_data));
+  if (ctx->length - ctx->num > inl) {
+    memcpy(&(ctx->enc_data[ctx->num]), in, inl);
+    ctx->num += inl;
     return 1;
+  }
+  if (ctx->num != 0) {
+    i = ctx->length - ctx->num;
+    memcpy(&(ctx->enc_data[ctx->num]), in, i);
+    in += i;
+    inl -= i;
+    j = evp_encodeblock_int(ctx, out, ctx->enc_data, ctx->length);
+    ctx->num = 0;
+    out += j;
+    total = j;
+    if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
+      *(out++) = '\n';
+      total++;
+    }
+    *out = '\0';
+  }
+  while (inl >= ctx->length && total <= INT_MAX) {
+    j = evp_encodeblock_int(ctx, out, in, ctx->length);
+    in += ctx->length;
+    inl -= ctx->length;
+    out += j;
+    total += j;
+    if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
+      *(out++) = '\n';
+      total++;
+    }
+    *out = '\0';
+  }
+  if (total > INT_MAX) {
+    /* Too much output data! */
+    *outl = 0;
+    return 0;
+  }
+  if (inl != 0)
+    memcpy(&(ctx->enc_data[0]), in, inl);
+  ctx->num = inl;
+  *outl = total;
+
+  return 1;
 }
 
-void EVP_EncodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
-{
-    unsigned int ret = 0;
+void EVP_EncodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl) {
+  unsigned int ret = 0;
 
-    if (ctx->num != 0) {
-        ret = evp_encodeblock_int(ctx, out, ctx->enc_data, ctx->num);
-        if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)
-            out[ret++] = '\n';
-        out[ret] = '\0';
-        ctx->num = 0;
-    }
-    *outl = ret;
+  if (ctx->num != 0) {
+    ret = evp_encodeblock_int(ctx, out, ctx->enc_data, ctx->num);
+    if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)
+      out[ret++] = '\n';
+    out[ret] = '\0';
+    ctx->num = 0;
+  }
+  *outl = ret;
 }
 
 static int evp_encodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
-                               const unsigned char *f, int dlen)
-{
-    int i, ret = 0;
-    unsigned long l;
-    const unsigned char *table;
+                               const unsigned char *f, int dlen) {
+  int i, ret = 0;
+  unsigned long l;
+  const unsigned char *table;
 
-    if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0)
-        table = srpdata_bin2ascii;
-    else
-        table = data_bin2ascii;
+  if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0)
+    table = srpdata_bin2ascii;
+  else
+    table = data_bin2ascii;
 
-    for (i = dlen; i > 0; i -= 3) {
-        if (i >= 3) {
-            l = (((unsigned long)f[0]) << 16L) |
-                (((unsigned long)f[1]) << 8L) | f[2];
-            *(t++) = conv_bin2ascii(l >> 18L, table);
-            *(t++) = conv_bin2ascii(l >> 12L, table);
-            *(t++) = conv_bin2ascii(l >> 6L, table);
-            *(t++) = conv_bin2ascii(l, table);
-        } else {
-            l = ((unsigned long)f[0]) << 16L;
-            if (i == 2)
-                l |= ((unsigned long)f[1] << 8L);
+  for (i = dlen; i > 0; i -= 3) {
+    if (i >= 3) {
+      l = (((unsigned long)f[0]) << 16L) | (((unsigned long)f[1]) << 8L) | f[2];
+      *(t++) = conv_bin2ascii(l >> 18L, table);
+      *(t++) = conv_bin2ascii(l >> 12L, table);
+      *(t++) = conv_bin2ascii(l >> 6L, table);
+      *(t++) = conv_bin2ascii(l, table);
+    } else {
+      l = ((unsigned long)f[0]) << 16L;
+      if (i == 2)
+        l |= ((unsigned long)f[1] << 8L);
 
-            *(t++) = conv_bin2ascii(l >> 18L, table);
-            *(t++) = conv_bin2ascii(l >> 12L, table);
-            *(t++) = (i == 1) ? '=' : conv_bin2ascii(l >> 6L, table);
-            *(t++) = '=';
-        }
-        ret += 4;
-        f += 3;
+      *(t++) = conv_bin2ascii(l >> 18L, table);
+      *(t++) = conv_bin2ascii(l >> 12L, table);
+      *(t++) = (i == 1) ? '=' : conv_bin2ascii(l >> 6L, table);
+      *(t++) = '=';
     }
+    ret += 4;
+    f += 3;
+  }
 
-    *t = '\0';
-    return ret;
+  *t = '\0';
+  return ret;
 }
 
-int EVP_EncodeBlock(unsigned char *t, const unsigned char *f, int dlen)
-{
-    return evp_encodeblock_int(NULL, t, f, dlen);
+int EVP_EncodeBlock(unsigned char *t, const unsigned char *f, int dlen) {
+  return evp_encodeblock_int(NULL, t, f, dlen);
 }
 
-void EVP_DecodeInit(EVP_ENCODE_CTX *ctx)
-{
-    /* Only ctx->num and ctx->flags are used during decoding. */
-    ctx->num = 0;
-    ctx->length = 0;
-    ctx->line_num = 0;
-    ctx->flags = 0;
+void EVP_DecodeInit(EVP_ENCODE_CTX *ctx) {
+  /* Only ctx->num and ctx->flags are used during decoding. */
+  ctx->num = 0;
+  ctx->length = 0;
+  ctx->line_num = 0;
+  ctx->flags = 0;
 }
-
 
 /*-
  * -1 for error
@@ -342,489 +333,345 @@ void EVP_DecodeInit(EVP_ENCODE_CTX *ctx)
  *   - B64_EOF is detected after an incomplete base64 block.
  */
 int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
-                     const unsigned char *in, int inl)
-{
-    int seof = 0, eof = 0, rv = -1, ret = 0, i, v, tmp, n, decoded_len;
-    unsigned char *d;
-    const unsigned char *table;
+                     const unsigned char *in, int inl) {
+  int seof = 0, eof = 0, rv = -1, ret = 0, i, v, tmp, n, decoded_len;
+  unsigned char *d;
+  const unsigned char *table;
 
-    n = ctx->num;
-    d = ctx->enc_data;
+  n = ctx->num;
+  d = ctx->enc_data;
 
-    if (n > 0 && d[n - 1] == '=') {
-        eof++;
-        if (n > 1 && d[n - 2] == '=')
-            eof++;
+  if (n > 0 && d[n - 1] == '=') {
+    eof++;
+    if (n > 1 && d[n - 2] == '=')
+      eof++;
+  }
+
+  /* Legacy behaviour: an empty input chunk signals end of input. */
+  if (inl == 0) {
+    rv = 0;
+    goto end;
+  }
+
+  // if ((ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0)
+  //   table = srpdata_ascii2bin;
+  // else
+    table = data_ascii2bin;
+
+  for (i = 0; i < inl; i++) {
+    tmp = *(in++);
+    v = conv_ascii2bin(tmp, table);
+    if (v == B64_ERROR) {
+      rv = -1;
+      goto end;
     }
 
-     /* Legacy behaviour: an empty input chunk signals end of input. */
-    if (inl == 0) {
-        rv = 0;
+    if (tmp == '=') {
+      eof++;
+    } else if (eof > 0 && B64_BASE64(v)) {
+      /* More data after padding. */
+      rv = -1;
+      goto end;
+    }
+
+    if (eof > 2) {
+      rv = -1;
+      goto end;
+    }
+
+    if (v == B64_EOF) {
+      seof = 1;
+      goto tail;
+    }
+
+    /* Only save valid base64 characters. */
+    if (B64_BASE64(v)) {
+      if (n >= 64) {
+        /*
+         * We increment n once per loop, and empty the buffer as soon as
+         * we reach 64 characters, so this can only happen if someone's
+         * manually messed with the ctx. Refuse to write any more data.
+         */
+        rv = -1;
         goto end;
+      }
+      OPENSSL_assert(n < (int)sizeof(ctx->enc_data));
+      d[n++] = tmp;
     }
 
-    if ((ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0)
-        table = srpdata_ascii2bin;
-    else
-        table = data_ascii2bin;
-
-    for (i = 0; i < inl; i++) {
-        tmp = *(in++);
-        v = conv_ascii2bin(tmp, table);
-        if (v == B64_ERROR) {
-            rv = -1;
-            goto end;
-        }
-
-        if (tmp == '=') {
-            eof++;
-        } else if (eof > 0 && B64_BASE64(v)) {
-            /* More data after padding. */
-            rv = -1;
-            goto end;
-        }
-
-        if (eof > 2) {
-            rv = -1;
-            goto end;
-        }
-
-        if (v == B64_EOF) {
-            seof = 1;
-            goto tail;
-        }
-
-        /* Only save valid base64 characters. */
-        if (B64_BASE64(v)) {
-            if (n >= 64) {
-                /*
-                 * We increment n once per loop, and empty the buffer as soon as
-                 * we reach 64 characters, so this can only happen if someone's
-                 * manually messed with the ctx. Refuse to write any more data.
-                 */
-                rv = -1;
-                goto end;
-            }
-            OPENSSL_assert(n < (int)sizeof(ctx->enc_data));
-            d[n++] = tmp;
-        }
-
-        if (n == 64) {
-            decoded_len = evp_decodeblock_int(ctx, out, d, n);
-            n = 0;
-            if (decoded_len < 0 || eof > decoded_len) {
-                rv = -1;
-                goto end;
-            }
-            ret += decoded_len - eof;
-            out += decoded_len - eof;
-        }
+    if (n == 64) {
+      decoded_len = evp_decodeblock_int(ctx, out, d, n);
+      n = 0;
+      if (decoded_len < 0 || eof > decoded_len) {
+        rv = -1;
+        goto end;
+      }
+      ret += decoded_len - eof;
+      out += decoded_len - eof;
     }
+  }
 
-    /*
-     * Legacy behaviour: if the current line is a full base64-block (i.e., has
-     * 0 mod 4 base64 characters), it is processed immediately. We keep this
-     * behaviour as applications may not be calling EVP_DecodeFinal properly.
-     */
+  /*
+   * Legacy behaviour: if the current line is a full base64-block (i.e., has
+   * 0 mod 4 base64 characters), it is processed immediately. We keep this
+   * behaviour as applications may not be calling EVP_DecodeFinal properly.
+   */
 tail:
-    if (n > 0) {
-        if ((n & 3) == 0) {
-            decoded_len = evp_decodeblock_int(ctx, out, d, n);
-            n = 0;
-            if (decoded_len < 0 || eof > decoded_len) {
-                rv = -1;
-                goto end;
-            }
-            ret += (decoded_len - eof);
-        } else if (seof) {
-            /* EOF in the middle of a base64 block. */
-            rv = -1;
-            goto end;
-        }
+  if (n > 0) {
+    if ((n & 3) == 0) {
+      decoded_len = evp_decodeblock_int(ctx, out, d, n);
+      n = 0;
+      if (decoded_len < 0 || eof > decoded_len) {
+        rv = -1;
+        goto end;
+      }
+      ret += (decoded_len - eof);
+    } else if (seof) {
+      /* EOF in the middle of a base64 block. */
+      rv = -1;
+      goto end;
     }
+  }
 
-    rv = seof || (n == 0 && eof) ? 0 : 1;
+  rv = seof || (n == 0 && eof) ? 0 : 1;
 end:
-    /* Legacy behaviour. This should probably rather be zeroed on error. */
-    *outl = ret;
-    ctx->num = n;
-    return rv;
+  /* Legacy behaviour. This should probably rather be zeroed on error. */
+  *outl = ret;
+  ctx->num = n;
+  return rv;
 }
 
-
 const uint8_t to_base64_value[] = {
-    255, 255, 255, 255, 255, 255, 255, 255, 255, 64,  64,  255, 64, 64,  255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 64,  64,  255, 64,  64,  255,
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
     255, 255, 64,  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 62,  255,
     255, 255, 63,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  255, 255,
     255, 255, 255, 255, 255, 0,   1,   2,   3,   4,   5,   6,   7,   8,   9,
-
-
     10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  21,  22,  23,  24,
-
-
     25,  255, 255, 255, 255, 255, 255, 26,  27,  28,  29,  30,  31,  32,  33,
-
-
     34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,  48,
-
-
     49,  50,  51,  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-
-
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-
-
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-
-
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-
-
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-
-
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-
-
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-
-
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-
-
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-
-
     255};
-
-
-
-
 
 const uint32_t d0[256] = {
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
-
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
 
     0x01ffffff, 0x000000f8, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x000000fc,
 
-
     0x000000d0, 0x000000d4, 0x000000d8, 0x000000dc, 0x000000e0, 0x000000e4,
-
 
     0x000000e8, 0x000000ec, 0x000000f0, 0x000000f4, 0x01ffffff, 0x01ffffff,
 
-
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x00000000,
-
 
     0x00000004, 0x00000008, 0x0000000c, 0x00000010, 0x00000014, 0x00000018,
 
-
     0x0000001c, 0x00000020, 0x00000024, 0x00000028, 0x0000002c, 0x00000030,
-
 
     0x00000034, 0x00000038, 0x0000003c, 0x00000040, 0x00000044, 0x00000048,
 
-
     0x0000004c, 0x00000050, 0x00000054, 0x00000058, 0x0000005c, 0x00000060,
-
 
     0x00000064, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
-
     0x01ffffff, 0x00000068, 0x0000006c, 0x00000070, 0x00000074, 0x00000078,
-
 
     0x0000007c, 0x00000080, 0x00000084, 0x00000088, 0x0000008c, 0x00000090,
 
-
     0x00000094, 0x00000098, 0x0000009c, 0x000000a0, 0x000000a4, 0x000000a8,
-
 
     0x000000ac, 0x000000b0, 0x000000b4, 0x000000b8, 0x000000bc, 0x000000c0,
 
-
     0x000000c4, 0x000000c8, 0x000000cc, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
-
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff};
-
-
-
-
 
 const uint32_t d1[256] = {
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
-
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
 
     0x01ffffff, 0x0000e003, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x0000f003,
 
-
     0x00004003, 0x00005003, 0x00006003, 0x00007003, 0x00008003, 0x00009003,
-
 
     0x0000a003, 0x0000b003, 0x0000c003, 0x0000d003, 0x01ffffff, 0x01ffffff,
 
-
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x00000000,
-
 
     0x00001000, 0x00002000, 0x00003000, 0x00004000, 0x00005000, 0x00006000,
 
-
     0x00007000, 0x00008000, 0x00009000, 0x0000a000, 0x0000b000, 0x0000c000,
-
 
     0x0000d000, 0x0000e000, 0x0000f000, 0x00000001, 0x00001001, 0x00002001,
 
-
     0x00003001, 0x00004001, 0x00005001, 0x00006001, 0x00007001, 0x00008001,
-
 
     0x00009001, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
-
     0x01ffffff, 0x0000a001, 0x0000b001, 0x0000c001, 0x0000d001, 0x0000e001,
-
 
     0x0000f001, 0x00000002, 0x00001002, 0x00002002, 0x00003002, 0x00004002,
 
-
     0x00005002, 0x00006002, 0x00007002, 0x00008002, 0x00009002, 0x0000a002,
-
 
     0x0000b002, 0x0000c002, 0x0000d002, 0x0000e002, 0x0000f002, 0x00000003,
 
-
     0x00001003, 0x00002003, 0x00003003, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
-
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff};
 
-
-
-
-
 const uint32_t d2[256] = {
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
+    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
-
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
-
-    0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
-
 
     0x01ffffff, 0x00800f00, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x00c00f00,
 
-
     0x00000d00, 0x00400d00, 0x00800d00, 0x00c00d00, 0x00000e00, 0x00400e00,
-
 
     0x00800e00, 0x00c00e00, 0x00000f00, 0x00400f00, 0x01ffffff, 0x01ffffff,
 
-
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x00000000,
-
 
     0x00400000, 0x00800000, 0x00c00000, 0x00000100, 0x00400100, 0x00800100,
 
-
     0x00c00100, 0x00000200, 0x00400200, 0x00800200, 0x00c00200, 0x00000300,
-
 
     0x00400300, 0x00800300, 0x00c00300, 0x00000400, 0x00400400, 0x00800400,
 
-
     0x00c00400, 0x00000500, 0x00400500, 0x00800500, 0x00c00500, 0x00000600,
-
 
     0x00400600, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
 
-
     0x01ffffff, 0x00800600, 0x00c00600, 0x00000700, 0x00400700, 0x00800700,
-
 
     0x00c00700, 0x00000800, 0x00400800, 0x00800800, 0x00c00800, 0x00000900,
     0x00400900, 0x00800900, 0x00c00900, 0x00000a00, 0x00400a00, 0x00800a00,
@@ -898,67 +745,67 @@ const uint32_t d3[256] = {
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff,
     0x01ffffff, 0x01ffffff, 0x01ffffff, 0x01ffffff};
 
-    const char base64_e0[256] = {
-        'A', 'A', 'A', 'A', 'B', 'B', 'B', 'B', 'C', 'C', 'C', 'C', 'D', 'D', 'D',
-        'D', 'E', 'E', 'E', 'E', 'F', 'F', 'F', 'F', 'G', 'G', 'G', 'G', 'H', 'H',
-        'H', 'H', 'I', 'I', 'I', 'I', 'J', 'J', 'J', 'J', 'K', 'K', 'K', 'K', 'L',
-        'L', 'L', 'L', 'M', 'M', 'M', 'M', 'N', 'N', 'N', 'N', 'O', 'O', 'O', 'O',
-        'P', 'P', 'P', 'P', 'Q', 'Q', 'Q', 'Q', 'R', 'R', 'R', 'R', 'S', 'S', 'S',
-        'S', 'T', 'T', 'T', 'T', 'U', 'U', 'U', 'U', 'V', 'V', 'V', 'V', 'W', 'W',
-        'W', 'W', 'X', 'X', 'X', 'X', 'Y', 'Y', 'Y', 'Y', 'Z', 'Z', 'Z', 'Z', 'a',
-        'a', 'a', 'a', 'b', 'b', 'b', 'b', 'c', 'c', 'c', 'c', 'd', 'd', 'd', 'd',
-        'e', 'e', 'e', 'e', 'f', 'f', 'f', 'f', 'g', 'g', 'g', 'g', 'h', 'h', 'h',
-        'h', 'i', 'i', 'i', 'i', 'j', 'j', 'j', 'j', 'k', 'k', 'k', 'k', 'l', 'l',
-        'l', 'l', 'm', 'm', 'm', 'm', 'n', 'n', 'n', 'n', 'o', 'o', 'o', 'o', 'p',
-        'p', 'p', 'p', 'q', 'q', 'q', 'q', 'r', 'r', 'r', 'r', 's', 's', 's', 's',
-        't', 't', 't', 't', 'u', 'u', 'u', 'u', 'v', 'v', 'v', 'v', 'w', 'w', 'w',
-        'w', 'x', 'x', 'x', 'x', 'y', 'y', 'y', 'y', 'z', 'z', 'z', 'z', '0', '0',
-        '0', '0', '1', '1', '1', '1', '2', '2', '2', '2', '3', '3', '3', '3', '4',
-        '4', '4', '4', '5', '5', '5', '5', '6', '6', '6', '6', '7', '7', '7', '7',
-        '8', '8', '8', '8', '9', '9', '9', '9', '+', '+', '+', '+', '/', '/', '/',
-        '/'};
-    
-    const char base64_e1[256] = {
-        'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
-        'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd',
-        'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
-        't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7',
-        '8', '9', '+', '/', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
-        'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',
-        'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3',
-        '4', '5', '6', '7', '8', '9', '+', '/', 'A', 'B', 'C', 'D', 'E', 'F', 'G',
-        'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
-        'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k',
-        'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/', 'A', 'B', 'C',
-        'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
-        'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g',
-        'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
-        'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+',
-        '/'};
-    
-    const char base64_e2[256] = {
-        'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
-        'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd',
-        'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
-        't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7',
-        '8', '9', '+', '/', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
-        'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',
-        'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3',
-        '4', '5', '6', '7', '8', '9', '+', '/', 'A', 'B', 'C', 'D', 'E', 'F', 'G',
-        'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
-        'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k',
-        'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/', 'A', 'B', 'C',
-        'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
-        'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g',
-        'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
-        'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+',
-        '/'};
+const char base64_e0[256] = {
+    'A', 'A', 'A', 'A', 'B', 'B', 'B', 'B', 'C', 'C', 'C', 'C', 'D', 'D', 'D',
+    'D', 'E', 'E', 'E', 'E', 'F', 'F', 'F', 'F', 'G', 'G', 'G', 'G', 'H', 'H',
+    'H', 'H', 'I', 'I', 'I', 'I', 'J', 'J', 'J', 'J', 'K', 'K', 'K', 'K', 'L',
+    'L', 'L', 'L', 'M', 'M', 'M', 'M', 'N', 'N', 'N', 'N', 'O', 'O', 'O', 'O',
+    'P', 'P', 'P', 'P', 'Q', 'Q', 'Q', 'Q', 'R', 'R', 'R', 'R', 'S', 'S', 'S',
+    'S', 'T', 'T', 'T', 'T', 'U', 'U', 'U', 'U', 'V', 'V', 'V', 'V', 'W', 'W',
+    'W', 'W', 'X', 'X', 'X', 'X', 'Y', 'Y', 'Y', 'Y', 'Z', 'Z', 'Z', 'Z', 'a',
+    'a', 'a', 'a', 'b', 'b', 'b', 'b', 'c', 'c', 'c', 'c', 'd', 'd', 'd', 'd',
+    'e', 'e', 'e', 'e', 'f', 'f', 'f', 'f', 'g', 'g', 'g', 'g', 'h', 'h', 'h',
+    'h', 'i', 'i', 'i', 'i', 'j', 'j', 'j', 'j', 'k', 'k', 'k', 'k', 'l', 'l',
+    'l', 'l', 'm', 'm', 'm', 'm', 'n', 'n', 'n', 'n', 'o', 'o', 'o', 'o', 'p',
+    'p', 'p', 'p', 'q', 'q', 'q', 'q', 'r', 'r', 'r', 'r', 's', 's', 's', 's',
+    't', 't', 't', 't', 'u', 'u', 'u', 'u', 'v', 'v', 'v', 'v', 'w', 'w', 'w',
+    'w', 'x', 'x', 'x', 'x', 'y', 'y', 'y', 'y', 'z', 'z', 'z', 'z', '0', '0',
+    '0', '0', '1', '1', '1', '1', '2', '2', '2', '2', '3', '3', '3', '3', '4',
+    '4', '4', '4', '5', '5', '5', '5', '6', '6', '6', '6', '7', '7', '7', '7',
+    '8', '8', '8', '8', '9', '9', '9', '9', '+', '+', '+', '+', '/', '/', '/',
+    '/'};
 
-inline uint32_t swap_bytes(const uint32_t word) {
+const char base64_e1[256] = {
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
+    'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd',
+    'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
+    't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7',
+    '8', '9', '+', '/', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
+    'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',
+    'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3',
+    '4', '5', '6', '7', '8', '9', '+', '/', 'A', 'B', 'C', 'D', 'E', 'F', 'G',
+    'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
+    'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k',
+    'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/', 'A', 'B', 'C',
+    'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
+    'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g',
+    'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+    'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+',
+    '/'};
+
+const char base64_e2[256] = {
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
+    'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd',
+    'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
+    't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7',
+    '8', '9', '+', '/', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
+    'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',
+    'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3',
+    '4', '5', '6', '7', '8', '9', '+', '/', 'A', 'B', 'C', 'D', 'E', 'F', 'G',
+    'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
+    'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k',
+    'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/', 'A', 'B', 'C',
+    'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
+    'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g',
+    'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+    'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+',
+    '/'};
+
+static inline uint32_t swap_bytes(const uint32_t word) {
   return ((word >> 24) & 0xff) |      // move byte 3 to byte 0
          ((word << 8) & 0xff0000) |   // move byte 1 to byte 2
          ((word >> 8) & 0xff00) |     // move byte 2 to byte 1
@@ -967,287 +814,359 @@ inline uint32_t swap_bytes(const uint32_t word) {
 
 // // Returns the number of bytes written. The destination buffer must be large
 // // enough. It will add padding (=) if needed.
-//  
-int tail_encode_base64(EVP_ENCODE_CTX *ctx, char *dst, const char *src, size_t srclen) {
-       // This looks like 3 branches, but we expect the compiler to resolve this to a single branch:
-    DEBUG_PRINT(RED_TEXT("DEBUG: Entering tail_encode_base64\n"));
-    const char *e0 = base64_e0;
-    const char *e1 = base64_e1;
-    const char *e2 = base64_e2;
-    char *out = dst;
-    size_t i = 0;
-    uint8_t t1, t2, t3;
+//
+int tail_encode_base64(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
+                       size_t srclen) {
+  // This looks like 3 branches, but we expect the compiler to resolve this to a
+  // single branch:
+  DEBUG_PRINT(RED_TEXT("DEBUG: Entering tail_encode_base64\n"));
+  const char *e0 = base64_e0;
+  const char *e1 = base64_e1;
+  const char *e2 = base64_e2;
+  char *out = dst;
+  size_t i = 0;
+  uint8_t t1, t2, t3;
 
-    DEBUG_PRINT(RED_TEXT("DEBUG: Source length = %zu\n"), srclen);
-    for (; i + 2 < srclen; i += 3) {
-        t1 = (uint8_t)src[i];
-        t2 = (uint8_t)src[i + 1];
-        t3 = (uint8_t)src[i + 2];
-        DEBUG_PRINT(RED_TEXT("DEBUG: Processing bytes at index %zu: %02x %02x %02x\n"), i, t1, t2, t3);
+  DEBUG_PRINT(RED_TEXT("DEBUG: Source length = %zu\n"), srclen);
+  for (; i + 2 < srclen; i += 3) {
+    t1 = (uint8_t)src[i];
+    t2 = (uint8_t)src[i + 1];
+    t3 = (uint8_t)src[i + 2];
+    DEBUG_PRINT(
+        RED_TEXT("DEBUG: Processing bytes at index %zu: %02x %02x %02x\n"), i,
+        t1, t2, t3);
 
-        *out++ = e0[t1];
-        *out++ = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
-        *out++ = e1[((t2 & 0x0F) << 2) | ((t3 >> 6) & 0x03)];
-        *out++ = e2[t3];
+    *out++ = e0[t1];
+    *out++ = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
+    *out++ = e1[((t2 & 0x0F) << 2) | ((t3 >> 6) & 0x03)];
+    *out++ = e2[t3];
 
-        DEBUG_PRINT(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst), dst);
-    }
-    size_t remaining = srclen - i;
-    DEBUG_PRINT(RED_TEXT("DEBUG: Remaining bytes = %zu\n"), remaining);
-    switch (remaining) {
-    case 0:
-        break;
-    case 1:
-        t1 = (uint8_t)src[i];
-        DEBUG_PRINT(RED_TEXT("DEBUG: Processing last byte at index %zu: %02x\n"), i, t1);
-        *out++ = e0[t1];
-        *out++ = e1[(t1 & 0x03) << 4];
-        *out++ = '=';
-        *out++ = '=';
-        DEBUG_PRINT(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst), dst);
-        break;
-    case 2:
-        t1 = (uint8_t)src[i];
-        t2 = (uint8_t)src[i + 1];
-        DEBUG_PRINT(RED_TEXT("DEBUG: Processing last 2 bytes at index %zu: %02x %02x\n"), i, t1, t2);
-        *out++ = e0[t1];
-        *out++ = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
-        *out++ = e2[(t2 & 0x0F) << 2];
-        *out++ = '=';
-        DEBUG_PRINT(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst), dst);
-        break;
-    }
-    int total = (int)(out - dst);
-    DEBUG_PRINT(RED_TEXT("DEBUG: Exiting tail_encode_base64, total output bytes = %d\n"), total);
-    return total;
+    DEBUG_PRINT(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst),
+                dst);
+  }
+  size_t remaining = srclen - i;
+  DEBUG_PRINT(RED_TEXT("DEBUG: Remaining bytes = %zu\n"), remaining);
+  switch (remaining) {
+  case 0:
+    break;
+  case 1:
+    t1 = (uint8_t)src[i];
+    DEBUG_PRINT(RED_TEXT("DEBUG: Processing last byte at index %zu: %02x\n"), i,
+                t1);
+    *out++ = e0[t1];
+    *out++ = e1[(t1 & 0x03) << 4];
+    *out++ = '=';
+    *out++ = '=';
+    DEBUG_PRINT(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst),
+                dst);
+    break;
+  case 2:
+    t1 = (uint8_t)src[i];
+    t2 = (uint8_t)src[i + 1];
+    DEBUG_PRINT(
+        RED_TEXT("DEBUG: Processing last 2 bytes at index %zu: %02x %02x\n"), i,
+        t1, t2);
+    *out++ = e0[t1];
+    *out++ = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
+    *out++ = e2[(t2 & 0x0F) << 2];
+    *out++ = '=';
+    DEBUG_PRINT(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst),
+                dst);
+    break;
+  }
+  int total = (int)(out - dst);
+  DEBUG_PRINT(
+      RED_TEXT("DEBUG: Exiting tail_encode_base64, total output bytes = %d\n"),
+      total);
+  return total;
 }
-
 
 // This function is not expected to be fast. Do not use in long loops.
 static inline int is_ascii_white_space(char c) {
-    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f';
+  return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f';
 }
 
 // removes padding and white spaces at the end
-result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char* output, char * input, size_t length) {
-    DEBUG_PRINT(BRIGHT_YELLOW_TEXT("DEBUG: Entered base64_tail_decode_trim_end\n"));
-    DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string: \"%s\", length: %d\n"), input, length);
+result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output,
+                                   char *input, size_t length) {
+  DEBUG_PRINT(
+      BRIGHT_YELLOW_TEXT("DEBUG: Entered base64_tail_decode_trim_end\n"));
+      DEBUG_CHECK_NULL(output);
 
-    while(length > 0 && is_ascii_white_space(input[length - 1])) {
+  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string: \"%s\", length: %d\n"), input,
+              length);
+
+  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (hex): "));
+  for (size_t i = 0; i < (size_t)length; i++) {
+    DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)input[i]);
+  }
+  DEBUG_PRINT("\n");
+
+  while (length > 0 && is_ascii_white_space(input[length - 1])) {
+    length--;
+  }
+  size_t equallocation =
+      length; // location of the first padding character if any
+
+  auto equalsigns = 0;
+  if (length > 0 && input[length - 1] == '=') {
+    equallocation = length - 1;
+    length -= 1;
+    equalsigns++;
+    DEBUG_PRINT("Found = sign: %d", equalsigns);
+
+    while (length > 0 && is_ascii_white_space(input[length - 1])) {
       length--;
     }
-    size_t equallocation = length; // location of the first padding character if any
-
-    auto equalsigns = 0;
-    if(length > 0 && input[length - 1] == '=') {
+    if (length > 0 && input[length - 1] == '=') {
       equallocation = length - 1;
-      length -= 1;
       equalsigns++;
       DEBUG_PRINT("Found = sign: %d", equalsigns);
-
-      while(length > 0 && is_ascii_white_space(input[length - 1])) {
-        length--;
-      }
-      if(length > 0 && input[length - 1] == '=') {
-        equallocation = length - 1;
-        equalsigns++;
-        DEBUG_PRINT("Found = sign: %d", equalsigns);
-        length -= 1;
-      }
+      length -= 1;
     }
-    if(length == 0) {
-      if(equalsigns > 0) {
-        return (result) {INVALID_BASE64_CHARACTER, equallocation};
-        // return -1;
-      }
-      return (result) {BASE64_SUCCESS, 0};
-    //   return 0;
-    }
-    full_result r = base64_tail_decode(ctx,output, input, length);
-    if(r.error == BASE64_SUCCESS && equalsigns > 0) {
-      // additional checks
-      if((r.output_count % 3 == 0) || ((r.output_count % 3) + 1 + equalsigns != 4)) {
-        return (result) {INVALID_BASE64_CHARACTER, equallocation};
-        // return -1;
-      }
-    }
-        // DEBUG_PRINT(GREEN_TEXT("DEBUG: Final r.count:%d\n"), r.input_count);
-
-    // return (result){r.error, (size_t) r.input_count};
-    if (r.error == BASE64_SUCCESS | r.error == BASE64_INPUT_REMAINDER) {
-        return (result){r.error, (size_t) r.output_count};
-    } else {
-        return (result){r.error, (size_t) r.input_count};
-    }
-    
   }
-
-// Returns 1 upon BASE64_SUCCESS. -1 upon error. The destination buffer must be large enough.
-// This function assumes that the padding (=) has been removed.
-full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int length) {
-    // Use local aliases for the global lookup tables.
-    const uint8_t *to_base64 = to_base64_value;
-    const uint32_t *p0 = d0;
-    const uint32_t *p1 = d1;
-    const uint32_t *p2 = d2;
-    const uint32_t *p3 = d3;
-
-    const char *srcend = src + length;
-    const char *srcinit = src;
-    const char *dstinit = dst;
-
-    uint32_t x;
-    size_t idx;
-    uint8_t buffer[4];
-
-#if DEBUG
-    DEBUG_PRINT("\n");
-    DEBUG_PRINT(RED_TEXT("DEBUG: Starting base64_tail_decode\n"));
-    DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string: \"%s\", length: %d\n"), src, length);
-    DEBUG_PRINT("DEBUG: Input (hex): ");
-    for (int i = 0; i < length; i++) {
-        DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)src[i]);
+  if (length == 0) {
+    if (equalsigns > 0) {
+      return (result){INVALID_BASE64_CHARACTER, equallocation};
     }
-    DEBUG_PRINT("\n\n");
+    return (result){BASE64_SUCCESS, 0};
+  }
+  full_result r = base64_tail_decode(ctx, output, input, length);
+  DEBUG_PRINT(" Base64_tail Input count: %d, Output count: %d,  \n",
+              r.input_count, r.output_count);
+
+  if (r.error == BASE64_SUCCESS && equalsigns > 0) {
+    // additional checks
+    if ((r.output_count % 3 == 0) ||
+        ((r.output_count % 3) + 1 + equalsigns != 4)) {
+      return (result){INVALID_BASE64_CHARACTER, equallocation};
+    }
+  }
+  // DEBUG_PRINT(GREEN_TEXT("DEBUG: Final r.count:%d\n"), r.input_count);
+  if (r.error == BASE64_SUCCESS | r.error == BASE64_INPUT_REMAINDER) {
+    return (result){r.error, (size_t)r.output_count};
+  } else {
+    return (result){r.error, (size_t)r.input_count};
+  }
+}
+
+// Returns 1 upon BASE64_SUCCESS. -1 upon error. The destination buffer must be
+// large enough. This function assumes that the padding (=) has been removed.
+full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
+                               int length) {
+
+  if (length == 0) {
+    return (full_result){BASE64_SUCCESS, 0, 0};
+  }
+  if (length %4 != 0) {
+    return (full_result){INVALID_BASE64_CHARACTER, 0, 0};
+  }
+  // Use local aliases for the global lookup tables.
+  const uint8_t *to_base64 = to_base64_value;
+  const uint32_t *p0 = d0;
+  const uint32_t *p1 = d1;
+  const uint32_t *p2 = d2;
+  const uint32_t *p3 = d3;
+
+  const char *srcend = src + length;
+  const char *srcinit = src;
+  const char *dstinit = dst;
+
+  uint32_t x;
+  size_t idx;
+  uint8_t buffer[4];
+
+#if DEBUG
+  DEBUG_PRINT("\n");
+  DEBUG_PRINT(RED_TEXT("DEBUG: Starting base64_tail_decode\n"));
+  DEBUG_CHECK_NULL(dst);
+  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string: \"%s\", length: %d\n"), src,
+              length);
+  DEBUG_PRINT("DEBUG: Input (hex): ");
+  for (int i = 0; i < length; i++) {
+    DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)src[i]);
+  }
+  DEBUG_PRINT("\n\n");
 #endif
 
-    while (1) {
-        while (src + 4 <= srcend &&
-               (x = p0[(uint8_t)(src[0])] | p1[(uint8_t)(src[1])] |
-                    p2[(uint8_t)(src[2])] | p3[(uint8_t)(src[3])]) < 0x01FFFFFF) {
-            memcpy(dst, &x, 3); // Copy 3 bytes from the computed value.
-            dst += 3;
-            src += 4;
-        }
-        idx = 0;
-        // Gather up to four valid characters.
-        while (idx < 4 && src < srcend) {
-            char c = *src;
-            uint8_t code = to_base64[(uint8_t)(c)];
-            buffer[idx] = code;
-            if (code <= 63) {
-                idx++;
-            } else if (code > 64) {
-                // INVALID_BASE64_CHARACTER
-                return (full_result){INVALID_BASE64_CHARACTER, (size_t)(src - srcinit),
-                    (size_t)(dst - dstinit)};
-            } else {
-                DEBUG_PRINT("WS detected!!!!\n");
-                // A whitespace or newline; ignore it.
-            }
-            src++;
-        }
-        if (idx != 4) {
-            if (idx == 2) {
-                DEBUG_PRINT("idx == 2\n");
-                uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) + ((uint32_t)(buffer[1]) << (2 * 6));
-                // For little-endian system: swap and shift.
-                triple = swap_bytes(triple);
-                triple >>= 8;
-                memcpy(dst, &triple, 1);
-                dst += 1;
-            } else if (idx == 3) {
-                DEBUG_PRINT("idx == 3\n");
-                uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) +
-                                  ((uint32_t)(buffer[1]) << (2 * 6)) +
-                                  ((uint32_t)(buffer[2]) << (1 * 6));
-                triple = swap_bytes(triple);
-                triple >>= 8;
-                memcpy(dst, &triple, 2);
-                dst += 2;
-            } else if (idx == 1) {
-                return (full_result){BASE64_INPUT_REMAINDER, (size_t)(src - srcinit),
-                    (size_t)(dst - dstinit)};
-            }
-#if DEBUG
-            {
-                int final_bytes = (int)(dst - dstinit);
-                DEBUG_PRINT("DEBUG: Final output (hex): ");
-                for (int j = 0; j < final_bytes; j++) {
-                    DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)dstinit[j]);
-                }
-                DEBUG_PRINT("\n\n");
-            }
-#endif
-            return (full_result){BASE64_SUCCESS, (size_t)(src - srcinit), (size_t)(dst - dstinit)};
-            // return (int)(dst - dstinit);
-        }
-        uint32_t triple =
-            ((uint32_t)(buffer[0]) << (3 * 6)) + ((uint32_t)(buffer[1]) << (2 * 6)) +
-            ((uint32_t)(buffer[2]) << (1 * 6)) + ((uint32_t)(buffer[3]) << (0 * 6));
+  while (1) {
+    DEBUG_PRINT("Entering While(1) loop\n:");
+    // while (src + 4 <= srcend &&
+    //        (x = p0[(uint8_t)(src[0])] | p1[(uint8_t)(src[1])] |
+    //             p2[(uint8_t)(src[2])] | p3[(uint8_t)(src[3])]) < 0x01FFFFFF) {
+    //   DEBUG_PRINT("fast track loop!!!\n");
+    //   memcpy(dst, &x, 3); // Copy 3 bytes from the computed value.
+    //   dst += 3;
+    //   src += 4;
+    // }
+    idx = 0;
+    // Gather up to four valid characters.
+    while (idx < 4 && src < srcend) {
+      DEBUG_PRINT("Main 4 char loop\n");
+      char c = *src;
+      uint8_t code = to_base64[(uint8_t)(c)];
+      buffer[idx] = code;
+      if (code <= 63) {
+        DEBUG_PRINT("Valid base64 character\n");
+        idx++;
+      } else if (code > 64) {
+        DEBUG_PRINT("INVALID_BASE64_CHARACTER\n");
+        // INVALID_BASE64_CHARACTER
+        return (full_result){INVALID_BASE64_CHARACTER, (size_t)(src - srcinit),
+                             (size_t)(dst - dstinit)};
+      } else {
+        DEBUG_PRINT("WS detected!!!!\n");
+        // A whitespace or newline; ignore it.
+      }
+      src++;
+      DEBUG_PRINT("idx = %d\n", idx);
+    }
+    if (idx != 4) {
+DEBUG_PRINT("idx != 4\n");
+
+      if (idx == 2) {
+        DEBUG_PRINT("idx == 2\n");
+        uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) +
+                          ((uint32_t)(buffer[1]) << (2 * 6));
+        // For little-endian system: swap and shift.
         triple = swap_bytes(triple);
         triple >>= 8;
-        memcpy(dst, &triple, 3);
-        dst += 3;
+        memcpy(dst, &triple, 1);
+        dst += 1;
+      } else if (idx == 3) {
+        DEBUG_PRINT("idx == 3\n");
+        uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) +
+                          ((uint32_t)(buffer[1]) << (2 * 6)) +
+                          ((uint32_t)(buffer[2]) << (1 * 6));
+        triple = swap_bytes(triple);
+        triple >>= 8;
+        memcpy(dst, &triple, 2);
+        dst += 2;
+      } else if (idx == 1) {
+        DEBUG_PRINT("idx == 1\n");
+        return (full_result){BASE64_INPUT_REMAINDER, (size_t)(src - srcinit),
+                             (size_t)(dst - dstinit)};
+      }
+#if DEBUG
+      {
+        int final_bytes = (int)(dst - dstinit);
+        DEBUG_PRINT("DEBUG: Final output (hex): ");
+        for (int j = 0; j < final_bytes; j++) {
+          DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)dstinit[j]);
+        }
+        DEBUG_PRINT("\n\n");
+      }
+#endif
+      return (full_result){BASE64_SUCCESS, (size_t)(src - srcinit),
+                           (size_t)(dst - dstinit)};
+      // return (int)(dst - dstinit);
     }
+    DEBUG_PRINT("idx == 4 remaining\n");
+    DEBUG_PRINT("Buffer: %02x %02x %02x %02x\n", buffer[0], buffer[1],
+                buffer[2], buffer[3]);
+    DEBUG_CHECK_NULL(dst);
+    uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) +
+                      ((uint32_t)(buffer[1]) << (2 * 6)) +
+                      ((uint32_t)(buffer[2]) << (1 * 6)) +
+                      ((uint32_t)(buffer[3]) << (0 * 6));
+    // DEBUG_PRINT("Read past buffer Triple: %08x\n", triple);
+    triple = swap_bytes(triple);
+    triple >>= 8;
+    memcpy(dst, &triple, 3);
+    // DEBUG_PRINT("Read past dst copy");
+    dst += 3;
+  }
 }
-
 
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
-                               const unsigned char *f, int n)
-{
-    int i, ret = 0, a, b, c, d;
-    unsigned long l;
-    const unsigned char *table;
+                               const unsigned char *f, int n) {
+  int i, ret = 0, a, b, c, d;
+  unsigned long l;
+  const unsigned char *table;
 
-    if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0)
-        table = srpdata_ascii2bin;
-    else
-        table = data_ascii2bin;
+  DEBUG_CHECK_NULL(t);
 
-    /* trim whitespace from the start of the line. */
-    while ((n > 0) && (conv_ascii2bin(*f, table) == B64_WS)) {
-        f++;
-        n--;
-    }
+  if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0)
+    table = srpdata_ascii2bin;
+  else
+    table = data_ascii2bin;
 
-    /*
-     * strip off stuff at the end of the line ascii2bin values B64_WS,
-     * B64_EOLN, B64_EOLN and B64_EOF
-     */
-    while ((n > 3) && (B64_NOT_BASE64(conv_ascii2bin(f[n - 1], table))))
-        n--;
+  /* trim whitespace from the start of the line. */
+  while ((n > 0) && (conv_ascii2bin(*f, table) == B64_WS)) {
+    f++;
+    n--;
+  }
 
-    if (n % 4 != 0)
-        return -1;
+  /*
+   * strip off stuff at the end of the line ascii2bin values B64_WS,
+   * B64_EOLN, B64_EOLN and B64_EOF
+   */
+  while ((n > 3) && (B64_NOT_BASE64(conv_ascii2bin(f[n - 1], table))))
+    n--;
 
-    for (i = 0; i < n; i += 4) {
-        a = conv_ascii2bin(*(f++), table);
-        b = conv_ascii2bin(*(f++), table);
-        c = conv_ascii2bin(*(f++), table);
-        d = conv_ascii2bin(*(f++), table);
-        if ((a | b | c | d) & 0x80)
-            return -1;
-        l = ((((unsigned long)a) << 18L) |
-             (((unsigned long)b) << 12L) |
-             (((unsigned long)c) << 6L) | (((unsigned long)d)));
-        *(t++) = (unsigned char)(l >> 16L) & 0xff;
-        *(t++) = (unsigned char)(l >> 8L) & 0xff;
-        *(t++) = (unsigned char)(l) & 0xff;
-        ret += 3;
-    }
-    return ret;
+  if (n % 4 != 0) // THEIRS DON'T DEAL WITH REMAINING BYTES. OURS DO.
+    return -1;
+
+  for (i = 0; i < n; i += 4) {
+    a = conv_ascii2bin(*(f++), table);
+    b = conv_ascii2bin(*(f++), table);
+    c = conv_ascii2bin(*(f++), table);
+    d = conv_ascii2bin(*(f++), table);
+    if ((a | b | c | d) & 0x80)
+      return -1;
+    l = ((((unsigned long)a) << 18L) | (((unsigned long)b) << 12L) |
+         (((unsigned long)c) << 6L) | (((unsigned long)d)));
+    *(t++) = (unsigned char)(l >> 16L) & 0xff;
+    *(t++) = (unsigned char)(l >> 8L) & 0xff;
+    *(t++) = (unsigned char)(l) & 0xff;
+    ret += 3;
+  }
+  return ret;
 }
 
-int EVP_DecodeBlock(unsigned char *t, const unsigned char *f, int n)
-{
-    return evp_decodeblock_int(NULL, t, f, n);
+int EVP_DecodeBlock(unsigned char *t, const unsigned char *f, int n) {
+  return evp_decodeblock_int(NULL, t, f, n);
 }
 
-int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
-{
-    int i;
-    int j;
+int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl) {
+  int i;
+  int j;
+  DEBUG_CHECK_NULL(out);
 
-    *outl = 0;
-    if (ctx->num != 0) {
-        i = evp_decodeblock_int(ctx, out, ctx->enc_data, ctx->num);
-        // i = base64_tail_decode(ctx, out, ctx->enc_data, ctx->num);
-        if (i < 0)
-            return -1;
-        ctx->num = 0;
-        *outl = i;
-        return 1;
-    } else
-        return 1;
+  *outl = 0;
+  if (ctx->num != 0) {
+    // i = evp_decodeblock_int(ctx, out, ctx->enc_data, ctx->num);
+    result r = base64_tail_decode_trim_end(ctx, out, ctx->enc_data, ctx->num);
+    if (r.error != BASE64_SUCCESS){
+      return -1;
+    };
+
+    // i = base64_tail_decode(ctx, out, ctx->enc_data, ctx->num);
+    // if (i < 0)
+    //   return -1;
+    ctx->num = 0;
+    *outl = r.count;
+    return 1;
+  } else
+    return 1;
 }
+
+// int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
+// {
+//     int i;
+//     int j;
+
+//     DEBUG_CHECK_NULL(out);
+
+//     *outl = 0;
+//     if (ctx->num != 0) {
+//         i = evp_decodeblock_int(ctx, out, ctx->enc_data, ctx->num);
+//         // i = base64_tail_decode(ctx, out, ctx->enc_data, ctx->num);
+//         if (i < 0)
+//             return -1;
+//         ctx->num = 0;
+//         *outl = i;
+//         return 1;
+//     } else
+//         return 1;
+// }
