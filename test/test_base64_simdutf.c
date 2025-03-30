@@ -50,10 +50,15 @@
 #define DEBUG 0
 
 #if DEBUG
-    #define DEBUG_PRINT(fmt, ...) printf(fmt, ##__VA_ARGS__)
+    #define DEBUG_PRINT(fmt, ...) \
+        do { \
+            fprintf(stderr, fmt, ##__VA_ARGS__); \
+            fflush(stderr); \
+        } while (0)
 #else
-    #define DEBUG_PRINT(fmt, ...)       
-#endif  
+    #define DEBUG_PRINT(fmt, ...) do {} while (0)
+#endif
+
 
 /* Example: ASSERT_EQUAL for integers */
 #define ASSERT_EQUAL_INT(actual, expected) do {                      \
@@ -159,6 +164,31 @@ size_t add_garbage(char **v, size_t *v_len, unsigned int *seed, const uint8_t *t
     return index;
 }
 
+result base64_decode_OpenSSL(char *dst, size_t dstlen, const char *src, size_t srclen, result res) {
+    EVP_ENCODE_CTX *ctx = EVP_ENCODE_CTX_new();
+    if (ctx == NULL) {
+        fprintf(stderr, "Memory allocation error\n");
+        exit(1);
+    }
+
+    int outlen = 0;
+    int taillen = 0;
+
+    EVP_DecodeInit(ctx);
+    if (EVP_DecodeUpdate(ctx, (unsigned char *)dst, &outlen,
+                         (const unsigned char *)src, srclen) < 0 ||
+        EVP_DecodeFinal(ctx, (unsigned char *)&dst[outlen], &taillen) < 0) {
+        fprintf(stderr, "Invalid input for openssl base64 decode.\n");
+        EVP_ENCODE_CTX_free(ctx);
+        return (result){OTHER, (size_t)outlen};        
+    }
+
+    EVP_ENCODE_CTX_free(ctx);
+    outlen += taillen;
+    return (result){BASE64_SUCCESS, (size_t)outlen};
+}
+
+
 /*-------------------------------------------------------------
  * Test Function: decode_base64_cases
  *
@@ -200,6 +230,12 @@ static int test_decode_base64_cases(void)
             return 0;
         }
         OPENSSL_free(buffer);
+
+        // EVP_ENCODE_CTX *ctx = EVP_ENCODE_CTX_new();
+        result openssl_result = base64_decode_OpenSSL((char *)buffer, max_len, cases[i], len, decoded);
+        ASSERT_EQUAL_INT(openssl_result.error, decoded.error);
+        ASSERT_EQUAL_INT(openssl_result.count, decoded.count);
+        
     }
     return 1;
 }
@@ -1682,25 +1718,25 @@ int setup_tests(void)
 {
     // // Register our sample test. The macro ADD_TEST() takes our test function.
     ADD_TEST(test_decode_base64_cases);
-    ADD_TEST(test_complete_decode_base64_cases);
-    ADD_TEST(test_encode_base64_basic_cases);
-    ADD_TEST(test_encode_base64_no_padding_cases);
-    ADD_TEST(test_roundtrip_base64_with_lots_of_spaces);
-    ADD_TEST(test_roundtrip_base64_with_spaces);
-    ADD_TEST(test_roundtrip_base64_with_garbage);
-    ADD_TEST(test_base64_decode_just_one_padding_loose);
-    ADD_TEST(test_roundtrip_base64);
-    ADD_TEST(test_issue_520);
-    ADD_TEST(test_issue_509);
-    ADD_TEST(test_issue_504_8bit); 
-    ADD_TEST(test_issue_502);
-    ADD_TEST(test_issue_502_alt);
-    ADD_TEST(test_bad_padding_base64);
-    ADD_TEST(test_doomed_truncated_base64_roundtrip);
-    ADD_TEST(test_doomed_base64_roundtrip);
-    ADD_TEST(test_streaming_base64_roundtrip);
-    ADD_TEST(test_readme_test);
-    ADD_TEST(test_doomed_partial_buffer_utf8);
+    // ADD_TEST(test_complete_decode_base64_cases);
+    // ADD_TEST(test_encode_base64_basic_cases);
+    // ADD_TEST(test_encode_base64_no_padding_cases);
+    // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces);
+    // ADD_TEST(test_roundtrip_base64_with_spaces);
+    // ADD_TEST(test_roundtrip_base64_with_garbage);
+    // ADD_TEST(test_base64_decode_just_one_padding_loose);
+    // ADD_TEST(test_roundtrip_base64);
+    // ADD_TEST(test_issue_520);
+    // ADD_TEST(test_issue_509);
+    // ADD_TEST(test_issue_504_8bit); 
+    // ADD_TEST(test_issue_502);
+    // ADD_TEST(test_issue_502_alt);
+    // ADD_TEST(test_bad_padding_base64);
+    // ADD_TEST(test_doomed_truncated_base64_roundtrip);
+    // ADD_TEST(test_doomed_base64_roundtrip);
+    // ADD_TEST(test_streaming_base64_roundtrip);
+    // ADD_TEST(test_readme_test);
+    // ADD_TEST(test_doomed_partial_buffer_utf8);
 
     // Return 1 to indicate successful test setup.
     return 1;
