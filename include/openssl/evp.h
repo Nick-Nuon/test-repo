@@ -740,7 +740,8 @@ __owur int EVP_Cipher(EVP_CIPHER_CTX *c,
         BASE64_EXTRA_BITS,        // The base64 input terminates with non-zero
                                     // padding bits.
         OUTPUT_BUFFER_TOO_SMALL,  // The provided buffer is too small.
-        OTHER                     // Not related to validation/transcoding.
+        NOT_MULTIPLE_OF_FOUR, // The base64 input is not a multiple of four.
+        OTHER,                     // Not related to validation/transcoding.
         } error_code;
         
           typedef struct result {
@@ -961,9 +962,10 @@ int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned
                     char *out, int *outl);
 int EVP_DecodeBlock(unsigned char *t, const unsigned char *f, int n);
 full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int length);
-result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char* output, char * input, size_t length);
+full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char* output, int* outlen, char * input, size_t length);
 int tail_encode_base64(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen); 
-
+int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
+    const char *input, int length);
 
 # ifndef OPENSSL_NO_DEPRECATED_1_1_0
 #  define EVP_CIPHER_CTX_init(c)      EVP_CIPHER_CTX_reset(c)
