@@ -377,252 +377,272 @@ static int test_complete_decode_base64_cases(void)
     return 1;
 }
 
-// static int check_cases(case_pair *cases)
-// {
-//     DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered encode_base64_cases Test\n"));
+static int check_cases(case_pair *cases)
+{
+    DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered encode_base64_cases Test\n"));
 
-//     /* Define test cases as an array of case_pair.
-//        These mirror your C++ test cases.
-//     */
-//     size_t num_cases = sizeof(cases) / sizeof(cases[0]);
-//     size_t i, j;
+    /* Define test cases as an array of case_pair.
+       These mirror your C++ test cases.
+    */
+    size_t num_cases = sizeof(cases) / sizeof(cases[0]);
+    size_t i, j;
 
-//         /* --- Part 1: Test binary => base64 (normal) --- */
-//         DEBUG_PRINT(GREEN_TEXT(" -- Testing base64_to_binary decoding (normal)\n"));
-//         for (i = 0; i < num_cases; i++) {
-//             size_t enc_len = strlen(cases[i].encoded);
-//             size_t expected_dec_len = strlen(cases[i].decoded);
-//             size_t bufsize = base64_length_from_binary(strlen(cases[i].decoded));
-//             char *buffer = OPENSSL_malloc(bufsize);
-//             if (!buffer) {
-//                 TEST_error("Out of memory in decoding test case %zu", i);
-//                 return 0;
-//             }
-//             int r = tail_encode_base64(NULL, (char *)buffer,cases[i].decoded, strlen(cases[i].decoded));
-//             if(r < 0) {
-//                 TEST_error(RED_TEXT("tail_encode_base64 error in test case %zu"), i);
-//                 OPENSSL_free(buffer);
-//                 return 0;
-//             }
-//             if(r != strlen(cases[i].encoded)) {
-//                 TEST_error(RED_TEXT("Encoded byte count mismatch in test case %zu: got %zu, expected %zu"), 
-//                            i, r, strlen(cases[i].encoded));
-//                 OPENSSL_free(buffer);
-//                 return 0;
-//             }
+        /* --- Part 1: Test binary => base64 (normal) --- */
+        DEBUG_PRINT(GREEN_TEXT(" -- Testing base64_to_binary decoding (normal)\n"));
+        for (i = 0; i < num_cases; i++) {
+            size_t enc_len = strlen(cases[i].encoded);
+            size_t expected_dec_len = strlen(cases[i].decoded);
+            size_t bufsize = base64_length_from_binary(strlen(cases[i].decoded));
+            char *buffer = OPENSSL_malloc(bufsize);
+            if (!buffer) {
+                TEST_error("Out of memory in decoding test case %zu", i);
+                return 0;
+            }
+            int r = tail_encode_base64(NULL, (char *)buffer,cases[i].decoded, strlen(cases[i].decoded));
+            if(r < 0) {
+                TEST_error(RED_TEXT("tail_encode_base64 error in test case %zu"), i);
+                OPENSSL_free(buffer);
+                return 0;
+            }
+            if(r != strlen(cases[i].encoded)) {
+                TEST_error(RED_TEXT("Encoded byte count mismatch in test case %zu: got %zu, expected %zu"), 
+                           i, r, strlen(cases[i].encoded));
+                OPENSSL_free(buffer);
+                return 0;
+            }
     
-//             for(size_t j = 0; j < r; j++) {
-//                 if(buffer[j] != cases[i].encoded[j]) {
-//                     TEST_error(RED_TEXT("Encoded: Mismatch at index %zu in test case %zu: got %02x, expected %02x"), 
-//                                j, i, (unsigned int)buffer[j], (unsigned int)cases[i].encoded[j]);
-//                     OPENSSL_free(buffer);
-//                     return 0;
-//                 }
-//             }
-//             OPENSSL_free(buffer);
-//         }
+            for(size_t j = 0; j < r; j++) {
+                if(buffer[j] != cases[i].encoded[j]) {
+                    TEST_error(RED_TEXT("Encoded: Mismatch at index %zu in test case %zu: got %02x, expected %02x"), 
+                               j, i, (unsigned int)buffer[j], (unsigned int)cases[i].encoded[j]);
+                    OPENSSL_free(buffer);
+                    return 0;
+                }
+            }
+            OPENSSL_free(buffer);
+        }
 
-//     /* --- Part 2: Test base64_to_binary decoding (normal) --- */
-//     DEBUG_PRINT(GREEN_TEXT(" -- Testing base64_to_binary decoding (normal)\n"));
-//     for (i = 0; i < num_cases; i++) {
-//         size_t enc_len = strlen(cases[i].encoded);
-//         size_t expected_dec_len = strlen(cases[i].decoded);
-//         size_t bufsize = maximal_binary_length_from_base64(cases[i].encoded, enc_len);
-//         char *buffer = OPENSSL_malloc(bufsize);
-//         if (!buffer) {
-//             TEST_error("Out of memory in decoding test case %zu", i);
-//             return 0;
-//         }
-//         result r = base64_tail_decode_trim_end(NULL, (char *)buffer,cases[i].encoded, enc_len);
-//         // if (bufsize & r.error != NOT_MULTIPLE_OF_FOUR) {
-//         //     TEST_error(RED_TEXT("base64_to_binary error in test case %zu"), i);
-//         //     OPENSSL_free(buffer);
-//         //     return 0;
-//         // } else 
-//         if(r.error != BASE64_SUCCESS) {
-//             TEST_error(RED_TEXT("base64_to_binary error in test case %zu"), i);
-//             OPENSSL_free(buffer);
-//             return 0;
-//         }
-//         if(r.count != strlen(cases[i].decoded)) {
-//             TEST_error(RED_TEXT("Decoded byte count mismatch in test case %zu: got %zu, expected %zu"), 
-//                        i, r, strlen(cases[i].decoded));
-//             OPENSSL_free(buffer);
-//             return 0;
-//         }
+    /* --- Part 2: Test base64_to_binary decoding (normal) --- */
+    DEBUG_PRINT(GREEN_TEXT(" -- Testing base64_to_binary decoding (normal)\n"));
+    /* First, test using base64_to_binary (normal decoding) */
+    for(i = 0; i < num_cases; i++) {
+        size_t enc_len = strlen(cases[i].encoded);
+        size_t max_len = maximal_binary_length_from_base64(cases[i].encoded, enc_len);
+        unsigned char *buffer = OPENSSL_malloc(max_len);
+        if (buffer == NULL) {
+            TEST_error("Out of memory");
+            return 0;
+        }
+        int outlen_simdutf = 0;
+        int simdutf_result = simdutf_decode(NULL, (char *)buffer, &outlen_simdutf, cases[i].encoded, enc_len);
 
-//         for(size_t j = 0; j < r.count; j++) {
-//             if(buffer[j] != cases[i].decoded[j]) {
-//                 TEST_error(RED_TEXT("Decoded:Mismatch at index %zu in test case %zu: got %02x, expected %02x"), 
-//                            j, i, (unsigned int)buffer[j], (unsigned int)cases[i].decoded[j]);
-//                 OPENSSL_free(buffer);
-//                 return 0;
-//             }
-//         }
-//         OPENSSL_free(buffer);
-//     }
+        for(size_t j = 0; j < simdutf_result; j++) {
+            if(buffer[j] != cases[i].decoded[j]) {
+                TEST_error(RED_TEXT("Decoded:Mismatch at index %zu in test case %zu for simdutf: got %02x, expected %02x"), 
+                           j, i, (unsigned int)buffer[j], (unsigned int)cases[i].decoded[j]);
+                OPENSSL_free(buffer);
+                return 0;
+            }
+        }
 
-//     return 1;
-// }
+        // *** OpenSSL part ***
 
-// const case_pair basic_cases[] = {
-//     { "Hello, World!", "SGVsbG8sIFdvcmxkIQ==" },
-//     { "GeeksforGeeks", "R2Vla3Nmb3JHZWVrcw==" },
-//     { "123456", "MTIzNDU2" },
-//     { "Base64 Encoding", "QmFzZTY0IEVuY29kaW5n" },
-//     { "!R~J2jL&mI]O)3=c:G3Mo)oqmJdxoprTZDyxEvU0MI.'Ww5H{G>}y;;+B8E_Ah,Ed[ PdBqY'^N>O$4:7LK1<:|7)btV@|{YWR$$Er59-XjVrFl4L}~yzTEd4'E[@k",
-//       "IVJ+SjJqTCZtSV1PKTM9YzpHM01vKW9xbUpkeG9wclRaRHl4RXZVME1JLidXdzVIe0c+fXk7OytCOEVfQWgsRWRbIFBkQnFZJ15OPk8kNDo3TEsxPDp8NylidFZAfHtZV1IkJEVyNTktWGpWckZsNEx9fnl6VEVkNCdFW0Br" }
-// };
+        unsigned char *buffer_openssl = OPENSSL_malloc(max_len);
+        if (buffer_openssl == NULL) {
+            TEST_error("Out of memory");
+            return 0;
+        }
 
-// const case_pair no_padding[] = {
-//     {"Hello, World!", "SGVsbG8sIFdvcmxkIQ"},
-//     {"GeeksforGeeks", "R2Vla3Nmb3JHZWVrcw"},
-//     {"123456", "MTIzNDU2"},
-//     {"Base64 Encoding", "QmFzZTY0IEVuY29kaW5n"},
-//     {"!R~J2jL&mI]O)3=c:G3Mo)oqmJdxoprTZDyxEvU0MI.'Ww5H{G>}y;;+B8E_Ah,Ed[ "
-//      "PdBqY'^N>O$4:7LK1<:|7)btV@|{YWR$$Er59-XjVrFl4L}~yzTEd4'E[@k",
-//      "IVJ+SjJqTCZtSV1PKTM9YzpHM01vKW9xbUpkeG9wclRaRHl4RXZVME1JLidXdzVIe0c+"
-//      "fXk7OytCOEVfQWgsRWRbIFBkQnFZJ15OPk8kNDo3TEsxPDp8NylidFZAfHtZV1IkJEVyNTk"
-//      "tWGpWckZsNEx9fnl6VEVkNCdFW0Br"}
-//     };
+        int openssl_outlen = 0;
+        int result_openssl = OpenSSL_decode(NULL, (char *)buffer_openssl, &openssl_outlen, cases[i].encoded, enc_len);
 
-// const case_pair whitespaces[] = {
-//         {"abcd", " Y\fW\tJ\njZ A=\r= "},
-//     };
+        for(size_t j = 0; j < result_openssl; j++) {
+            if(buffer_openssl[j] != cases[i].decoded[j]) {
+                TEST_error(RED_TEXT("Decoded:Mismatch at index %zu in test case %zu for OpenSSL: got %02x, expected %02x"), 
+                           j, i, (unsigned int)buffer_openssl[j], (unsigned int)cases[i].decoded[j]);
+                OPENSSL_free(buffer_openssl);
+                return 0;
+            }
+        }
 
-// static int test_encode_base64_basic_cases(void){
-//     check_cases(basic_cases);
-//     return 1;
-// }
+        printf("max_len: %zu\n", max_len);
+        printf("simdutf_result: %d\n", simdutf_result);
+        printf("simdutf_outlen: %d\n", outlen_simdutf);
+        printf("result_openssl: %d\n", result_openssl);
+        printf("openssl_outlen: %d\n", openssl_outlen);
 
+        ASSERT_EQUAL_INT(simdutf_result, result_openssl);
+        ASSERT_EQUAL_INT(outlen_simdutf, openssl_outlen);
+        // ****** TEST SPECIFIC ASSERTIONS ******
 
-// static int test_encode_base64_no_padding_cases(void){
-//     check_cases(no_padding);
-//     return 1;
-// }
+        ASSERT_EQUAL_INT(result_openssl, strlen(cases[i].decoded));
+        ASSERT_EQUAL_INT(simdutf_result, strlen(cases[i].decoded));
+        
+        OPENSSL_free(buffer);
+        OPENSSL_free(buffer_openssl);
+    }
 
-// static int test_encode_base64_whitespace_cases(void){
-//     check_cases(whitespaces);
-//     return 1;
-// }
+    return 1;
+}
 
-// /*
-//  * add_space:
-//  * Inserts a single random whitespace character into the array.
-//  *
-//  * Parameters:
-//  *   v      - pointer to a dynamically allocated array of char.
-//  *   v_len  - pointer to the length of the array.
-//  *   seed   - pointer to an unsigned int used as the random seed.
-//  *
-//  * Returns:
-//  *   The index where the whitespace was inserted.
-//  *   The array and its length are updated.
-//  */
+const case_pair basic_cases[] = {
+    { "Hello, World!", "SGVsbG8sIFdvcmxkIQ==" },
+    { "GeeksforGeeks", "R2Vla3Nmb3JHZWVrcw==" },
+    { "123456", "MTIzNDU2" },
+    { "Base64 Encoding", "QmFzZTY0IEVuY29kaW5n" },
+    { "!R~J2jL&mI]O)3=c:G3Mo)oqmJdxoprTZDyxEvU0MI.'Ww5H{G>}y;;+B8E_Ah,Ed[ PdBqY'^N>O$4:7LK1<:|7)btV@|{YWR$$Er59-XjVrFl4L}~yzTEd4'E[@k",
+      "IVJ+SjJqTCZtSV1PKTM9YzpHM01vKW9xbUpkeG9wclRaRHl4RXZVME1JLidXdzVIe0c+fXk7OytCOEVfQWgsRWRbIFBkQnFZJ15OPk8kNDo3TEsxPDp8NylidFZAfHtZV1IkJEVyNTktWGpWckZsNEx9fnl6VEVkNCdFW0Br" }
+};
 
-// size_t add_space(char **v, size_t *v_len, unsigned int *seed) {
-//     static const char space[5] = { ' ', '\t', '\n', '\r', '\f' };
+const case_pair no_padding[] = {
+    {"Hello, World!", "SGVsbG8sIFdvcmxkIQ"},
+    {"GeeksforGeeks", "R2Vla3Nmb3JHZWVrcw"},
+    {"123456", "MTIzNDU2"},
+    {"Base64 Encoding", "QmFzZTY0IEVuY29kaW5n"},
+    {"!R~J2jL&mI]O)3=c:G3Mo)oqmJdxoprTZDyxEvU0MI.'Ww5H{G>}y;;+B8E_Ah,Ed[ "
+     "PdBqY'^N>O$4:7LK1<:|7)btV@|{YWR$$Er59-XjVrFl4L}~yzTEd4'E[@k",
+     "IVJ+SjJqTCZtSV1PKTM9YzpHM01vKW9xbUpkeG9wclRaRHl4RXZVME1JLidXdzVIe0c+"
+     "fXk7OytCOEVfQWgsRWRbIFBkQnFZJ15OPk8kNDo3TEsxPDp8NylidFZAfHtZV1IkJEVyNTk"
+     "tWGpWckZsNEx9fnl6VEVkNCdFW0Br"}
+    };
 
-//     // DEBUG_PRINT(RED_TEXT("DEBUG: Entering add_space\n"));
+const case_pair whitespaces[] = {
+        {"abcd", " Y\fW\tJ\njZ A=\r= "},
+    };
 
-//     /* Choose a random insertion index between 0 and *v_len (inclusive) */
-//     size_t index = rand_r(seed) % (*v_len + 1);
-//     // DEBUG_PRINT("DEBUG: Chosen insertion index = %zu (v_len = %zu)\n", index, *v_len);
-
-//     /* Choose a random whitespace character from the array */
-//     size_t space_index = rand_r(seed) % 5;
-//     // DEBUG_PRINT("DEBUG: Chosen whitespace character = '%c'\n", space[space_index]);
-
-//     /* Reallocate the array to make room for one extra character. */
-//     char *new_v = OPENSSL_realloc(*v, *v_len + 1);
-//     if (new_v == NULL) {
-//         TEST_error(RED_TEXT("DEBUG: OPENSSL_realloc failed for new size = %zu"), *v_len + 1);
-//         return (size_t)-1;
-//     }
-//     // DEBUG_PRINT(RED_TEXT("DEBUG: Reallocation successful, new pointer = %p\n"), new_v);
-
-//     /* Move the tail of the array one position to the right */
-//     memmove(new_v + index + 1, new_v + index, *v_len - index);
-//     // DEBUG_PRINT("DEBUG: memmove executed from index %zu for %zu bytes\n", index, *v_len - index);
-
-//     /* Insert the chosen whitespace */
-//     new_v[index] = space[space_index];
-//     // DEBUG_PRINT("DEBUG: Inserted '%c' at index %zu\n", space[space_index], index);
-
-//     *v = new_v;
-//     (*v_len)++;
-//     // DEBUG_PRINT("DEBUG: New vector length is %zu\n", *v_len);
-
-//     return index;
-// }
+static int test_encode_base64_basic_cases(void){
+    check_cases(basic_cases);
+    return 1;
+}
 
 
-// /*
-//  * add_simple_spaces:
-//  * Inserts a given number of spaces at unique random positions into the input array.
-//  *
-//  * Parameters:
-//  *   v              - The original array of characters.
-//  *   v_len          - The number of elements in the array.
-//  *   number_of_spaces - How many spaces to insert.
-//  *   seed           - Pointer to an unsigned int used as the random seed.
-//  *   result_len     - Output pointer that receives the length of the resulting array.
-//  *
-//  * Returns:
-//  *   A newly allocated array containing the original elements plus extra spaces.
-//  *   The caller is responsible for freeing the returned array using OPENSSL_free.
-//  */
-// char *add_simple_spaces(const char *v, size_t v_len, size_t number_of_spaces,
-//                         //   unsigned int *seed, size_t *result_len) {
-//                         unsigned int *seed) {
-//     /* If there are no spaces to add or the array is empty, return a copy of v */
-//     if (number_of_spaces == 0 || v_len == 0) {
-//         char *copy = OPENSSL_malloc(v_len + 1);
-//         if (copy) {
-//             memcpy(copy, v, v_len);
-//             copy[v_len] = '\0';
-//         }
-//         return copy;
-//     }
+static int test_encode_base64_no_padding_cases(void){
+    check_cases(no_padding);
+    return 1;
+}
 
-//     size_t total = v_len + number_of_spaces;
-//     /* Allocate a boolean array (using char) to mark positions for inserted spaces.
-//        Initialize all positions to 0. */
-//     char *positions = OPENSSL_zalloc(total * sizeof(char));
-//     if (!positions)
-//         return NULL;
+static int test_encode_base64_whitespace_cases(void){
+    check_cases(whitespaces);
+    return 1;
+}
 
-//     size_t i;
-//     /* Generate unique random positions for extra spaces */
-//     for (i = 0; i < number_of_spaces; i++) {
-//         size_t pos = rand_r(seed) % total;
-//         while (positions[pos]) {
-//             pos = rand_r(seed) % total;
-//         }
-//         positions[pos] = 1;  /* Mark this position to hold a space */
-//     }
+/*
+ * add_space:
+ * Inserts a single random whitespace character into the array.
+ *
+ * Parameters:
+ *   v      - pointer to a dynamically allocated array of char.
+ *   v_len  - pointer to the length of the array.
+ *   seed   - pointer to an unsigned int used as the random seed.
+ *
+ * Returns:
+ *   The index where the whitespace was inserted.
+ *   The array and its length are updated.
+ */
 
-//     /* Allocate the result array */
-//     char *result = OPENSSL_malloc(total + 1);
-//     if (!result) {
-//         OPENSSL_free(positions);
-//         return NULL;
-//     }
+size_t add_space(char **v, size_t *v_len, unsigned int *seed) {
+    static const char space[5] = { ' ', '\t', '\n', '\r', '\f' };
 
-//     size_t pos_idx = 0;  /* Index for traversing the original array */
-//     const char whitespace[4] = { ' ', '\t', '\n', '\r' };
-//     for (i = 0; i < total; i++) {
-//         if (positions[i]) {
-//             /* Choose a random whitespace character from the set */
-//             result[i] = whitespace[rand_r(seed) % 4];
-//         } else {
-//             result[i] = v[pos_idx++];
-//         }
-//     }
-//     result[total] = '\0';
-//     OPENSSL_free(positions);
-//     return result;
-// }
+    // DEBUG_PRINT(RED_TEXT("DEBUG: Entering add_space\n"));
+
+    /* Choose a random insertion index between 0 and *v_len (inclusive) */
+    size_t index = rand_r(seed) % (*v_len + 1);
+    // DEBUG_PRINT("DEBUG: Chosen insertion index = %zu (v_len = %zu)\n", index, *v_len);
+
+    /* Choose a random whitespace character from the array */
+    size_t space_index = rand_r(seed) % 5;
+    // DEBUG_PRINT("DEBUG: Chosen whitespace character = '%c'\n", space[space_index]);
+
+    /* Reallocate the array to make room for one extra character. */
+    char *new_v = OPENSSL_realloc(*v, *v_len + 1);
+    if (new_v == NULL) {
+        TEST_error(RED_TEXT("DEBUG: OPENSSL_realloc failed for new size = %zu"), *v_len + 1);
+        return (size_t)-1;
+    }
+    // DEBUG_PRINT(RED_TEXT("DEBUG: Reallocation successful, new pointer = %p\n"), new_v);
+
+    /* Move the tail of the array one position to the right */
+    memmove(new_v + index + 1, new_v + index, *v_len - index);
+    // DEBUG_PRINT("DEBUG: memmove executed from index %zu for %zu bytes\n", index, *v_len - index);
+
+    /* Insert the chosen whitespace */
+    new_v[index] = space[space_index];
+    // DEBUG_PRINT("DEBUG: Inserted '%c' at index %zu\n", space[space_index], index);
+
+    *v = new_v;
+    (*v_len)++;
+    // DEBUG_PRINT("DEBUG: New vector length is %zu\n", *v_len);
+
+    return index;
+}
+
+
+/*
+ * add_simple_spaces:
+ * Inserts a given number of spaces at unique random positions into the input array.
+ *
+ * Parameters:
+ *   v              - The original array of characters.
+ *   v_len          - The number of elements in the array.
+ *   number_of_spaces - How many spaces to insert.
+ *   seed           - Pointer to an unsigned int used as the random seed.
+ *   result_len     - Output pointer that receives the length of the resulting array.
+ *
+ * Returns:
+ *   A newly allocated array containing the original elements plus extra spaces.
+ *   The caller is responsible for freeing the returned array using OPENSSL_free.
+ */
+char *add_simple_spaces(const char *v, size_t v_len, size_t number_of_spaces,
+                        //   unsigned int *seed, size_t *result_len) {
+                        unsigned int *seed) {
+    /* If there are no spaces to add or the array is empty, return a copy of v */
+    if (number_of_spaces == 0 || v_len == 0) {
+        char *copy = OPENSSL_malloc(v_len + 1);
+        if (copy) {
+            memcpy(copy, v, v_len);
+            copy[v_len] = '\0';
+        }
+        return copy;
+    }
+
+    size_t total = v_len + number_of_spaces;
+    /* Allocate a boolean array (using char) to mark positions for inserted spaces.
+       Initialize all positions to 0. */
+    char *positions = OPENSSL_zalloc(total * sizeof(char));
+    if (!positions)
+        return NULL;
+
+    size_t i;
+    /* Generate unique random positions for extra spaces */
+    for (i = 0; i < number_of_spaces; i++) {
+        size_t pos = rand_r(seed) % total;
+        while (positions[pos]) {
+            pos = rand_r(seed) % total;
+        }
+        positions[pos] = 1;  /* Mark this position to hold a space */
+    }
+
+    /* Allocate the result array */
+    char *result = OPENSSL_malloc(total + 1);
+    if (!result) {
+        OPENSSL_free(positions);
+        return NULL;
+    }
+
+    size_t pos_idx = 0;  /* Index for traversing the original array */
+    const char whitespace[4] = { ' ', '\t', '\n', '\r' };
+    for (i = 0; i < total; i++) {
+        if (positions[i]) {
+            /* Choose a random whitespace character from the set */
+            result[i] = whitespace[rand_r(seed) % 4];
+        } else {
+            result[i] = v[pos_idx++];
+        }
+    }
+    result[total] = '\0';
+    OPENSSL_free(positions);
+    return result;
+}
 
 // static int test_roundtrip_base64_with_lots_of_spaces(void) {
 //     size_t len, trial, i;
@@ -1804,8 +1824,8 @@ int setup_tests(void)
     // // Register our sample test. The macro ADD_TEST() takes our test function.
     ADD_TEST(test_decode_base64_cases); // OpenSSL FAIL: multiple of four
     ADD_TEST(test_complete_decode_base64_cases); // OpenSSL FAIL: multiple of four
-    // ADD_TEST(test_encode_base64_basic_cases); // OpenSSL OK
-    // ADD_TEST(test_encode_base64_no_padding_cases); // OpenSSL OK
+    ADD_TEST(test_encode_base64_basic_cases); // OpenSSL OK
+    ADD_TEST(test_encode_base64_no_padding_cases); // OpenSSL OK
     // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); // OpenSSL OK
     // ADD_TEST(test_roundtrip_base64_with_spaces); //OpenSSL FAIL,multiple of four, incorrect len
     // ADD_TEST(test_roundtrip_base64_with_garbage);
