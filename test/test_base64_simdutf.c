@@ -329,6 +329,15 @@ static int test_complete_decode_base64_cases(void)
         int outlen_simdutf = 0;
         int simdutf_result = simdutf_decode(NULL, (char *)buffer, &outlen_simdutf, cases[i].encoded, enc_len);
 
+        for(size_t j = 0; j < simdutf_result; j++) {
+            if(buffer[j] != cases[i].decoded[j]) {
+                TEST_error(RED_TEXT("Decoded:Mismatch at index %zu in test case %zu for simdutf: got %02x, expected %02x"), 
+                           j, i, (unsigned int)buffer[j], (unsigned int)cases[i].decoded[j]);
+                OPENSSL_free(buffer);
+                return 0;
+            }
+        }
+
         // *** OpenSSL part ***
 
         unsigned char *buffer_openssl = OPENSSL_malloc(max_len);
@@ -339,6 +348,15 @@ static int test_complete_decode_base64_cases(void)
 
         int openssl_outlen = 0;
         int result_openssl = OpenSSL_decode(NULL, (char *)buffer_openssl, &openssl_outlen, cases[i].encoded, enc_len);
+
+        for(size_t j = 0; j < result_openssl; j++) {
+            if(buffer_openssl[j] != cases[i].decoded[j]) {
+                TEST_error(RED_TEXT("Decoded:Mismatch at index %zu in test case %zu for OpenSSL: got %02x, expected %02x"), 
+                           j, i, (unsigned int)buffer_openssl[j], (unsigned int)cases[i].decoded[j]);
+                OPENSSL_free(buffer_openssl);
+                return 0;
+            }
+        }
 
         printf("max_len: %zu\n", max_len);
         printf("simdutf_result: %d\n", simdutf_result);
@@ -1784,7 +1802,7 @@ static int test_complete_decode_base64_cases(void)
 int setup_tests(void)
 {
     // // Register our sample test. The macro ADD_TEST() takes our test function.
-    // ADD_TEST(test_decode_base64_cases); // OpenSSL FAIL: multiple of four
+    ADD_TEST(test_decode_base64_cases); // OpenSSL FAIL: multiple of four
     ADD_TEST(test_complete_decode_base64_cases); // OpenSSL FAIL: multiple of four
     // ADD_TEST(test_encode_base64_basic_cases); // OpenSSL OK
     // ADD_TEST(test_encode_base64_no_padding_cases); // OpenSSL OK
