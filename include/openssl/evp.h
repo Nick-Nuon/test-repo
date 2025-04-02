@@ -740,7 +740,8 @@ __owur int EVP_Cipher(EVP_CIPHER_CTX *c,
         BASE64_EXTRA_BITS,        // The base64 input terminates with non-zero
                                     // padding bits.
         OUTPUT_BUFFER_TOO_SMALL,  // The provided buffer is too small.
-        NOT_MULTIPLE_OF_FOUR, // The base64 input is not a multiple of four.
+        NOT_MULTIPLE_OF_FOUR, // The base64 input is not a multiple of four after 
+                                // removing padding and removing white spaces at beginning.
         OTHER,                     // Not related to validation/transcoding.
         } error_code;
         

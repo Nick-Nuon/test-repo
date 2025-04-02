@@ -959,6 +959,9 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
     }
     return (full_result){BASE64_SUCCESS, 0,0};
   }
+  if ((length - equalsigns) %4 != 0) {
+    return (full_result){NOT_MULTIPLE_OF_FOUR, 0, 0};
+  }
   full_result r = base64_tail_decode(ctx, output, input, length);
   DEBUG_PRINT(" Base64_tail Input count: %d, Output count: %d,  \n",
               r.input_count, r.output_count);
@@ -985,9 +988,6 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
 
   if (length == 0) {
     return (full_result){BASE64_SUCCESS, 0, 0};
-  }
-  if (length %4 != 0) {
-    return (full_result){NOT_MULTIPLE_OF_FOUR, 0, 0};
   }
   // Use local aliases for the global lookup tables.
   const uint8_t *to_base64 = to_base64_value;
@@ -1135,7 +1135,7 @@ static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
   while ((n > 3) && (B64_NOT_BASE64(conv_ascii2bin(f[n - 1], table))))
     n--;
 
-  if (n % 4 != 0) // THEIRS DON'T DEAL WITH REMAINING BYTES. OURS DO.
+  if (n % 4 != 0)
     return -1;
 
   for (i = 0; i < n; i += 4) {

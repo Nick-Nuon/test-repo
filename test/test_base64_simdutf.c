@@ -307,74 +307,57 @@ typedef struct {
     const char *encoded;  /* input Base64 string */
 } case_pair;
 
-// static int test_complete_decode_base64_cases(void)
-// {
-//     DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered complete_decode_base64_cases Test\n"));
+static int test_complete_decode_base64_cases(void)
+{
+    DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered complete_decode_base64_cases Test\n"));
 
-//     case_pair cases[] = {
-//         {"abcd", " Y\fW\tJ\njZ A=\r= "}
-//     };
-//     size_t num_cases = sizeof(cases) / sizeof(cases[0]);
-//     size_t i;
+    case_pair cases[] = {
+        {"abcd", " YW\tJ\njZ A=\r= "}
+    };
+    size_t num_cases = sizeof(cases) / sizeof(cases[0]);
+    size_t i;
 
-//     /* First, test using base64_to_binary (normal decoding) */
-//     for(i = 0; i < num_cases; i++) {
-//         size_t enc_len = strlen(cases[i].encoded);
-//         size_t max_len = maximal_binary_length_from_base64(cases[i].encoded, enc_len);
-//         unsigned char *buffer = OPENSSL_malloc(max_len);
-//         if (buffer == NULL) {
-//             TEST_error("Out of memory");
-//             return 0;
-//         }
-//         int outlen_simdutf = 0;
-//         int simdutf_result = simdutf_decode(NULL, (char *)buffer, &outlen_simdutf, cases[i].encoded, enc_len);
+    /* First, test using base64_to_binary (normal decoding) */
+    for(i = 0; i < num_cases; i++) {
+        size_t enc_len = strlen(cases[i].encoded);
+        size_t max_len = maximal_binary_length_from_base64(cases[i].encoded, enc_len);
+        unsigned char *buffer = OPENSSL_malloc(max_len);
+        if (buffer == NULL) {
+            TEST_error("Out of memory");
+            return 0;
+        }
+        int outlen_simdutf = 0;
+        int simdutf_result = simdutf_decode(NULL, (char *)buffer, &outlen_simdutf, cases[i].encoded, enc_len);
 
-//         // *** OpenSSL part ***
+        // *** OpenSSL part ***
 
-//         unsigned char *buffer_openssl = OPENSSL_malloc(max_len);
-//         if (buffer_openssl == NULL) {
-//             TEST_error("Out of memory");
-//             return 0;
-//         }
+        unsigned char *buffer_openssl = OPENSSL_malloc(max_len);
+        if (buffer_openssl == NULL) {
+            TEST_error("Out of memory");
+            return 0;
+        }
 
-//         int openssl_outlen = 0;
-//         int result_openssl = OpenSSL_decode(NULL, (char *)buffer_openssl, &openssl_outlen, cases[i].encoded, enc_len);
+        int openssl_outlen = 0;
+        int result_openssl = OpenSSL_decode(NULL, (char *)buffer_openssl, &openssl_outlen, cases[i].encoded, enc_len);
 
-//         ASSERT_EQUAL_INT(outlen_simdutf, openssl_outlen);
-//         ASSERT_EQUAL_INT(simdutf_result, result_openssl);
-//         // ****** TEST SPECIFIC ASSERTIONS ******
-//         // if(simdutf_result.count != strlen(cases[i].decoded)) {
-//         //     TEST_error(RED_TEXT("Decoded byte count mismatch in test case %zu: got %zu, expected %zu"), 
-//         //                i, simdutf_result, strlen(cases[i].decoded));
-//         //     OPENSSL_free(buffer);
-//         //     return 0;
-//         // }
+        printf("max_len: %zu\n", max_len);
+        printf("simdutf_result: %d\n", simdutf_result);
+        printf("simdutf_outlen: %d\n", outlen_simdutf);
+        printf("result_openssl: %d\n", result_openssl);
+        printf("openssl_outlen: %d\n", openssl_outlen);
 
-//         // for(size_t j = 0; j < simdutf_result.count; j++) {
-//         //     if(buffer[j] != cases[i].decoded[j]) {
-//         //         TEST_error(RED_TEXT("Mismatch at index %zu in test case %zu: got %02x, expected %02x"), 
-//         //                    j, i, (unsigned int)buffer[j], (unsigned int)cases[i].decoded[j]);
-//         //         OPENSSL_free(buffer);
-//         //         return 0;
-//         //     }
-//         // }
+        ASSERT_EQUAL_INT(simdutf_result, result_openssl);
+        ASSERT_EQUAL_INT(outlen_simdutf, openssl_outlen);
+        // ****** TEST SPECIFIC ASSERTIONS ******
 
-
-//         // result openssl_result = base64_tail_decode_trim_end((char *)buffer, max_len, cases[i].encoded, enc_len);
-
+        ASSERT_EQUAL_INT(result_openssl, strlen(cases[i].decoded));
+        ASSERT_EQUAL_INT(simdutf_result, strlen(cases[i].decoded));
         
-//         // if (openssl_result.error != simdutf_result.error) {
-//         //     fprintf(stderr, RED_TEXT("Assertion failed: openssl_result.error (%d) != simdutf_result.error (%d); max length: %d\n"),
-//         //             (int)openssl_result.error, (int)simdutf_result.error, (int)max_len);
-//         //     return 0;
-//         // }
-        
-//         // ASSERT_EQUAL_INT(openssl_result.error, simdutf_result.error);
-//         // ASSERT_EQUAL_INT(openssl_result.count, simdutf_result.count);
-//         OPENSSL_free(buffer);
-//     }
-//     return 1;
-// }
+        OPENSSL_free(buffer);
+        OPENSSL_free(buffer_openssl);
+    }
+    return 1;
+}
 
 // static int check_cases(case_pair *cases)
 // {
