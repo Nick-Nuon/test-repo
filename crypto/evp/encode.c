@@ -124,10 +124,10 @@ static const unsigned char srpdata_bin2ascii[65] =
  * 0xFF is error
  */
 
-#define B64_EOLN 0xF0
-#define B64_CR 0xF1
-#define B64_EOF 0xF2
-#define B64_WS 0xE0
+#define B64_EOLN 0xF0 // 1111 0000 outside the range of valid base64 characters
+#define B64_CR 0xF1 // 1111 0001 outside the range of valid base64 characters, but ASCII CR is 0x0D....
+#define B64_EOF 0xF2 // 1111 0002 outside the range of valid base64 characters
+#define B64_WS 0xE0 // 1110 0000 outside the range of valid base64 characters
 #define B64_ERROR 0xFF
 #define B64_NOT_BASE64(a) (((a) | 0x13) == 0xF3)
 #define B64_BASE64(a) (!B64_NOT_BASE64(a))
@@ -347,7 +347,7 @@ int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
   // it starts high and diminishes as the buffer gets processed
   d = ctx->enc_data;
 
-  // detects padding
+  // detects padding inside the ctx's buffer
   if (n > 0 && d[n - 1] == '=') {
     eof++;
     if (n > 1 && d[n - 2] == '=')
@@ -355,7 +355,7 @@ int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
   }
 
   /* Legacy behaviour: an empty input chunk signals end of input. */
-  if (inl == 0) {
+  if (inl == 0) { // fastpast if len == 0
     rv = 0;
     goto end;
   }
@@ -368,8 +368,9 @@ int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
   // check for errors first, we can axe that 
   for (i = 0; i < inl; i++) {
     tmp = *(in++);
-    v = conv_ascii2bin(tmp, table); // this is a straight conversion without surprises
-    if (v == B64_ERROR) { // if the leading bit is set returns an error eg it does char c & 0x80  
+    v = conv_ascii2bin(tmp, table); // this is a straight conversion without surprises, it fails 
+    // if the leading bit is set eg it does char c & 0x80  
+    if (v == B64_ERROR) { // does some more error handling here, leaves WS/equals/EOF alone.
       rv = -1;
       goto end;
     }
@@ -383,7 +384,7 @@ int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
       goto end;
     }
 
-    if (eof > 2) {
+    if (eof > 2) {  // if there are more than two padding characters, fails
       rv = -1;
       goto end;
     }
@@ -395,7 +396,7 @@ int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
       goto tail;
     }
 
-    /* Only save valid base64 characters. */ // to the cix buffer that is
+    /* Only save valid base64 characters. */ // to the ctx buffer that is, forgo WS/EOF/etc
     if (B64_BASE64(v)) {
       if (n >= 64) {
         /*
@@ -411,14 +412,15 @@ int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     }
 
     if (n == 64) {
-      decoded_len = evp_decodeblock_int(ctx, out, d, n);
+      decoded_len = evp_decodeblock_int(ctx, out, d, n); // this only takes care of the conversion
       n = 0; // we process 64 bytes at a time
-      if (decoded_len < 0 || eof > decoded_len) {
+      if (decoded_len < 0 || eof > decoded_len) { //if there is an error or basic check to see  
+        // if the padding is correcteg there will never decode only 1 or two bytes
         rv = -1;
         goto end;
       }
       // This is the number of bytes we have written to the output buffer up to an error
-      // e.g. if the 64 bit block fails, then the pointer is not ret and out aren't incremented 
+      // e.g. if the 64 bit block fails, then the pointers ret and out aren't incremented 
       ret += decoded_len - eof; // advance the "partial error" pointer
       out += decoded_len - eof; //advance the write pointer, for internal use
     }
@@ -905,10 +907,15 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length) {
 full_result r = base64_tail_decode_trim_end(ctx, output, outl, input, length);
 
+  DEBUG_PRINT(RED_TEXT("DEBUG: r.error Simdutf: %d\n"),
+              r.error);
+
+
 // Optional: copy the decoded byte count to *outl
 if (outl != NULL) {
 *outl = (int)r.output_count;
 }
+
 
 return (r.error == BASE64_SUCCESS) ? r.output_count : -1;
 }
@@ -930,9 +937,33 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
   }
   DEBUG_PRINT("\n");
 
+  int easy_whitespaces = 0;
+  for (size_t i = 0; i < length; i++) {
+    if (is_ascii_white_space(input[i])) {
+      easy_whitespaces++;
+    }
+  }
+
+  if ((length - easy_whitespaces) %4 != 0) {
+    return (full_result){NOT_MULTIPLE_OF_FOUR, 0, 0};
+  }
+
+  DEBUG_PRINT(
+      GREEN_TEXT("DEBUG: Found %d easy whitespace characters\n"),
+      easy_whitespaces);
+
+  size_t begin_ws_count = 0;
+  while (begin_ws_count < length && is_ascii_white_space(input[begin_ws_count])) {
+      begin_ws_count++;
+  }
+  DEBUG_PRINT("DEBUG: Found %zu leading whitespace characters\n", begin_ws_count);
+
+  int trailing_ws_count = 0;
   while (length > 0 && is_ascii_white_space(input[length - 1])) {
+    trailing_ws_count++;
     length--;
   }
+  
   size_t equallocation =
       length; // location of the first padding character if any
 
@@ -959,12 +990,18 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
     }
     return (full_result){BASE64_SUCCESS, 0,0};
   }
-  if ((length - equalsigns) %4 != 0) {
-    return (full_result){NOT_MULTIPLE_OF_FOUR, 0, 0};
-  }
   full_result r = base64_tail_decode(ctx, output, input, length);
   DEBUG_PRINT(" Base64_tail Input count: %d, Output count: %d,  \n",
               r.input_count, r.output_count);
+
+  DEBUG_PRINT(GREEN_TEXT("DEBUG: r.whitespaces: %d\n"), r.whitespaces);
+  int valid_b64_chars = length + equalsigns - r.whitespaces - begin_ws_count;
+  DEBUG_PRINT(      GREEN_TEXT("DEBUG: valid_b64_chars: %d, begin_ws_count: %zu\n, trailing_ws_count: %d\n"),
+              valid_b64_chars, begin_ws_count, trailing_ws_count);
+  // if ((valid_b64_chars) %4 != 0) {
+  //   return (full_result){NOT_MULTIPLE_OF_FOUR, 0, 0};
+  // }
+            
 
   if (r.error == BASE64_SUCCESS && equalsigns > 0) {
     // additional checks
@@ -987,8 +1024,9 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
                                int length) {
 
   if (length == 0) {
-    return (full_result){BASE64_SUCCESS, 0, 0};
+    return (full_result){BASE64_SUCCESS, 0, 0,0};
   }
+  int whitespaces = 0;
   // Use local aliases for the global lookup tables.
   const uint8_t *to_base64 = to_base64_value;
   const uint32_t *p0 = d0;
@@ -1038,19 +1076,23 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
         DEBUG_PRINT("Valid base64 character\n");
         idx++;
       } else if (code > 64) {
-        DEBUG_PRINT("INVALID_BASE64_CHARACTER\n");
+        // DEBUG_PRINT("INVALID_BASE64_CHARACTER\n");
         // INVALID_BASE64_CHARACTER
         return (full_result){INVALID_BASE64_CHARACTER, (size_t)(src - srcinit),
-                             (size_t)(dst - dstinit)};
+                             (size_t)(dst - dstinit), whitespaces};
       } else {
         DEBUG_PRINT("WS detected!!!!\n");
+        whitespaces++;
         // A whitespace or newline; ignore it.
       }
       src++;
-      DEBUG_PRINT("idx = %d\n", idx);
+      // DEBUG_PRINT("idx = %d\n", idx);
     }
     if (idx != 4) {
       DEBUG_PRINT("idx != 4\n");
+      // return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),
+      //   (size_t)(dst - dstinit), whitespaces};
+
 
       if (idx == 2) {
         DEBUG_PRINT("idx == 2\n");
@@ -1073,7 +1115,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
       } else if (idx == 1) {
         DEBUG_PRINT("idx == 1\n");
         return (full_result){BASE64_INPUT_REMAINDER, (size_t)(src - srcinit),
-                             (size_t)(dst - dstinit)};
+                             (size_t)(dst - dstinit), whitespaces};
       }
 #if DEBUG
       {
@@ -1086,13 +1128,23 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
       }
 #endif
       return (full_result){BASE64_SUCCESS, (size_t)(src - srcinit),
-                           (size_t)(dst - dstinit)};
-      // return (int)(dst - dstinit);
+                           (size_t)(dst - dstinit),whitespaces};
+
     }
     DEBUG_PRINT("idx == 4 remaining\n");
     DEBUG_PRINT("Buffer: %02x %02x %02x %02x\n", buffer[0], buffer[1],
                 buffer[2], buffer[3]);
-    DEBUG_CHECK_NULL(dst);
+
+        /* Count whitespace characters in the buffer */
+    int ws_count = 0;
+    for (int i = 0; i < 4; i++) {
+        if (is_ascii_white_space(buffer[i])) {
+            ws_count++;
+        }
+    }
+    DEBUG_PRINT("DEBUG: Found %d whitespace characters in the final block\n", ws_count);
+    whitespaces += ws_count;
+
     uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) +
                       ((uint32_t)(buffer[1]) << (2 * 6)) +
                       ((uint32_t)(buffer[2]) << (1 * 6)) +
@@ -1134,6 +1186,9 @@ static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
    */
   while ((n > 3) && (B64_NOT_BASE64(conv_ascii2bin(f[n - 1], table))))
     n--;
+
+  DEBUG_PRINT(
+      RED_TEXT("DEBUG OpenSSL: n = %d, f = %s, t = %s\n"), n, f, t);
 
   if (n % 4 != 0)
     return -1;
