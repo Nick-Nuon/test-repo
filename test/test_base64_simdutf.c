@@ -713,15 +713,15 @@ static int test_roundtrip_base64_with_lots_of_spaces(void) {
         int outlen_simdutf = 0;
         int result_simdutf = simdutf_decode(NULL, back,  &outlen_simdutf, buffer_with_spaces, buffer_with_spaces_len);
         DEBUG_PRINT("DEBUG: Decoded binary length simdutf= %zu\n", result_simdutf);
-        // if (source == NULL) {
-        //     ASSERT_EQUAL_INT(result_simdutf, 0);
-        // } else {
-        //     ASSERT_EQUAL_INT(result_simdutf, len);
-        // }
+        if (source == NULL) {
+            ASSERT_EQUAL_INT(result_simdutf, 0);
+        } else {
+            ASSERT_EQUAL_INT(result_simdutf, len);
+        }
 
-        // for (size_t j = 0; j < len; j++) {
-        //     ASSERT_EQUAL_HEX(j, back[j], source[j]);
-        // }
+        for (size_t j = 0; j < len; j++) {
+            ASSERT_EQUAL_HEX(j, back[j], source[j]);
+        }
         DEBUG_PRINT("DEBUG: Source and decoded data match for length %zu\n", len);
 
         // OPENSSL_free(source);
