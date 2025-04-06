@@ -963,7 +963,7 @@ int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
 int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned
                     char *out, int *outl);
 int EVP_DecodeBlock(unsigned char *t, const unsigned char *f, int n);
-full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int length);
+full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int length, int equalsigns);
 full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char* output, int* outlen, char * input, size_t length);
 int tail_encode_base64(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen); 
 int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
