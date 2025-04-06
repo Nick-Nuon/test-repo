@@ -328,3 +328,18 @@ doc-nits
 # LSP (Language Server Protocol) support
 .cache/
 compile_commands.json
+apps/enc copy.c
+test/bio_base64_test comments.c
+.gitignore
+decode_rand.txt
+decoded_nl.txt
+encode_rand.txt
+encoded_nl.txt
+rand.txt
+random.txt
+sanitizer.log
+st21befF
+test.txt
+.vscode/settings.json
+test/test_base64_simdutf
+util/quicserver
