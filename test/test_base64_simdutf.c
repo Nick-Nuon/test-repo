@@ -1287,6 +1287,7 @@ static int test_base64_decode_just_one_padding_loose(void) {
                 ASSERT_EQUAL_INT(result_openssl, result_simdutf);
                 ASSERT_EQUAL_SIZE(outlen_openssl, outlen_simdutf);
                 ASSERT_EQUAL_INT(result_openssl, -1);
+                ASSERT_EQUAL_INT(outlen_simdutf, 3);
 
                 OPENSSL_free(input);
                 OPENSSL_free(buffer);
