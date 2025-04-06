@@ -983,14 +983,14 @@ static int test_roundtrip_base64_with_spaces(void) {
         int outlen_simdutf = 0;
         int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, buffer, cur_b64_len);
         DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
-        // if (len == 0) {
-        //     ASSERT_EQUAL_INT(result_simdutf, 0);
-        // } else {
-        //     ASSERT_EQUAL_INT(result_simdutf, (int)len);
-        // }
-        // for (j = 0; j < len; j++) {
-        //     ASSERT_EQUAL_HEX(j, back_simd[j], (unsigned char)source[j]);
-        // }
+        if (len == 0) {
+            ASSERT_EQUAL_INT(result_simdutf, 0);
+        } else {
+            ASSERT_EQUAL_INT(result_simdutf, (int)len);
+        }
+        for (j = 0; j < len; j++) {
+            ASSERT_EQUAL_HEX(j, back_simd[j], (unsigned char)source[j]);
+        }
         DEBUG_PRINT("DEBUG: Source and decoded data match for simdutf for length %zu\n", len);
 
         /* **** OpenSSL decoding **** */
@@ -1005,22 +1005,17 @@ static int test_roundtrip_base64_with_spaces(void) {
         int outlen_openssl = 0;
         int result_openssl = OpenSSL_decode(NULL, (char *)back_openssl, &outlen_openssl, buffer, cur_b64_len);
         DEBUG_PRINT("DEBUG: Decoded binary length openssl = %d\n", result_openssl);
-        // if (len == 0) {
-        //     ASSERT_EQUAL_INT(result_openssl, 0);
-        // } else {
-        //     ASSERT_EQUAL_INT(result_openssl, (int)len);
-        // }
-        // for (j = 0; j < len; j++) {
-        //     ASSERT_EQUAL_HEX(j, back_openssl[j], (unsigned char)source[j]);
-        // }
+        if (len == 0) {
+            ASSERT_EQUAL_INT(result_openssl, 0);
+        } else {
+            ASSERT_EQUAL_INT(result_openssl, (int)len);
+        }
+        for (j = 0; j < len; j++) {
+            ASSERT_EQUAL_HEX(j, back_openssl[j], (unsigned char)source[j]);
+        }
         DEBUG_PRINT("DEBUG: Source and decoded data match for OpenSSL for length %zu\n", len);
 
         /* Specific assertions comparing the two decoders */
-        // ASSERT_EQUAL_INT(result_openssl, (int)len);
-        // ASSERT_EQUAL_SIZE(outlen_openssl, len);
-        // ASSERT_EQUAL_INT(result_simdutf, (int)len);
-        // ASSERT_EQUAL_SIZE(outlen_simdutf, len);
-
         ASSERT_EQUAL_INT(result_openssl, result_simdutf);
         ASSERT_EQUAL_SIZE(outlen_openssl, outlen_simdutf);
         ASSERT_EQUAL_INT(result_openssl, len);
@@ -1035,62 +1030,62 @@ static int test_roundtrip_base64_with_spaces(void) {
 
 
 
-// const static uint8_t to_base64_value[] = {
-//     255, 255, 255, 255, 255, 255, 255, 255, 255, 64,  64,  255, 64, 64,  255,
-//     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-//     255, 255, 64,  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 62,  255,
-//     255, 255, 63,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  255, 255,
-//     255, 255, 255, 255, 255, 0,   1,   2,   3,   4,   5,   6,   7,   8,   9,
+const static uint8_t to_base64_value[] = {
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 64,  64,  255, 64, 64,  255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 64,  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 62,  255,
+    255, 255, 63,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  255, 255,
+    255, 255, 255, 255, 255, 0,   1,   2,   3,   4,   5,   6,   7,   8,   9,
 
 
-//     10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  21,  22,  23,  24,
+    10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  21,  22,  23,  24,
 
 
-//     25,  255, 255, 255, 255, 255, 255, 26,  27,  28,  29,  30,  31,  32,  33,
+    25,  255, 255, 255, 255, 255, 255, 26,  27,  28,  29,  30,  31,  32,  33,
 
 
-//     34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,  48,
+    34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,  48,
 
 
-//     49,  50,  51,  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    49,  50,  51,  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
 
 
-//     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
 
 
-//     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
 
 
-//     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
 
 
-//     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
 
 
-//     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
 
 
-//     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
 
 
-//     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
 
 
-//     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
 
 
-//     255};
+    255};
 
 
-// /*
-//  * test_roundtrip_base64_with_garbage:
-//  * For each binary length from 0 to 2047, generate random binary data,
-//  * encode it to Base64, insert garbage characters (5 insertions),
-//  * then decode using both base64_to_binary and base64_to_binary_safe with
-//  * each of three last-chunk handling options. The decoded data is compared
-//  * with the original source.
-//  */
-// // this is true in the original, the original tests the ignore_garbage option
+/*
+ * test_roundtrip_base64_with_garbage:
+ * For each binary length from 0 to 2047, generate random binary data,
+ * encode it to Base64, insert garbage characters (5 insertions),
+ * then decode using both base64_to_binary and base64_to_binary_safe with
+ * each of three last-chunk handling options. The decoded data is compared
+ * with the original source.
+ */
+// this is true in the original, the original tests the ignore_garbage option
 // static int test_roundtrip_base64_with_garbage(void) {
 //     size_t len, trial, i, j;
 //     unsigned int seed = 12345;  /* Fixed seed for reproducibility */
@@ -1098,7 +1093,7 @@ static int test_roundtrip_base64_with_spaces(void) {
 
 //     /* Loop over binary lengths from 0 to 2047 */
 //     for (len = 0; len < 2048; len++) {
-//         DEBUG_PRINT("DEBUG: Processing binary length = %zu\n", len);
+//         DEBUG_PRINT("DEBUG: ***************** Processing binary length = %zu\n", len);
 //         /* Allocate source binary data */
 //         char *source = (len > 0) ? OPENSSL_malloc(len) : NULL;
 //         if (len > 0 && source == NULL) {
@@ -1136,6 +1131,9 @@ static int test_roundtrip_base64_with_spaces(void) {
 //         /* Allocate buffer for decoded binary data */
 //         size_t back_bufsize = maximal_binary_length_from_base64(buffer, cur_b64_len);
 //         DEBUG_PRINT("DEBUG: Back buffer size (maximal binary length) = %zu\n", back_bufsize);
+
+//         // **** Simdutf part *****
+
 //         char *back = OPENSSL_malloc(back_bufsize);
 //         if (back == NULL) {
 //             TEST_error("Out of memory for back buffer");
@@ -1144,17 +1142,8 @@ static int test_roundtrip_base64_with_spaces(void) {
 //             return 0;
 //         }
 
-//         // /* Define options: Strict, Loose, Stop-Before-Partial */
-//         // last_chunk_handling_options opts[3] = {
-//         //     LAST_CHUNK_STRICT, LAST_CHUNK_LOOSE, LAST_CHUNK_STOP_BEFORE_PARTIAL
-//         // };
 
-//         /* First round: using base64_to_binary */
-//         // for (i = 0; i < 3; i++) {
-//             result r = base64_tail_decode_trim_end(NULL,back, buffer, cur_b64_len);
-//                                         //   BASE64_DEFAULT_ACCEPT_GARBAGE, opts[i]);
-//             // DEBUG_PRINT("DEBUG: Option %d, base64_to_binary returned count = %zu\n",
-//             //             (int)opts[i], r);
+//             result r = (NULL,back, buffer, cur_b64_len);
 //             DEBUG_PRINT("DEBUG: base64_to_binary returned count = %zu\n",
 //                  r);
 
@@ -1164,27 +1153,6 @@ static int test_roundtrip_base64_with_spaces(void) {
 //             // }
 //         // }
 
-//         // /* Second round: using base64_to_binary_safe */
-//         // for (i = 0; i < 3; i++) {
-//         //     size_t back_length = back_bufsize;
-//         //     result r = base64_to_binary_safe(buffer, cur_b64_len, back, back_length,
-//         //                                        BASE64_DEFAULT_ACCEPT_GARBAGE, opts[i]);
-//         //     DEBUG_PRINT("DEBUG: Option %d, base64_to_binary_safe returned count = %zu\n",
-//         //                 (int)opts[i], r.count);
-//         //     ASSERT_EQUAL_INT(r.error, ERROR_SUCCESS);
-//         //     if (opts[i] == LAST_CHUNK_STOP_BEFORE_PARTIAL) {
-//         //         for (j = r.count; j < cur_b64_len; j++) {
-//         //             /* Check that any extra characters are whitespace */
-//         //             ASSERT_TRUE(buffer[j]==' ' || buffer[j]=='\t' ||
-//         //                         buffer[j]=='\n' || buffer[j]=='\r' || buffer[j]=='\f');
-//         //         }
-//         //     } else {
-//         //         ASSERT_EQUAL_SIZE(r.count, cur_b64_len);
-//         //     }
-//         //     if (len > 0) {
-//         //         ASSERT_TRUE(memcmp(back, source, len) == 0);
-//         //     }
-//         // }
 //         OPENSSL_free(source);
 //         OPENSSL_free(buffer);
 //         OPENSSL_free(back);
