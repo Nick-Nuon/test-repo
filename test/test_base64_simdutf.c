@@ -1346,81 +1346,59 @@ static int test_roundtrip_base64(void) {
         /* Allocate buffer for decoded binary data */
         size_t back_bufsize = maximal_binary_length_from_base64(buffer, s);
         DEBUG_PRINT("DEBUG: Back buffer size (maximal binary length) = %zu\n", back_bufsize);
-        // char *back = OPENSSL_malloc(back_bufsize);
-        // if (!back && back_bufsize != 0) {
-        //     TEST_error("Out of memory for back buffer");
-        //     OPENSSL_free(source);
-        //     OPENSSL_free(buffer);
-        //     return 0;
+
+        /* **** simdutf decoding **** */
+        unsigned char *back_simd = OPENSSL_malloc(back_bufsize);
+        if (back_bufsize != 0 && back_simd == NULL) {
+            TEST_error("Out of memory for simdutf back buffer");
+            OPENSSL_free(source);
+            OPENSSL_free(buffer);
+            return 0;
+        }
+        int outlen_simdutf = 0;
+        int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, buffer, strlen(source));
+        DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
+        if (len == 0) {
+            ASSERT_EQUAL_INT(result_simdutf, 0);
+        } else {
+            ASSERT_EQUAL_INT(result_simdutf, -1);
+        }
+        // for (j = 0; j < len; j++) {
+        //     ASSERT_EQUAL_HEX(j, back_simd[j], (unsigned char)source[j]);
         // }
+        DEBUG_PRINT("DEBUG: Source and decoded data match for simdutf for length %zu\n", len);
 
-        // /* Decode the Base64 string without added spaces */
-        // result r = base64_tail_decode_trim_end(NULL, back, buffer, s);
-        // DEBUG_PRINT("DEBUG: Decoded binary length = %zu\n", r);
-        // ASSERT_TRUE(r.error == BASE64_SUCCESS);
-        // ASSERT_EQUAL_SIZE(r.count, len);
-
-        // for (size_t j = 0; j < len; j++) {
-        //     ASSERT_EQUAL_HEX(j, back[j], source[j]);
+        /* **** OpenSSL decoding **** */
+        unsigned char *back_openssl = OPENSSL_malloc(back_bufsize);
+        if (back_bufsize != 0 && back_openssl == NULL) {
+            TEST_error("Out of memory for OpenSSL back buffer");
+            OPENSSL_free(source);
+            OPENSSL_free(buffer);
+            OPENSSL_free(back_simd);
+            return 0;
+        }
+        int outlen_openssl = 0;
+        int result_openssl = OpenSSL_decode(NULL, (char *)back_openssl, &outlen_openssl, buffer,  strlen(source));
+        DEBUG_PRINT("DEBUG: Decoded binary length openssl = %d\n", result_openssl);
+        if (len == 0) {
+            ASSERT_EQUAL_INT(result_openssl, 0);
+        } else {
+            ASSERT_EQUAL_INT(result_openssl, -1);
+        }
+        // for (j = 0; j < len; j++) {
+        //     ASSERT_EQUAL_HEX(j, back_openssl[j], (unsigned char)source[j]);
         // }
-        // DEBUG_PRINT("DEBUG: Source and decoded data match for length %zu\n", len);
+        DEBUG_PRINT("DEBUG: Source and decoded data match for OpenSSL for length %zu\n", len);
 
-        // OPENSSL_free(source);
-        // OPENSSL_free(buffer);
-        // OPENSSL_free(back);
+        /* Specific assertions comparing the two decoders */
+        ASSERT_EQUAL_INT(result_openssl, result_simdutf);
+        ASSERT_EQUAL_SIZE(outlen_openssl, outlen_simdutf);
+        ASSERT_EQUAL_INT(result_openssl, -1);
 
-                    /* **** simdutf decoding **** */
-                    unsigned char *back_simd = OPENSSL_malloc(back_bufsize);
-                    if (back_bufsize != 0 && back_simd == NULL) {
-                        TEST_error("Out of memory for simdutf back buffer");
-                        OPENSSL_free(source);
-                        OPENSSL_free(buffer);
-                        return 0;
-                    }
-                    int outlen_simdutf = 0;
-                    int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, buffer, strlen(source));
-                    DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
-                    if (len == 0) {
-                        ASSERT_EQUAL_INT(result_simdutf, 0);
-                    } else {
-                        ASSERT_EQUAL_INT(result_simdutf, -1);
-                    }
-                    // for (j = 0; j < len; j++) {
-                    //     ASSERT_EQUAL_HEX(j, back_simd[j], (unsigned char)source[j]);
-                    // }
-                    DEBUG_PRINT("DEBUG: Source and decoded data match for simdutf for length %zu\n", len);
-        
-                    /* **** OpenSSL decoding **** */
-                    unsigned char *back_openssl = OPENSSL_malloc(back_bufsize);
-                    if (back_bufsize != 0 && back_openssl == NULL) {
-                        TEST_error("Out of memory for OpenSSL back buffer");
-                        OPENSSL_free(source);
-                        OPENSSL_free(buffer);
-                        OPENSSL_free(back_simd);
-                        return 0;
-                    }
-                    int outlen_openssl = 0;
-                    int result_openssl = OpenSSL_decode(NULL, (char *)back_openssl, &outlen_openssl, buffer,  strlen(source));
-                    DEBUG_PRINT("DEBUG: Decoded binary length openssl = %d\n", result_openssl);
-                    if (len == 0) {
-                        ASSERT_EQUAL_INT(result_openssl, 0);
-                    } else {
-                        ASSERT_EQUAL_INT(result_openssl, -1);
-                    }
-                    // for (j = 0; j < len; j++) {
-                    //     ASSERT_EQUAL_HEX(j, back_openssl[j], (unsigned char)source[j]);
-                    // }
-                    DEBUG_PRINT("DEBUG: Source and decoded data match for OpenSSL for length %zu\n", len);
-        
-                    /* Specific assertions comparing the two decoders */
-                    ASSERT_EQUAL_INT(result_openssl, result_simdutf);
-                    ASSERT_EQUAL_SIZE(outlen_openssl, outlen_simdutf);
-                    ASSERT_EQUAL_INT(result_openssl, -1);
-        
-                    OPENSSL_free(source);
-                    OPENSSL_free(buffer);
-                    OPENSSL_free(back_simd);
-                    OPENSSL_free(back_openssl);
+        OPENSSL_free(source);
+        OPENSSL_free(buffer);
+        OPENSSL_free(back_simd);
+        OPENSSL_free(back_openssl);
         
     }
     return 1;
