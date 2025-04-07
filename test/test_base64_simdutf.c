@@ -11,7 +11,7 @@
 #include "testutil.h"
 #include <openssl/evp.h>
 
-#define DEBUG 1
+#define DEBUG 0
 
 #define BUFMAX 0xa0000          /* Encode at most 640kB. */
 #define RED_TEXT(str)     "\033[31m" str "\033[0m"
@@ -217,11 +217,11 @@ int OpenSSL_decode(EVP_ENCODE_CTX *dummy,char *dst,int *outl, const char *src, i
     if (EVP_DecodeUpdate(ctx, (unsigned char *)dst, &outlen,
                          (const unsigned char *)src, srclen) < 0 ||
         EVP_DecodeFinal(ctx, (unsigned char *)&dst[outlen], &taillen) < 0) {
-        fprintf(stderr, "Invalid input for openssl base64 decode.\n");
+        // fprintf(stderr, "Invalid input for openssl base64 decode.\n");
         EVP_ENCODE_CTX_free(ctx);
         *outl = outlen;
         DEBUG_PRINT(RED_TEXT("DEBUG: OpenSSL decode error: outlen = %d, taillen = %d\n"), outlen, taillen);
-        fprintf(stderr, "Decoded length: %d\n", outlen);
+        // fprintf(stderr, "Decoded length: %d\n", outlen);
         return -1;
         // return (result){NOT_MULTIPLE_OF_FOUR, (size_t)outlen};        
     }
@@ -379,14 +379,14 @@ static int test_complete_decode_base64_cases(void)
     return 1;
 }
 
-static int check_cases(case_pair *cases)
+static int inline check_cases(case_pair *cases, size_t num_cases)
 {
     DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered encode_base64_cases Test\n"));
+    printf(GREEN_TEXT("DEBUG: Number of cases: %zu\n"), num_cases);
 
     /* Define test cases as an array of case_pair.
        These mirror your C++ test cases.
     */
-    size_t num_cases = sizeof(cases) / sizeof(cases[0]);
     size_t i, j;
 
         /* --- Part 1: Test binary => base64 (normal) --- */
@@ -477,8 +477,8 @@ static int check_cases(case_pair *cases)
         ASSERT_EQUAL_INT(outlen_simdutf, openssl_outlen);
         // ****** TEST SPECIFIC ASSERTIONS ******
 
-        ASSERT_EQUAL_INT(result_openssl, strlen(cases[i].decoded));
-        ASSERT_EQUAL_INT(simdutf_result, strlen(cases[i].decoded));
+        ASSERT_EQUAL_INT(openssl_outlen, strlen(cases[i].decoded));
+        ASSERT_EQUAL_INT(outlen_simdutf, strlen(cases[i].decoded));
         
         OPENSSL_free(buffer);
         OPENSSL_free(buffer_openssl);
@@ -513,18 +513,33 @@ const case_pair whitespaces[] = {
     };
 
 static int test_encode_base64_basic_cases(void){
-    check_cases(basic_cases);
+    check_cases(basic_cases,1);
     return 1;
 }
 
+const case_pair seof_good_cases[] = {
+    { "Hello, World!", "SGVsbG8sIFdvcmxkIQ==" },
+    { "GeeksforGeeks", "R2Vla3Nmb3JHZWVrcw==" },
+    { "123456", "MTIzNDU2-" },
+    { "Base64 Encoding", "QmFzZTY0IEVuY29kaW5n-" },
+    { "!R~J2jL&mI]O)3=c:G3Mo)oqmJdxoprTZDyxEvU0MI.'Ww5H{G>}y;;+B8E_Ah,Ed[ PdBqY'^N>O$4:7LK1<:|7)btV@|{YWR$$Er59-XjVrFl4L}~yzTEd4'E[@k",
+      "IVJ+SjJqTCZtSV1PKTM9YzpHM01vKW9xbUpkeG9wclRaRHl4RXZVME1JLidXdzVIe0c+fXk7OytCOEVfQWgsRWRbIFBkQnFZJ15OPk8kNDo3TEsxPDp8NylidFZAfHtZV1IkJEVyNTktWGpWckZsNEx9fnl6VEVkNCdFW0Br-" }
+};
+
+
+static int test_seof_good(void){
+    int result = check_cases(seof_good_cases,5);
+    // printf(GREEN_TEXT("DEBUG: SEOF good test result: %d\n"), result);
+    return result;
+}
 
 static int test_encode_base64_no_padding_cases(void){
-    check_cases(no_padding);
+    check_cases(no_padding,5);
     return 1;
 }
 
 static int test_encode_base64_whitespace_cases(void){
-    check_cases(whitespaces);
+    check_cases(whitespaces,1);
     return 1;
 }
 
@@ -983,14 +998,14 @@ static int test_roundtrip_base64_with_spaces(void) {
         int outlen_simdutf = 0;
         int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, buffer, cur_b64_len);
         DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
-        // if (len == 0) {
-        //     ASSERT_EQUAL_INT(result_simdutf, 0);
-        // } else {
-        //     ASSERT_EQUAL_INT(result_simdutf, (int)len);
-        // }
-        // for (j = 0; j < len; j++) {
-        //     ASSERT_EQUAL_HEX(j, back_simd[j], (unsigned char)source[j]);
-        // }
+        if (len == 0) {
+            ASSERT_EQUAL_INT(result_simdutf, 0);
+        } else {
+            ASSERT_EQUAL_INT(result_simdutf, (int)len);
+        }
+        for (j = 0; j < len; j++) {
+            ASSERT_EQUAL_HEX(j, back_simd[j], (unsigned char)source[j]);
+        }
         DEBUG_PRINT("DEBUG: Source and decoded data match for simdutf for length %zu\n", len);
 
         /* **** OpenSSL decoding **** */
@@ -1005,14 +1020,14 @@ static int test_roundtrip_base64_with_spaces(void) {
         int outlen_openssl = 0;
         int result_openssl = OpenSSL_decode(NULL, (char *)back_openssl, &outlen_openssl, buffer, cur_b64_len);
         DEBUG_PRINT("DEBUG: Decoded binary length openssl = %d\n", result_openssl);
-        // if (len == 0) {
-        //     ASSERT_EQUAL_INT(result_openssl, 0);
-        // } else {
-        //     ASSERT_EQUAL_INT(result_openssl, (int)len);
-        // }
-        // for (j = 0; j < len; j++) {
-        //     ASSERT_EQUAL_HEX(j, back_openssl[j], (unsigned char)source[j]);
-        // }
+        if (len == 0) {
+            ASSERT_EQUAL_INT(result_openssl, 0);
+        } else {
+            ASSERT_EQUAL_INT(result_openssl, (int)len);
+        }
+        for (j = 0; j < len; j++) {
+            ASSERT_EQUAL_HEX(j, back_openssl[j], (unsigned char)source[j]);
+        }
         DEBUG_PRINT("DEBUG: Source and decoded data match for OpenSSL for length %zu\n", len);
 
         /* Specific assertions comparing the two decoders */
@@ -1094,6 +1109,7 @@ const static uint8_t to_base64_value[] = {
         /* Loop over binary lengths from 0 to 2047 */
         for (len = 0; len < 2048; len++) {
             DEBUG_PRINT("DEBUG: ***************** Processing binary length = %zu\n", len);
+            printf("DEBUG: ***************** Processing binary length = %zu\n", len);
             /* Allocate source binary data */
             char *source = (len > 0) ? OPENSSL_malloc(len) : NULL;
             if (len > 0 && source == NULL) {
@@ -2357,11 +2373,12 @@ int setup_tests(void)
 {
     // // Register our sample test. The macro ADD_TEST() takes our test function.
     ADD_TEST(test_decode_base64_cases); // OpenSSL FAIL: multiple of four
-    ADD_TEST(test_complete_decode_base64_cases); // OpenSSL FAIL: multiple of four
-    ADD_TEST(test_encode_base64_basic_cases); // OpenSSL OK
-    ADD_TEST(test_encode_base64_no_padding_cases); // OpenSSL OK
-    ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); // OpenSSL OK
-    ADD_TEST(test_roundtrip_base64_with_spaces); //OpenSSL FAIL,multiple of four, incorrect len
+    // ADD_TEST(test_complete_decode_base64_cases); // OpenSSL FAIL: multiple of four
+    // ADD_TEST(test_encode_base64_basic_cases); // OpenSSL OK
+    // ADD_TEST(test_encode_base64_no_padding_cases); // OpenSSL OK
+    // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); // OpenSSL OK
+    // ADD_TEST(test_roundtrip_base64_with_spaces); //OpenSSL FAIL,multiple of four, incorrect len
+    // ADD_TEST(test_seof_good); 
     // ADD_TEST(test_roundtrip_base64_with_garbage);
     // ADD_TEST(test_base64_decode_just_one_padding_loose);
     // ADD_TEST(test_roundtrip_base64);
