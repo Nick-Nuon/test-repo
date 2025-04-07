@@ -513,8 +513,8 @@ const case_pair whitespaces[] = {
     };
 
 static int test_encode_base64_basic_cases(void){
-    check_cases(basic_cases,1);
-    return 1;
+    int result = check_cases(basic_cases,1);
+    return result;
 }
 
 const case_pair seof_good_cases[] = {
@@ -534,13 +534,13 @@ static int test_seof_good(void){
 }
 
 static int test_encode_base64_no_padding_cases(void){
-    check_cases(no_padding,5);
-    return 1;
+    int result = check_cases(no_padding,5);
+    return result;
 }
 
 static int test_encode_base64_whitespace_cases(void){
-    check_cases(whitespaces,1);
-    return 1;
+    int result = check_cases(whitespaces,1);
+    return result;
 }
 
 /*
@@ -2372,10 +2372,10 @@ static int test_bad_padding_base64(void) {
 int setup_tests(void)
 {
     // // Register our sample test. The macro ADD_TEST() takes our test function.
-    ADD_TEST(test_decode_base64_cases); // OpenSSL FAIL: multiple of four
+    // ADD_TEST(test_decode_base64_cases); // OpenSSL FAIL: multiple of four
     // ADD_TEST(test_complete_decode_base64_cases); // OpenSSL FAIL: multiple of four
     // ADD_TEST(test_encode_base64_basic_cases); // OpenSSL OK
-    // ADD_TEST(test_encode_base64_no_padding_cases); // OpenSSL OK
+    ADD_TEST(test_encode_base64_no_padding_cases); // OpenSSL OK
     // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); // OpenSSL OK
     // ADD_TEST(test_roundtrip_base64_with_spaces); //OpenSSL FAIL,multiple of four, incorrect len
     // ADD_TEST(test_seof_good); 
