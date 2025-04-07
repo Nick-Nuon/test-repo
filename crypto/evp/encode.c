@@ -339,6 +339,8 @@ void EVP_DecodeInit(EVP_ENCODE_CTX *ctx) {
  */
 int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                      const unsigned char *in, int inl) {
+
+  DEBUG_PRINT(GREEN_TEXT("********************* DEBUG: Entered EVP_DecodeUpdate\n"));
   int seof = 0, eof = 0, rv = -1, ret = 0, i, v, tmp, n, decoded_len;
   unsigned char *d;
   const unsigned char *table;
@@ -367,6 +369,7 @@ int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
 
   // check for errors first, we can axe that 
   for (i = 0; i < inl; i++) {
+    DEBUG_PRINT(GREEN_TEXT("DEBUG: EVP_DecodeUpdate: inl: %d, i: %d, tmp: %02x\n"), inl, i, *(in + i));
     tmp = *(in++);
     v = conv_ascii2bin(tmp, table); // this is a straight conversion without surprises, it fails 
     // if the leading bit is set eg it does char c & 0x80  
@@ -914,14 +917,16 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length) {
 full_result r = base64_tail_decode_trim_end(ctx, output, outl, input, length);
 
+  // DEBUG_PRINT(RED_TEXT("DEBUG: 
+  
   DEBUG_PRINT(RED_TEXT("DEBUG: r.error Simdutf: %d\n"),
               r.error);
 
 
 // Optional: copy the decoded byte count to *outl
-if (outl != NULL) {
-*outl = (int)r.output_count;
-}
+// if (outl != NULL) {
+  *outl = (int)r.output_count;
+// }
 
 
 return (r.error == BASE64_SUCCESS) ? r.output_count : -1;
@@ -1012,6 +1017,10 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
 
   if (r.error == BASE64_SUCCESS && equalsigns > 0) {
     // additional checks
+    DEBUG_PRINT(
+        GREEN_TEXT("DEBUG: Additional checks: equalsigns: %d, r.output_count: %zu\n"), equalsigns,
+        r.output_count);
+
     if ((r.output_count % 3 == 0) ||
         ((r.output_count % 3) + 1 + equalsigns != 4)) {
       return (full_result){INVALID_BASE64_CHARACTER, equallocation, (size_t)r.output_count};
@@ -1021,7 +1030,7 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
   if (r.error == BASE64_SUCCESS | r.error == BASE64_INPUT_REMAINDER) {
     return (full_result){r.error, r.input_count, (size_t)r.output_count};
   } else {
-    return (full_result){r.error, r.input_count,(size_t)r.input_count};
+    return (full_result){r.error, r.input_count,(size_t)r.output_count};
   }
 }
 
@@ -1030,7 +1039,8 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
 full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
                                int length,int equalsigns) {
 
-  if (length == 0) {
+  // if (length == 0 || *src == '\0') {
+    if (length == 0) {
     return (full_result){BASE64_SUCCESS, 0, 0,0};
   }
   int whitespaces = 0;
@@ -1077,16 +1087,19 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
     while (idx < 4 && src < srcend) {
       DEBUG_PRINT("Main 4 char loop\n");
       char c = *src;
+      if (c == '\0') {
+        DEBUG_PRINT("NULL character detected\n");
+      }
       uint8_t code = to_base64[(uint8_t)(c)];
       buffer[idx] = code;
       if (code <= 63) {
         DEBUG_PRINT("Valid base64 character\n");
         idx++;
       } else if (code > 64) {
-        // DEBUG_PRINT("INVALID_BASE64_CHARACTER\n");
+        DEBUG_PRINT("INVALID_BASE64_CHARACTER: code > 64 \n");
         // INVALID_BASE64_CHARACTER
         return (full_result){INVALID_BASE64_CHARACTER, (size_t)(src - srcinit),
-                             (size_t)(dst - dstinit), whitespaces};
+                             (size_t)((dst - dstinit) - (dst - dstinit) % 48),  whitespaces};
       } else {
         if (c == '\f') {
           DEBUG_PRINT("Simdutf:Form feed detected!!!!Not a valid b64 char by OpenSSL standards!\n");
@@ -1107,7 +1120,11 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
       if (idx == 2) {
         DEBUG_PRINT("idx == 2\n");
         if (equalsigns != 2){
-          return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit), whitespaces};}
+          DEBUG_PRINT("equalsigns != 2\n");
+          // DEBUG_PRINT("src - srcinit: %zu\n", (size_t)(src - srcinit));
+          DEBUG_PRINT("dst - dstinit: %zu\n", (size_t)(dst - dstinit));
+          return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit), whitespaces};
+        }
 
         uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) +
                           ((uint32_t)(buffer[1]) << (2 * 6));
@@ -1182,6 +1199,8 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
 // returns -1 on error
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n) {
+  DEBUG_PRINT(
+      RED_TEXT("DEBUG OpenSSL: Entering evp_decodeblock_int\n"));
   int i, ret = 0, a, b, c, d;
   unsigned long l;
   const unsigned char *table;
