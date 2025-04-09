@@ -25,7 +25,7 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
 char *input, size_t length);
 
 
-#define DEBUG 0 // Set to 1 to enable debug prints, 0 to disable
+#define DEBUG 1 // Set to 1 to enable debug prints, 0 to disable
 #define RED_TEXT(str) "\033[31m" str "\033[0m"
 #define GREEN_TEXT(str) "\033[32m" str "\033[0m"
 
@@ -915,21 +915,32 @@ static inline int is_ascii_white_space(char c) {
 
 int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length) {
-full_result r = base64_tail_decode_trim_end(ctx, output, outl, input, length);
+    full_result r = base64_tail_decode_trim_end(ctx, output, outl, input, length);
 
-  // DEBUG_PRINT(RED_TEXT("DEBUG: 
-  
-  DEBUG_PRINT(RED_TEXT("DEBUG: r.error Simdutf: %d\n"),
-              r.error);
-
-
-// Optional: copy the decoded byte count to *outl
-// if (outl != NULL) {
-  *outl = (int)r.output_count;
-// }
+    // DEBUG_PRINT(RED_TEXT("DEBUG: 
+    
+    DEBUG_PRINT(RED_TEXT("DEBUG: r.error Simdutf: %d\n"),
+                r.error);
 
 
-return (r.error == BASE64_SUCCESS) ? r.output_count : -1;
+  // Optional: copy the decoded byte count to *outl
+  // if (outl != NULL) {
+  //   *outl = (int)r.output_count - r.output_count % 48;
+  // // }
+
+  if (r.error == BASE64_SUCCESS) {
+    // DEBUG_PRINT(RED_TEXT("DEBUG: Simdutf decode successful, output count: %d\n"),
+    //             r.output_count);
+    *outl = (int)r.output_count;
+    return (int)r.output_count;
+  } else {
+    // DEBUG_PRINT(RED_TEXT("DEBUG: Simdutf decode incomplete, output count: %d\n"),
+    //             r.output_count);
+    *outl = (int)r.output_count - r.output_count % 48;
+    return -1;
+  }
+
+  // return (r.error == BASE64_SUCCESS) ? r.output_count : -1;
 }
 
 
@@ -1087,9 +1098,6 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
     while (idx < 4 && src < srcend) {
       DEBUG_PRINT("Main 4 char loop\n");
       char c = *src;
-      if (c == '\0') {
-        DEBUG_PRINT("NULL character detected\n");
-      }
       uint8_t code = to_base64[(uint8_t)(c)];
       buffer[idx] = code;
       if (code <= 63) {
@@ -1098,8 +1106,16 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
       } else if (code > 64) {
         DEBUG_PRINT("INVALID_BASE64_CHARACTER: code > 64 \n");
         // INVALID_BASE64_CHARACTER
+        if (c == 0x2D & (idx % 4) == 0 ) { // '-' sign/ SEOF
+          DEBUG_PRINT("SEOF detected\n");
+          printf("SEOF detected\n");
+          // idx++;
+          break;
+          // return (full_result){BASE64_SUCCESS, (size_t)(src - srcinit),
+          //                      (size_t)(dst - dstinit), whitespaces};
+        }
         return (full_result){INVALID_BASE64_CHARACTER, (size_t)(src - srcinit),
-                             (size_t)((dst - dstinit) - (dst - dstinit) % 48),  whitespaces};
+                             (size_t)((dst - dstinit)),  whitespaces};
       } else {
         if (c == '\f') {
           DEBUG_PRINT("Simdutf:Form feed detected!!!!Not a valid b64 char by OpenSSL standards!\n");
