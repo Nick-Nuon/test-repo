@@ -934,11 +934,15 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     *outl = (int)r.output_count;
     return (int)r.output_count;
   } else {
-    // DEBUG_PRINT(RED_TEXT("DEBUG: Simdutf decode incomplete, output count: %d\n"),
-    //             r.output_count);
-    *outl = (int)r.output_count - r.output_count % 48;
+    // Calculate the number of bytes that constitute the valid part.
+    size_t valid = r.output_count - (r.output_count % 48);
+    *outl = (int) valid;
+    // Cleanse (erase) the remaining incomplete portion.
+    size_t to_cleanse = r.output_count % 48;
+    OPENSSL_cleanse(output + valid, to_cleanse);
     return -1;
-  }
+}
+
 
   // return (r.error == BASE64_SUCCESS) ? r.output_count : -1;
 }

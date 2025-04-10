@@ -133,6 +133,76 @@
     OPENSSL_free(buffer_openssl);                                                      \
 } while(0)
 
+// #define PRINT_STRINGS(expected, actual, len) do {                         \
+//     size_t _i;                                                            \
+//     printf("Expected buffer (%s): ", #expected);                          \
+//     for (_i = 0; _i < (len); _i++) {                                       \
+//         printf("%02x ", (unsigned int)(expected)[_i]);                    \
+//     }                                                                     \
+//     printf("\nActual buffer (%s): ", #actual);                            \
+//     for (_i = 0; _i < (len); _i++) {                                       \
+//         printf("%02x ", (unsigned int)(actual)[_i]);                      \
+//     }                                                                     \
+//     printf("\n");                                                         \
+// } while(0)
+
+
+#define PRINT_STRINGS(expected, actual, len) do {                         \
+    size_t _i;                                                            \
+    /* Print as regular strings */                                        \
+    printf("Expected buffer (%s) as string: \"%s\"\n", #expected, (expected)); \
+    printf("Actual buffer   (%s) as string: \"%s\"\n", #actual, (actual));   \
+    /* Print as hexadecimal */                                            \
+    printf("Expected buffer (%s) as hex: ", #expected);                    \
+    for (_i = 0; _i < (len); _i++) {                                       \
+        printf("%02x ", (unsigned int)(expected)[_i]);                    \
+    }                                                                     \
+    printf("\n");                                                         \
+    printf("Actual buffer   (%s) as hex: ", #actual);                      \
+    for (_i = 0; _i < (len); _i++) {                                       \
+        printf("%02x ", (unsigned int)(actual)[_i]);                      \
+    }                                                                     \
+    printf("\n");                                                         \
+} while(0)
+
+// #define ASSERT_MEM_EQUAL(expected, actual, len) do {                             \
+//     size_t _i;                                                                 \
+//     for (_i = 0; _i < (len); _i++) {                                             \
+//         if ((expected)[_i] != (actual)[_i]) {                                    \
+//             TEST_error(RED_TEXT("Memory mismatch at index %zu: got %02x, expected %02x"), \
+//                        _i, (unsigned int)(actual)[_i], (unsigned int)(expected)[_i]); \
+//             return 0;                                                          \
+//         }                                                                      \
+//     }                                                                          \
+// } while(0)
+
+
+#define ASSERT_MEM_EQUAL(expected, actual, len) do {                         \
+    size_t _i, _mismatch_index = (size_t)(-1);                               \
+    for (_i = 0; _i < (len); _i++) {                                         \
+        if ((expected)[_i] != (actual)[_i]) {                                \
+            _mismatch_index = _i;                                            \
+            break;                                                         \
+        }                                                                    \
+    }                                                                        \
+    if (_mismatch_index != (size_t)(-1)) {                                   \
+        printf("Memory mismatch detected:\n");                             \
+        printf("Expected buffer: ");                                         \
+        for (_i = 0; _i < (len); _i++) {                                     \
+            printf("%02x ", (unsigned int)(expected)[_i]);                   \
+        }                                                                    \
+        printf("\nActual buffer  : ");                                      \
+        for (_i = 0; _i < (len); _i++) {                                     \
+            printf("%02x ", (unsigned int)(actual)[_i]);                     \
+        }                                                                    \
+        printf("\n");                                                        \
+        printf("Memory mismatch at index %zu: got %02x, expected %02x\n",     \
+               _mismatch_index,                                              \
+               (unsigned int)(actual)[_mismatch_index],                      \
+               (unsigned int)(expected)[_mismatch_index]);                   \
+        return 0;                                                            \
+    }                                                                        \
+} while(0)
 
 size_t base64_length_from_binary(size_t length) {
     return (length + 2)/3 * 4; // We use padding to make the length a multiple of 4.
@@ -489,6 +559,90 @@ static int inline check_cases(case_pair *cases, size_t num_cases)
     return 1;
 }
 
+static int inline check_seof(case_pair *cases, size_t num_cases)
+{
+    DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered encode_base64_cases Test\n"));
+    printf(GREEN_TEXT("DEBUG: Number of cases: %zu\n"), num_cases);
+
+    /* Define test cases as an array of case_pair.
+       These mirror your C++ test cases.
+    */
+    size_t i, j;
+
+
+    /* --- Part 2: Test base64_to_binary decoding (normal) --- */
+    DEBUG_PRINT(GREEN_TEXT(" -- Testing base64_to_binary decoding (normal)\n"));
+    /* First, test using base64_to_binary (normal decoding) */
+    for(i = 0; i < num_cases; i++) {
+        size_t enc_len = strlen(cases[i].encoded);
+        size_t max_len = maximal_binary_length_from_base64(cases[i].encoded, enc_len);
+
+        // *** Simdutf part *** 
+        unsigned char *buffer = OPENSSL_malloc(max_len + 1);
+        if (buffer == NULL) {
+            TEST_error("Out of memory");
+            return 0;
+        }
+        int outlen_simdutf = 0;
+        int simdutf_result = simdutf_decode(NULL, (char *)buffer, &outlen_simdutf, cases[i].encoded, enc_len);
+
+
+        // for(size_t j = 0; j < simdutf_result; j++) {
+        //     if(buffer[j] != cases[i].decoded[j]) {
+        //         TEST_error(RED_TEXT("Decoded:Mismatch at index %zu in test case %zu for simdutf: got %02x, expected %02x"), 
+        //                    j, i, (unsigned int)buffer[j], (unsigned int)cases[i].decoded[j]);
+        //         OPENSSL_free(buffer);
+        //         return 0;
+        //     }
+        // }
+
+        buffer[simdutf_result] = '\0'; // Null-terminate the string
+
+        // *** OpenSSL part ***
+
+        unsigned char *buffer_openssl = OPENSSL_malloc(max_len + 1);
+        if (buffer_openssl == NULL) {
+            TEST_error("Out of memory");
+            return 0;
+        }
+
+        int openssl_outlen = 0;
+        int result_openssl = OpenSSL_decode(NULL, (char *)buffer_openssl, &openssl_outlen, cases[i].encoded, enc_len);
+
+        // for(size_t j = 0; j < result_openssl; j++) {
+        //     if(buffer_openssl[j] != cases[i].decoded[j]) {
+        //         TEST_error(RED_TEXT("Decoded:Mismatch at index %zu in test case %zu for OpenSSL: got %02x, expected %02x"), 
+        //                    j, i, (unsigned int)buffer_openssl[j], (unsigned int)cases[i].decoded[j]);
+        //         OPENSSL_free(buffer_openssl);
+        //         return 0;
+        //     }
+        // }
+
+        buffer_openssl[openssl_outlen] = '\0'; // Null-terminate the string
+
+        printf("max_len: %zu\n", max_len);
+        printf("simdutf_result: %d\n", simdutf_result);
+        printf("simdutf_outlen: %d\n", outlen_simdutf);
+        printf("result_openssl: %d\n", result_openssl);
+        printf("openssl_outlen: %d\n", openssl_outlen);
+
+        ASSERT_EQUAL_INT(simdutf_result, result_openssl);
+        ASSERT_EQUAL_INT(outlen_simdutf, openssl_outlen);
+        // ****** TEST SPECIFIC ASSERTIONS ******
+
+        ASSERT_MEM_EQUAL(buffer_openssl, buffer, outlen_simdutf);
+        PRINT_STRINGS(buffer_openssl, buffer, outlen_simdutf);
+
+        // ASSERT_EQUAL_INT(openssl_outlen, strlen(cases[i].decoded));
+        // ASSERT_EQUAL_INT(outlen_simdutf, strlen(cases[i].decoded));
+
+        
+        OPENSSL_free(buffer);
+        OPENSSL_free(buffer_openssl);
+    }
+    return 1;
+}
+
 static int inline check_cases_no_padding(case_pair *cases, size_t num_cases)
 {
     DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered encode_base64_cases Test\n"));
@@ -640,20 +794,29 @@ static int test_encode_base64_basic_cases(void){
 }
 
 const case_pair seof_good_cases[] = {
-    { "Hello, World!", "SGVsbG8sIFdvcmxkIQ==" },
-    { "GeeksforGeeks", "R2Vla3Nmb3JHZWVrcw==" },
-    { "123456", "MTIzNDU2-" },
-    { "Base64 Encoding", "QmFzZTY0IEVuY29kaW5n-" },
-    { "!R~J2jL&mI]O)3=c:G3Mo)oqmJdxoprTZDyxEvU0MI.'Ww5H{G>}y;;+B8E_Ah,Ed[ PdBqY'^N>O$4:7LK1<:|7)btV@|{YWR$$Er59-XjVrFl4L}~yzTEd4'E[@k",
-      "IVJ+SjJqTCZtSV1PKTM9YzpHM01vKW9xbUpkeG9wclRaRHl4RXZVME1JLidXdzVIe0c+fXk7OytCOEVfQWgsRWRbIFBkQnFZJ15OPk8kNDo3TEsxPDp8NylidFZAfHtZV1IkJEVyNTktWGpWckZsNEx9fnl6VEVkNCdFW0Br-" }
+    { "123", "MTIz\x2DNDU2" }, 
+    // { "Base64 Encod", "QmFzZTY0IEVuY29k\x2DW5n" }, 
+    // { "!R~J-2jL&m",
+    //   "IVJ+SjJqTCZt\x2DSV1PKTM9YzpHM01vKW9xbUpkeG9wclRaRHl4RXZVME1JLidXdzVIe0c+fXk7OytCOEVfQWgsRWRbIFBkQnFZJ15OPk8kNDo3TEsxPDp8NylidFZAfHtZV1IkJEVyNTktWGpWckZsNEx9fnl6VEVkNCdFW0Br-" }
 };
 
+const case_pair seof_bad_cases[] = {
+    { "Hello, Wo", "SGVsbG8sIFdv\x2DcmxkIQ==" }, // bad
+    { "Geeksf", "R2Vla3Nm\x2Db3JHZWVrcw==" }, // bad
+};
 
-static int test_seof_good(void){
-    int result = check_cases(seof_good_cases,5);
+static int test_seof_good_basic_cases(void){
+    int result = check_seof(seof_good_cases,1);
     // printf(GREEN_TEXT("DEBUG: SEOF good test result: %d\n"), result);
     return result;
 }
+
+static int test_seof_bad_basic_cases(void){
+    int result = check_seof(seof_bad_cases,2);
+    // printf(GREEN_TEXT("DEBUG: SEOF good test result: %d\n"), result);
+    return result;
+}
+
 
 static int test_encode_base64_no_padding_cases(void){
     int result = check_cases_no_padding(no_padding,5);
@@ -2501,7 +2664,8 @@ int setup_tests(void)
     ADD_TEST(test_encode_base64_no_padding_cases); // OpenSSL OK
     // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); // OpenSSL OK
     // ADD_TEST(test_roundtrip_base64_with_spaces); //OpenSSL FAIL,multiple of four, incorrect len
-    // ADD_TEST(test_seof_good); 
+    ADD_TEST(test_seof_good_basic_cases); 
+    ADD_TEST(test_seof_bad_basic_cases); 
     // ADD_TEST(test_roundtrip_base64_with_garbage);
     // ADD_TEST(test_base64_decode_just_one_padding_loose);
     // ADD_TEST(test_roundtrip_base64);
