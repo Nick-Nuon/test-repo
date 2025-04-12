@@ -25,7 +25,7 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
 char *input, size_t length);
 
 
-#define DEBUG 1 // Set to 1 to enable debug prints, 0 to disable
+#define DEBUG 0 // Set to 1 to enable debug prints, 0 to disable
 #define RED_TEXT(str) "\033[31m" str "\033[0m"
 #define GREEN_TEXT(str) "\033[32m" str "\033[0m"
 
@@ -846,6 +846,8 @@ int tail_encode_base64(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
   // This looks like 3 branches, but we expect the compiler to resolve this to a
   // single branch:
   DEBUG_PRINT(RED_TEXT("DEBUG: Entering tail_encode_base64\n"));
+  DEBUG_PRINT(GREEN_TEXT("DEBUG: Source string: \"%s\"\n"), src);
+  
   const char *e0 = base64_e0;
   const char *e1 = base64_e1;
   const char *e2 = base64_e2;
