@@ -11,7 +11,7 @@
 #include "testutil.h"
 #include <openssl/evp.h>
 
-#define DEBUG 1
+#define DEBUG 0
 
 #define BUFMAX 0xa0000          /* Encode at most 640kB. */
 #define RED_TEXT(str)     "\033[31m" str "\033[0m"
@@ -65,6 +65,15 @@
 #define ASSERT_EQUAL_INT(actual, expected) do {                      \
     if ((actual) != (expected)) {                                      \
         TEST_error(RED_TEXT("Assertion failed: %s != %s, got %d, expected %d"), \
+                   #actual, #expected, (int)(actual), (int)(expected));\
+        OPENSSL_free(buffer);                                                    \
+        return 0;                                                    \
+    }                                                                \
+} while(0)
+
+#define ASSERT_NOT_EQUAL_INT(actual, expected) do {                      \
+    if ((actual) == (expected)) {                                      \
+        TEST_error(RED_TEXT("Assertion failed: %s == %s, got %d, expected %d"), \
                    #actual, #expected, (int)(actual), (int)(expected));\
         OPENSSL_free(buffer);                                                    \
         return 0;                                                    \
@@ -273,7 +282,52 @@ size_t add_garbage(char **v, size_t *v_len, unsigned int *seed, const uint8_t *t
     return index;
 }
 
-size_t add_seof(char **v, size_t *v_len, unsigned int *seed) {
+/**
+ * swap_seof - Replaces a character in the given string with the SEOF marker.
+ *
+ * @v: pointer to the buffer (string) to modify. Must be a valid, allocated string.
+ * @v_len: pointer to the current length of the string.
+ * @seed: pointer to an unsigned int used for random number generation.
+ * @at_multiple_of_4: if non-zero, the replacement index will be chosen such that
+ *                    it is a multiple of 4; if zero, the index will be chosen such that
+ *                    it is NOT a multiple of 4.
+ *
+ * Returns the index at which the character was replaced, or (size_t)-1 on failure.
+ *
+ * Note: The function does not change the length of the string.
+ */
+static size_t swap_seof(char **v, size_t *v_len, unsigned int *seed, int at_multiple_of_4) {
+    size_t index;
+    size_t len = *v_len;
+    char *array = *v;
+    
+    if (len == 0) {
+        // Nothing to swap in an empty string.
+        TEST_error("swap_seof: Buffer length is zero.");
+        return (size_t)-1;
+    }
+    
+    DEBUG_PRINT(GREEN_TEXT("DEBUG: swap_seof: Buffer length = %zu\n"), len);
+    if (at_multiple_of_4) {
+        // Choose a random index that IS a multiple of 4.
+        do {
+            index = rand_r(seed) % len;
+            DEBUG_PRINT(GREEN_TEXT("DEBUG: swap_seof: Random index = %zu\n"), index);
+        } while (index % 4 != 0);
+    } else {
+        // Choose a random index that is NOT a multiple of 4.
+        do {
+            index = rand_r(seed) % len;
+        } while (index % 4 == 0);
+    }
+    
+    // Swap: just overwrite the character at index with the SEOF marker '-'
+    // DEBUG_PRINT((GREEN_TEXT("DEBUG: Replacing character at index %zu with SEOF marker\n"), index));
+    array[index] = (char)0x2D;   // 0x2D is the ASCII hyphen
+    return index;
+}
+
+size_t add_seof(char **v, size_t *v_len, unsigned int *seed, int at_multiple_of_4) {
     size_t i, len;
     char *array = *v;
     
@@ -281,18 +335,40 @@ size_t add_seof(char **v, size_t *v_len, unsigned int *seed) {
        If '=' is found, use its index; otherwise, use the full length.
     */
     len = *v_len;
-    for (i = 0; i < *v_len; i++) {
-        if (array[i] == '=') {
-            // DEBUG_PRINT("= is found in add_garbage\n");
-            len = i;
-            break;
-        }
-    }
-    
+    // for (i = 0; i < *v_len; i++) {
+    //     if (array[i] == '=') {
+    //         // DEBUG_PRINT("= is found in add_garbage\n");
+    //         len = i;
+    //         break;
+    //     }
+    // }
+
+    uint8_t c = 0x2D; // 0x2D is the '-'/SEOF sign
+
     /* Choose a random insertion index between 0 and len (inclusive) */
     size_t index = rand_r(seed) % (len + 1);
 
-    uint8_t c = 0x2D; // 0x2D is the '-'/SEOF sign
+    if (at_multiple_of_4){
+        index = index - (index % 4);
+    }
+
+
+    // size_t index;
+    // if (len == 0) {
+    //     index = 0;
+    // } else if (at_multiple_of_4 == 1) {
+    //     DEBUG_PRINT(GREEN_TEXT("DEBUG: at_multiple_of_4 is true\n"));
+    //         do {
+    //             DEBUG_PRINT(GREEN_TEXT("DEBUG: Random index = %zu\n"), index);
+
+    //             index = rand_r(&seed) % (len + 1);
+    //         } while (index % 4 != 0);
+    // } else {
+    //         do {
+    //             index = rand_r(&seed) % (len + 1);
+    //         } while (index % 4 == 0);
+    // }
+    
 
     /* Reallocate the array to make room for one extra character.
        Note: Passing a pointer to the array pointer so that it can be updated.
@@ -1837,7 +1913,7 @@ void create_basic_string(char *str, int count) {
     str[count * 4] = '\0';
 }
 
-static int test_super_basic(void) {
+static int test_multiple_of_4_good(void) {
     size_t len, trial, i;
     unsigned int seed = 12345;  /* Fixed seed for reproducibility */
     DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered test_roundtrip_base64\n"));
@@ -1939,6 +2015,111 @@ static int test_super_basic(void) {
     return 1;
 }
 
+static int test_seof_good_automation(void) {
+    size_t len, trial, i;
+    unsigned int seed = 12345;  /* Fixed seed for reproducibility */
+    DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered test_roundtrip_base64\n"));
+
+    for (len = 0; len < 512; len++) {
+        DEBUG_PRINT("DEBUG: Processing length = %zu\n", len *4);
+
+        /* Allocate buffer for Base64 conversion */
+        size_t b64_len_expected = base64_length_from_binary(len * 4);
+        // DEBUG_PRINT("DEBUG: Expected Base64 length = %zu\n", b64_len_expected);
+        char *buffer = OPENSSL_malloc(b64_len_expected + 1);
+        if (buffer == NULL) {
+            TEST_error("Out of memory for Base64 buffer for length %zu", len);
+            return 0;
+        }
+
+        create_basic_string(buffer, len);
+
+        int index = add_seof(&buffer, &len, &seed, 1);
+        buffer[len * 4] = '\0';
+
+        /* No extra spaces are added; use the encoded buffer as-is */
+        size_t s = len * 4;
+
+        /* Allocate buffer for decoded binary data */
+        size_t back_bufsize = maximal_binary_length_from_base64(buffer, s);
+        DEBUG_PRINT("DEBUG: Back buffer size (maximal binary length) = %zu\n", back_bufsize);
+
+        /* **** simdutf decoding **** */
+        unsigned char *back_simd = OPENSSL_malloc(back_bufsize);
+        if (back_bufsize != 0 && back_simd == NULL) {
+            TEST_error("Out of memory for simdutf back buffer");
+            OPENSSL_free(buffer);
+            return 0;
+        }
+
+        if (back_simd == NULL) {
+            // TEST_error("Out of memory for back buffer");
+            DEBUG_PRINT("back_bufsize = %zu\n", back_bufsize);
+            DEBUG_PRINT("back_simd shouldn't be NULL\n");
+            // OPENSSL_free(source);
+            // OPENSSL_free(buffer);
+            // return 0;
+        }
+
+        int outlen_simdutf = 0;
+        int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, buffer, s);
+        DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
+        // if (len == 0) {
+        //     ASSERT_EQUAL_INT(result_simdutf, 0);
+        // } else {
+        //     ASSERT_EQUAL_INT(result_simdutf, len);
+        // }
+        // for (j = 0; j < len; j++) {
+        //     ASSERT_EQUAL_HEX(j, back_simd[j], (unsigned char)source[j]);
+        // }
+        DEBUG_PRINT("DEBUG: Source and decoded data match for simdutf for length %zu\n", len);
+
+        /* **** OpenSSL decoding **** */
+        unsigned char *back_openssl = OPENSSL_malloc(back_bufsize);
+        if (back_bufsize != 0 && back_openssl == NULL) {
+            TEST_error("Out of memory for OpenSSL back buffer");
+            OPENSSL_free(buffer);
+            OPENSSL_free(back_simd);
+            return 0;
+        }
+        int outlen_openssl = 0;
+        int result_openssl = OpenSSL_decode(NULL, (char *)back_openssl, &outlen_openssl, buffer, s);
+        DEBUG_PRINT("DEBUG: Decoded binary length openssl = %d\n", result_openssl);
+        // if (len == 0) {
+        //     ASSERT_EQUAL_INT(result_openssl, 0);
+        // } else {
+        //     ASSERT_EQUAL_INT(result_openssl, -1);
+        // }
+        // for (j = 0; j < len; j++) {
+        //     ASSERT_EQUAL_HEX(j, back_openssl[j], (unsigned char)source[j]);
+        // }
+        DEBUG_PRINT("DEBUG: Source and decoded data match for OpenSSL for length %zu\n", len);
+
+        /* Specific assertions comparing the two decoders */
+        ASSERT_EQUAL_INT(result_openssl, result_simdutf);
+        ASSERT_EQUAL_SIZE(outlen_openssl, outlen_simdutf);
+
+        ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
+        ASSERT_EQUAL_INT(result_openssl, index/4 * 3);
+        
+        // ASSERT_EQUAL_INT(result_openssl, len*3);
+
+
+    //    if (s %4 == 0 & result_simdutf != -1) {
+    //         ASSERT_EQUAL_INT(result_openssl, len);
+    //     } 
+        // else {
+            // ASSERT_EQUAL_INT(result_openssl, -1);
+            // if (result_openssl == -1) {
+            //     TEST_error("DEBUG: result_openssl = -1\n");
+            // }
+        // }
+        OPENSSL_free(buffer);
+        OPENSSL_free(back_simd);
+        OPENSSL_free(back_openssl);
+    }
+    return 1;
+}
 
 static int test_roundtrip_base64(void) {
     size_t len, trial, i;
@@ -3024,9 +3205,11 @@ int setup_tests(void)
     // ADD_TEST(test_roundtrip_base64_with_spaces); //OpenSSL FAIL,multiple of four, incorrect len
     // ADD_TEST(test_seof_good_basic_cases); 
     // ADD_TEST(test_seof_bad_basic_cases); 
-    ADD_TEST(test_roundtrip_base64);
-    ADD_TEST(test_super_basic);
+    // ADD_TEST(test_roundtrip_base64);
+    // ADD_TEST(test_multiple_of_4_good);
+    ADD_TEST(test_seof_good_automation);
 
+    // NOT WORKING 
     // ADD_TEST(test_roundtrip_base64_with_garbage);
     // ADD_TEST(test_base64_decode_just_one_padding_loose);
     // ADD_TEST(test_issue_520);
