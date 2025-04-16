@@ -2110,8 +2110,11 @@ static int test_multiple_of_4_bad(void) {
         ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
         if (len == 0) {
             ASSERT_EQUAL_INT(result_openssl, 0);
+            ASSERT_EQUAL_INT(outlen_openssl, 0);
         } else {
             ASSERT_EQUAL_INT(result_openssl, -1);
+            ASSERT_EQUAL_INT(outlen_openssl, s/4*3 - ((s/4*3) % (48)));
+            
         }
         
 
