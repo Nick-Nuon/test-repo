@@ -416,7 +416,12 @@ size_t add_seof(char **v, size_t *v_len, unsigned int *seed, int at_multiple_of_
     size_t rand_num =  rand_r(seed);
     DEBUG_PRINT(GREEN_TEXT("DEBUG: rand_num = %d\n"), rand_num);
     DEBUG_PRINT(GREEN_TEXT("DEBUG: len + 1= %zu\n"), len + 1);
-    size_t index = rand_num % (len + 1);
+    size_t index = 0;
+    if (at_multiple_of_4){
+        index = rand_num % (len - 3);
+    } else {
+        index = rand_num % (len + 1);
+    }
     
     size_t index_mod = index % 4;
     DEBUG_PRINT(GREEN_TEXT("DEBUG: add_seof: Random index = %zu\n"), index);
@@ -427,7 +432,10 @@ size_t add_seof(char **v, size_t *v_len, unsigned int *seed, int at_multiple_of_
             index += rand_r(seed) % 2 + 1;
         }
     } else if (at_multiple_of_4){
+        DEBUG_PRINT(GREEN_TEXT("DEBUG: at_multiple_of_4 is true\n"));
+        DEBUG_PRINT("DEBUG: index before slashing = %zu\n", index);
         index = index - (index % 4);
+        DEBUG_PRINT("DEBUG: index after slashing = %zu\n", index);
     } else if (index_mod == 0) {
         DEBUG_PRINT(GREEN_TEXT("DEBUG: index_mod == 0\n"));
         index -= rand_r(seed) % 3 + 1; 
@@ -2102,7 +2110,7 @@ static int test_seof_good_cases(void) {
 
         // DEBUG_PRINT("DEBUG: buffer before add_seof= %s\n", buffer);
         // DEBUG_PRINT("DEBUG: augmented_length = %d\n", augmented_len);
-        int index = add_seof(&buffer, &augmented_len, &seed, 1);
+        int index = swap_seof(&buffer, &augmented_len, &seed, 1);
 
         DEBUG_PRINT("DEBUG: buffer after add_seof= %s\n", buffer);
 
