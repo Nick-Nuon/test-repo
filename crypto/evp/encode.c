@@ -56,12 +56,6 @@ char *input, size_t length);
 #define UNDERLINE_TEXT(str) "\033[4m" str "\033[0m"
 #define BLINK_TEXT(str) "\033[5m" str "\033[0m" // May not work on all terminals
 
-// #if DEBUG
-// #define DEBUG_PRINT(fmt, ...) printf(fmt, ##__VA_ARGS__)
-// #else
-// #define DEBUG_PRINT(fmt, ...)
-// #endif
-
 #define DEBUG_CHECK_NULL(ptr)                                         \
     do {                                                              \
         if (!(ptr)) {                                                 \
@@ -924,12 +918,6 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     DEBUG_PRINT(RED_TEXT("DEBUG: r.error Simdutf: %d\n"),
                 r.error);
 
-
-  // Optional: copy the decoded byte count to *outl
-  // if (outl != NULL) {
-  //   *outl = (int)r.output_count - r.output_count % 48;
-  // // }
-
   if (r.error == BASE64_SUCCESS) {
     // DEBUG_PRINT(RED_TEXT("DEBUG: Simdutf decode successful, output count: %d\n"),
     //             r.output_count);
@@ -946,7 +934,6 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
 }
 
 
-  // return (r.error == BASE64_SUCCESS) ? r.output_count : -1;
 }
 
 
@@ -973,9 +960,6 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
     }
   }
 
-  // if ((length - easy_whitespaces) %4 != 0) {
-  //   return (full_result){NOT_MULTIPLE_OF_FOUR, 0, 0};
-  // }
 
   DEBUG_PRINT(
       GREEN_TEXT("DEBUG: Found %d easy whitespace characters\n"),
@@ -1027,11 +1011,7 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
   int valid_b64_chars = length + equalsigns - r.whitespaces - begin_ws_count;
   DEBUG_PRINT(      GREEN_TEXT("DEBUG: valid_b64_chars: %d, begin_ws_count: %zu\n, trailing_ws_count: %d\n"),
               valid_b64_chars, begin_ws_count, trailing_ws_count);
-  // if ((valid_b64_chars) %4 != 0) {
-  //   return (full_result){NOT_MULTIPLE_OF_FOUR, 0, 0};
-  // }
             
-
   if (r.error == BASE64_SUCCESS && equalsigns > 0) {
     // additional checks
     DEBUG_PRINT(
@@ -1117,8 +1097,6 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
           printf("SEOF detected\n");
           // idx++;
           break;
-          // return (full_result){BASE64_SUCCESS, (size_t)(src - srcinit),
-          //                      (size_t)(dst - dstinit), whitespaces};
         }
         return (full_result){INVALID_BASE64_CHARACTER, (size_t)(src - srcinit),
                              (size_t)((dst - dstinit)),  whitespaces};
@@ -1170,10 +1148,6 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
         DEBUG_PRINT("idx == 1\n");
 
         return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit), whitespaces};
-
-
-        // return (full_result){BASE64_INPUT_REMAINDER, (size_t)(src - srcinit),
-        //                      (size_t)(dst - dstinit), whitespaces};
       }
 #if DEBUG
       {
@@ -1216,7 +1190,6 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
   }
 }
 
-// that is changed as to accomodate ours
 // returns the number of bytes written
 // returns -1 on error
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
@@ -1274,31 +1247,6 @@ int EVP_DecodeBlock(unsigned char *t, const unsigned char *f, int n) {
   return evp_decodeblock_int(NULL, t, f, n);
 }
 
-// ours
-// int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl) {
-//   int i;
-//   int j;
-//   DEBUG_CHECK_NULL(out);
-
-//   *outl = 0;
-//   if (ctx->num != 0) {
-//     // i = evp_decodeblock_int(ctx, out, ctx->enc_data, ctx->num);
-//     result r = base64_tail_decode_trim_end(ctx, out, ctx->enc_data, ctx->num);
-//     if (r.error != BASE64_SUCCESS){
-//       return -1;
-//     };
-
-//     // i = base64_tail_decode(ctx, out, ctx->enc_data, ctx->num);
-//     // if (i < 0)
-//     //   return -1;
-//     ctx->num = 0;
-//     *outl = r.count;
-//     return 1;
-//   } else
-//     return 1;
-// }
-
-// theirs
 int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
 {
     int i;
@@ -1309,7 +1257,6 @@ int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
     *outl = 0;
     if (ctx->num != 0) {
         i = evp_decodeblock_int(ctx, out, ctx->enc_data, ctx->num);
-        // i = base64_tail_decode(ctx, out, ctx->enc_data, ctx->num);
         if (i < 0)
             return -1;
         ctx->num = 0;
