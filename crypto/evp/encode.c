@@ -363,7 +363,7 @@ int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
 
   // check for errors first, we can axe that 
   for (i = 0; i < inl; i++) {
-    DEBUG_PRINT(GREEN_TEXT("DEBUG: EVP_DecodeUpdate: inl: %d, i: %d, tmp: %02x\n"), inl, i, *(in + i));
+    // DEBUG_PRINT(GREEN_TEXT("DEBUG: EVP_DecodeUpdate: inl: %d, i: %d, tmp: %02x\n"), inl, i, *(in + i));
     tmp = *(in++);
     v = conv_ascii2bin(tmp, table); // this is a straight conversion without surprises, it fails 
     // if the leading bit is set eg it does char c & 0x80  
@@ -840,7 +840,7 @@ int tail_encode_base64(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
   // This looks like 3 branches, but we expect the compiler to resolve this to a
   // single branch:
   DEBUG_PRINT(RED_TEXT("DEBUG: Entering tail_encode_base64\n"));
-  DEBUG_PRINT(GREEN_TEXT("DEBUG: Source string: \"%s\"\n"), src);
+  // DEBUG_PRINT(GREEN_TEXT("DEBUG: Source string: \"%s\"\n"), src);
   
   const char *e0 = base64_e0;
   const char *e1 = base64_e1;
@@ -1220,8 +1220,7 @@ static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
   while ((n > 3) && (B64_NOT_BASE64(conv_ascii2bin(f[n - 1], table))))
     n--;
 
-  DEBUG_PRINT(
-      RED_TEXT("DEBUG OpenSSL: n = %d, f = %s, t = %s\n"), n, f, t);
+  // DEBUG_PRINT(      RED_TEXT("DEBUG OpenSSL: n = %d, f = %s, t = %s\n"), n, f, t);
 
   if (n % 4 != 0)
     return -1;
