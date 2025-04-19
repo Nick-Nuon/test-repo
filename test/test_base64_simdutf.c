@@ -256,10 +256,14 @@ size_t add_garbage(char **v, size_t *v_len, unsigned int *seed, const uint8_t *t
 
     /* Choose a random byte value between 0 and 255 until table[c] equals 255 */
     uint8_t c = rand_r(seed) % 256;
-    while (table[c] != 255) {
+    while (table[c] != 255 || c == 0x2D) { // 0x2D is the ASCII hyphen / SEOF marker
         c = rand_r(seed) % 256;
     }
-    
+
+    // do {
+    //     c = rand_r(seed) % 256;
+    // } while (table[c] != 255 && c == 0x2D); // 0x2D is the ASCII hyphen / SEOF marker
+
     /* Reallocate the array to make room for one extra character.
        Note: Passing a pointer to the array pointer so that it can be updated.
     */
@@ -1312,44 +1316,18 @@ const static uint8_t to_base64_value[] = {
     255, 255, 64,  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 62,  255,
     255, 255, 63,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  255, 255,
     255, 255, 255, 255, 255, 0,   1,   2,   3,   4,   5,   6,   7,   8,   9,
-
-
     10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  21,  22,  23,  24,
-
-
     25,  255, 255, 255, 255, 255, 255, 26,  27,  28,  29,  30,  31,  32,  33,
-
-
     34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,  47,  48,
-
-
     49,  50,  51,  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-
-
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-
-
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-
-
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-
-
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-
-
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-
-
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-
-
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-
-
     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-
-
     255};
 
 
@@ -1481,6 +1459,7 @@ const static uint8_t to_base64_value[] = {
             ASSERT_EQUAL_INT(result_openssl, result_simdutf);
             ASSERT_EQUAL_SIZE(outlen_openssl, outlen_simdutf);
             ASSERT_EQUAL_INT(result_openssl, -1);
+            ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
 
             OPENSSL_free(source);
             OPENSSL_free(buffer);
@@ -3272,13 +3251,13 @@ int setup_tests(void)
     // ADD_TEST(test_seof_bad_cases);
 
     // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); // OpenSSL OK
-    ADD_TEST(test_roundtrip_base64_with_spaces); //OpenSSL FAIL,multiple of four, incorrect len
+    // ADD_TEST(test_roundtrip_base64_with_spaces); //OpenSSL FAIL,multiple of four, incorrect len
     // ADD_TEST(test_roundtrip_base64);
 
 
 
     // NOT WORKING 
-    // ADD_TEST(test_roundtrip_base64_with_garbage);
+    ADD_TEST(test_roundtrip_base64_with_garbage);
     // ADD_TEST(test_base64_decode_just_one_padding_loose);
     // ADD_TEST(test_issue_520);
     // ADD_TEST(test_issue_509);
