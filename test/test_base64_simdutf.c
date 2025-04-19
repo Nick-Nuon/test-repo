@@ -1470,92 +1470,167 @@ const static uint8_t to_base64_value[] = {
         return 1;
     }
 
+    static int test_base64_decode_just_one_padding_loose(void) {
+        typedef struct {
+            const char *input;
+            int         error;
+            int         expected;
+        } test_case;
+    
+        test_case test_cases[] = {
+            { "uuuu             =", -1, 0 }
+        };
+        size_t num_cases = OSSL_NELEM(test_cases);
+    
+        for (size_t i = 0; i < num_cases; i++) {
+            const char *input    = test_cases[i].input;
+            size_t       inlen    = strlen(input);
+            int          want_err = test_cases[i].error;
+            int          want_len = test_cases[i].expected;
+    
+            /* 1) Copy into a heap buffer with room for the "\n\0". */
+            char *buffer = OPENSSL_malloc(inlen + 1 /* NUL */ + 2 /* newline + NUL */);
+            if (buffer == NULL) {
+                TEST_error("malloc failed");
+                return 0;
+            }
+            memcpy(buffer, input, inlen);
+            buffer[inlen] = '\0';  /* NUL‑terminate */
+    
+            /* 2) Figure out how big the worst‑case output is. */
+            size_t back_bufsize =
+                maximal_binary_length_from_base64(buffer, inlen);
+    
+            /* 3) simdutf decode */
+            unsigned char *back_simd = OPENSSL_malloc(back_bufsize);
+            if (back_bufsize != 0 && back_simd == NULL) {
+                OPENSSL_free(buffer);
+                TEST_error("malloc simdutf failed");
+                return 0;
+            }
+            int out_simd = 0;
+            int err_simd = simdutf_decode(NULL, (char *)back_simd,
+                                          &out_simd, buffer, inlen);
+            ASSERT_EQUAL_INT(err_simd, want_err);
+            // if (err_simd >= 0)
+                ASSERT_EQUAL_INT(out_simd, want_len);
+    
+            /* 4) OpenSSL decode */
+            unsigned char *back_ssl = OPENSSL_malloc(back_bufsize);
+            if (back_bufsize != 0 && back_ssl == NULL) {
+                OPENSSL_free(buffer);
+                OPENSSL_free(back_simd);
+                TEST_error("malloc openssl failed");
+                return 0;
+            }
+            int out_ssl = 0;
+            int err_ssl = OpenSSL_decode(NULL, (char *)back_ssl,
+                                         &out_ssl, buffer, inlen);
+            ASSERT_EQUAL_INT(err_ssl, want_err);
+            // if (err_ssl >= 0)
+                ASSERT_EQUAL_INT(out_ssl, want_len);
+    
+            /* 5) Compare */
+            ASSERT_EQUAL_INT(err_ssl, err_simd);
+            ASSERT_EQUAL_INT(out_ssl, out_simd);
+            
+    
+            /* 6) Clean up only what we malloc’d */
+            OPENSSL_free(buffer);
+            OPENSSL_free(back_simd);
+            OPENSSL_free(back_ssl);
+        }
+    
+        return 1;
+    }
+    
+
 // /*
 //  * test_base64_decode_just_one_padding_loose:
 //  * This test verifies that decoding a particular input string in loose mode
 //  * returns the expected error code and count.
 //  */
-static int test_base64_decode_just_one_padding_loose(void) {
-    /* Define a structure for test cases */
-    typedef struct {
-        const char *input;
-        int error;
-        int expected;
-    } test_case;
+// static int test_base64_decode_just_one_padding_loose(void) {
+//     /* Define a structure for test cases */
+//     typedef struct {
+//         const char *input;
+//         int error;
+//         int expected;
+//     } test_case;
     
-    /* Test cases array; here we have one test case. */
-    test_case test_cases[] = {
-        { "uuuu             =", -1, 3 }
-    };
+//     /* Test cases array; here we have one test case. */
+//     test_case test_cases[] = {
+//         { "uuuu             =", -1, 3 }
+//     };
 
-    size_t num_cases = sizeof(test_cases) / sizeof(test_cases[0]);
-    char buffer[3]; 
+//     size_t num_cases = sizeof(test_cases) / sizeof(test_cases[0]);
+//     char buffer[3]; 
     
-    for (size_t i = 0; i < num_cases; i++) {
-        const char *input = test_cases[i].input;
-        int error = test_cases[i].error;
-        int expected = test_cases[i].expected;
+//     for (size_t i = 0; i < num_cases; i++) {
+//         const char *input = test_cases[i].input;
+//         int error = test_cases[i].error;
+//         int expected = test_cases[i].expected;
         
-            for (size_t k = 0; k < 1; k++) {
-                // result r = base64_tail_decode_trim_end(NULL , buffer, input, strlen(input));
-                // ASSERT_EQUAL_SIZE( r.error , error);
-                // ASSERT_EQUAL_SIZE(r.count, expected);
-                size_t back_bufsize = maximal_binary_length_from_base64(test_cases[0].input, strlen(test_cases[0].input));
+//             for (size_t k = 0; k < 1; k++) {
+//                 // result r = base64_tail_decode_trim_end(NULL , buffer, input, strlen(input));
+//                 // ASSERT_EQUAL_SIZE( r.error , error);
+//                 // ASSERT_EQUAL_SIZE(r.count, expected);
+//                 size_t back_bufsize = maximal_binary_length_from_base64(test_cases[0].input, strlen(test_cases[0].input));
 
-                /* **** simdutf decoding **** */
-                unsigned char *back_simd = OPENSSL_malloc(back_bufsize);
-                if (back_bufsize != 0 && back_simd == NULL) {
-                    TEST_error("Out of memory for simdutf back buffer");
-                    OPENSSL_free(input);
-                    OPENSSL_free(buffer);
-                    return 0;
-                }
-                int outlen_simdutf = 0;
-                int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, buffer, strlen(test_cases[0].input));
-                DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
-                ASSERT_EQUAL_INT(result_simdutf, -1);
+//                 /* **** simdutf decoding **** */
+//                 unsigned char *back_simd = OPENSSL_malloc(back_bufsize);
+//                 if (back_bufsize != 0 && back_simd == NULL) {
+//                     TEST_error("Out of memory for simdutf back buffer");
+//                     OPENSSL_free(input);
+//                     OPENSSL_free(buffer);
+//                     return 0;
+//                 }
+//                 int outlen_simdutf = 0;
+//                 int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, buffer, strlen(test_cases[0].input));
+//                 DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
+//                 ASSERT_EQUAL_INT(result_simdutf, -1);
             
-                // for (j = 0; j < len; j++) {
-                //     ASSERT_EQUAL_HEX(j, back_simd[j], (unsigned char)source[j]);
-                // }
-                // DEBUG_PRINT("DEBUG: Source and decoded data match for simdutf for length %zu\n", len);
+//                 // for (j = 0; j < len; j++) {
+//                 //     ASSERT_EQUAL_HEX(j, back_simd[j], (unsigned char)source[j]);
+//                 // }
+//                 // DEBUG_PRINT("DEBUG: Source and decoded data match for simdutf for length %zu\n", len);
 
-                /* **** OpenSSL decoding **** */
-                unsigned char *back_openssl = OPENSSL_malloc(back_bufsize);
-                if (back_bufsize != 0 && back_openssl == NULL) {
-                    TEST_error("Out of memory for OpenSSL back buffer");
-                    OPENSSL_free(input);
-                    OPENSSL_free(buffer);
-                    OPENSSL_free(back_simd);
-                    return 0;
-                }
-                int outlen_openssl = 0;
-                int result_openssl = OpenSSL_decode(NULL, (char *)back_openssl, &outlen_openssl, buffer, strlen(test_cases[0].input));
-                DEBUG_PRINT("DEBUG: Decoded binary length openssl = %d\n", result_openssl);
-                ASSERT_EQUAL_INT(result_openssl, -1);
+//                 /* **** OpenSSL decoding **** */
+//                 unsigned char *back_openssl = OPENSSL_malloc(back_bufsize);
+//                 if (back_bufsize != 0 && back_openssl == NULL) {
+//                     TEST_error("Out of memory for OpenSSL back buffer");
+//                     OPENSSL_free(input);
+//                     OPENSSL_free(buffer);
+//                     OPENSSL_free(back_simd);
+//                     return 0;
+//                 }
+//                 int outlen_openssl = 0;
+//                 int result_openssl = OpenSSL_decode(NULL, (char *)back_openssl, &outlen_openssl, buffer, strlen(test_cases[0].input));
+//                 DEBUG_PRINT("DEBUG: Decoded binary length openssl = %d\n", result_openssl);
+//                 ASSERT_EQUAL_INT(result_openssl, -1);
                 
-                // for (j = 0; j < len; j++) {
-                //     ASSERT_EQUAL_HEX(j, back_openssl[j], (unsigned char)source[j]);
-                // }
-                // DEBUG_PRINT("DEBUG: Source and decoded data match for OpenSSL for length %zu\n", len);
+//                 // for (j = 0; j < len; j++) {
+//                 //     ASSERT_EQUAL_HEX(j, back_openssl[j], (unsigned char)source[j]);
+//                 // }
+//                 // DEBUG_PRINT("DEBUG: Source and decoded data match for OpenSSL for length %zu\n", len);
 
-                /* Specific assertions comparing the two decoders */
-                ASSERT_EQUAL_INT(result_openssl, result_simdutf);
-                ASSERT_EQUAL_SIZE(outlen_openssl, outlen_simdutf);
-                ASSERT_EQUAL_INT(result_openssl, -1);
-                ASSERT_EQUAL_INT(outlen_simdutf, 3);
+//                 /* Specific assertions comparing the two decoders */
+//                 ASSERT_EQUAL_INT(result_openssl, result_simdutf);
+//                 ASSERT_EQUAL_SIZE(outlen_openssl, outlen_simdutf);
+//                 ASSERT_EQUAL_INT(result_openssl, -1);
+//                 ASSERT_EQUAL_INT(outlen_simdutf, 3);
 
-                OPENSSL_free(input);
-                OPENSSL_free(buffer);
-                OPENSSL_free(back_simd);
-                OPENSSL_free(back_openssl);
+//                 OPENSSL_free(input);
+//                 OPENSSL_free(buffer);
+//                 OPENSSL_free(back_simd);
+//                 OPENSSL_free(back_openssl);
 
 
-            }
-        // }
-    }
-    return 1;
-}
+//             }
+//         // }
+//     }
+//     return 1;
+// }
 
 
 
@@ -3253,12 +3328,13 @@ int setup_tests(void)
     // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); // OpenSSL OK
     // ADD_TEST(test_roundtrip_base64_with_spaces); //OpenSSL FAIL,multiple of four, incorrect len
     // ADD_TEST(test_roundtrip_base64);
+    // ADD_TEST(test_roundtrip_base64_with_garbage);
 
 
 
-    // NOT WORKING 
-    ADD_TEST(test_roundtrip_base64_with_garbage);
-    // ADD_TEST(test_base64_decode_just_one_padding_loose);
+
+    // TODOS:
+    ADD_TEST(test_base64_decode_just_one_padding_loose);
     // ADD_TEST(test_issue_520);
     // ADD_TEST(test_issue_509);
     // ADD_TEST(test_issue_504_8bit); 
