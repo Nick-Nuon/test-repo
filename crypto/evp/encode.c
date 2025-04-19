@@ -944,8 +944,8 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
       BRIGHT_YELLOW_TEXT("DEBUG: Entered base64_tail_decode_trim_end\n"));
       DEBUG_CHECK_NULL(output);
 
-  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string: \"%s\", length: %d\n"), input,
-              length);
+  // DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string: \"%s\", length: %d\n"), input,
+  //             length);
 
   DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (hex): "));
   for (size_t i = 0; i < (size_t)length; i++) {
@@ -1059,9 +1059,9 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
 #if DEBUG
   DEBUG_PRINT("\n");
   DEBUG_PRINT(RED_TEXT("DEBUG: Starting base64_tail_decode\n"));
-  DEBUG_CHECK_NULL(dst);
-  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string: \"%s\", length: %d\n"), src,
-              length);
+  // DEBUG_CHECK_NULL(dst);
+  // DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string: \"%s\", length: %d\n"), src,
+  //             length);
   DEBUG_PRINT("DEBUG: Input (hex): ");
   for (int i = 0; i < length; i++) {
     DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)src[i]);
@@ -1195,10 +1195,15 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n) {
   DEBUG_PRINT(
-      RED_TEXT("DEBUG OpenSSL: Entering evp_decodeblock_int\n"));
+      RED_TEXT("DEBUG OpenSSL: Entering evp_decodeblock_int\n")); 
+      DEBUG_PRINT(      RED_TEXT("DEBUG OpenSSL: n = %d\n"), n);
+
   int i, ret = 0, a, b, c, d;
   unsigned long l;
   const unsigned char *table;
+
+  // DEBUG_PRINT(      RED_TEXT("DEBUG OpenSSL: n = %d, f = %s, t = %s\n"), n, f, t);
+
 
   // DEBUG_CHECK_NULL(t);
 
@@ -1220,7 +1225,6 @@ static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
   while ((n > 3) && (B64_NOT_BASE64(conv_ascii2bin(f[n - 1], table))))
     n--;
 
-  // DEBUG_PRINT(      RED_TEXT("DEBUG OpenSSL: n = %d, f = %s, t = %s\n"), n, f, t);
 
   if (n % 4 != 0)
     return -1;

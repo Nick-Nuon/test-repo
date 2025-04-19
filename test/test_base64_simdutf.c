@@ -11,7 +11,7 @@
 #include "testutil.h"
 #include <openssl/evp.h>
 
-#define DEBUG 0
+#define DEBUG 0 // Set to 1 to enable debug prints, 0 to disable
 
 #define BUFMAX 0xa0000          /* Encode at most 640kB. */
 #define RED_TEXT(str)     "\033[31m" str "\033[0m"
@@ -1177,174 +1177,26 @@ static int test_roundtrip_base64_with_lots_of_spaces(void) {
         }
         DEBUG_PRINT("DEBUG: Source and decoded data match for length %zu\n", len);
 
-        OPENSSL_free(source);
-        OPENSSL_free(buffer_with_spaces);
-        OPENSSL_free(back);
 
-        
-        
         // specific to this test
         ASSERT_EQUAL_INT(result_openssl, len);
         ASSERT_EQUAL_SIZE(outlen_openssl, len);
 
         ASSERT_EQUAL_INT(result_simdutf, len);
         ASSERT_EQUAL_SIZE(outlen_simdutf, len);
+        ASSERT_MEM_EQUAL(back_openssl, back, outlen_openssl);
+
+        OPENSSL_free(source);
+        OPENSSL_free(buffer_with_spaces);
+        OPENSSL_free(back);
+        OPENSSL_free(back_openssl);
+
+        
+        
 
     }
     return 1;
 }
-
-
-
-// /*
-//  * test_roundtrip_base64_with_spaces:
-//  * For each binary length from 0 to 2047, generate random binary data,
-//  * encode it to Base64, then insert extra whitespace (5 insertions),
-//  * and finally decode using both base64_to_binary and base64_to_binary_safe
-//  * with each of three last-chunk handling options.
-//  * The decoded data is then compared with the original source.
-//  */
-// static int test_roundtrip_base64_with_spaces(void) {
-//     size_t len, trial, i, j;
-//     unsigned int seed = 12345;  /* Fixed seed for reproducibility */
-//     DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered test_roundtrip_base64_with_spaces\n"));
-
-//     for (len = 0; len < 2048; len++) {
-//         DEBUG_PRINT(CYAN_TEXT("DEBUG: Processing binary length = %zu\n"), len);
-//         /* Allocate source binary data */
-//         char *source = (len > 0) ? OPENSSL_malloc(len) : NULL;
-//         if (len > 0 && !source) {
-//             TEST_error("Out of memory for source of length %zu", len);
-//             return 0;
-//         }
-//         for (i = 0; i < len; i++) {
-//             source[i] = (char)(rand_r(&seed) % 256);
-//         }
-
-//         /* Allocate buffer for Base64 conversion */
-//         size_t b64_len_expected = base64_length_from_binary(len);
-//         char *buffer = OPENSSL_malloc(b64_len_expected + 1);
-//         if (!buffer) {
-//             TEST_error("Out of memory for Base64 buffer for length %zu", len);
-//             if (source) OPENSSL_free(source);
-//             return 0;
-//         }
-//         size_t s = tail_encode_base64(NULL, buffer, source, len);
-//         buffer[s] = '\0';
-//         DEBUG_PRINT("DEBUG: Base64 encoded result (length %zu): \"%s\"\n", s, buffer);
-
-//         /* Insert extra spaces (5 times) */
-//         size_t cur_b64_len = s;
-//         for (i = 0; i < 5; i++) {
-//             int index = add_space(&buffer, &cur_b64_len, &seed);
-//             if (index == -1) {
-//                 TEST_error("Out of memory in add_space for length %zu", cur_b64_len);
-//                 if (source) OPENSSL_free(source);
-//                 return 0;
-//             }
-//             // buffer = new_buffer;
-//         }
-//         DEBUG_PRINT("DEBUG: Base64 with spaces (length %zu): \"%s\"\n", cur_b64_len, buffer);
-
-//         /* Allocate buffer for decoded binary data */
-//         size_t back_bufsize = maximal_binary_length_from_base64(buffer, cur_b64_len);
-//         DEBUG_PRINT("DEBUG: Back buffer size (maximal binary length) = %zu\n", back_bufsize);
-//         char *back = OPENSSL_malloc(back_bufsize);
-//         if (!back) {
-//             TEST_error("Out of memory for back buffer");
-//             OPENSSL_free(source);
-//             OPENSSL_free(buffer);
-//             return 0;
-//         }
-//                 // **** Simdutf part *****
-
-//                 char *back = OPENSSL_malloc(back_bufsize);
-//                 if (!back && back_bufsize !=0) {
-//                     TEST_error("Out of memory for back buffer");
-//                     OPENSSL_free(source);
-//                     OPENSSL_free(buffer_with_spaces);
-//                     return 0;
-//                 }
-        
-//                 /* Decode the Base64 string (with extra spaces) */
-//                 int outlen_simdutf = 0;
-//                 int result_simdutf = simdutf_decode(NULL, back,  &outlen_simdutf, buffer_with_spaces, buffer_with_spaces_len);
-//                 DEBUG_PRINT("DEBUG: Decoded binary length simdutf= %zu\n", result_simdutf);
-//                 if (source == NULL) {
-//                     ASSERT_EQUAL_INT(result_simdutf, 0);
-//                 } else {
-//                     ASSERT_EQUAL_INT(result_simdutf, len);
-//                 }
-        
-//                 for (size_t j = 0; j < len; j++) {
-//                     ASSERT_EQUAL_HEX(j, back[j], source[j]);
-//                 }
-//                 DEBUG_PRINT("DEBUG: Source and decoded data match for length %zu\n", len);
-        
-//                 // OPENSSL_free(source);
-//                 // OPENSSL_free(buffer_with_spaces);
-//                 // OPENSSL_free(back);
-        
-//                 // **** OpenSSL part *****
-        
-//                 char *back_openssl = OPENSSL_malloc(back_bufsize);
-//                 if (!back_openssl && back_openssl !=0) {
-//                     TEST_error("Out of memory for back buffer");
-//                     OPENSSL_free(source);
-//                     OPENSSL_free(buffer_with_spaces);
-//                     return 0;
-//                 }
-        
-//                 /* Decode the Base64 string (with extra spaces) */
-//                 int outlen_openssl = 0;
-//                 int result_openssl = OpenSSL_decode(NULL, back_openssl,  &outlen_openssl, buffer_with_spaces, buffer_with_spaces_len);
-//                 DEBUG_PRINT("DEBUG: Decoded binary length openssl= %zu\n", result_openssl);
-//                 if (source == NULL) {
-//                     ASSERT_EQUAL_INT(result_openssl, 0);
-//                 } else {
-//                     ASSERT_EQUAL_INT(result_openssl, len);
-//                 }
-        
-//                 for (size_t j = 0; j < len; j++) {
-//                     ASSERT_EQUAL_HEX(j, back_openssl[j], source[j]);
-//                 }
-//                 DEBUG_PRINT("DEBUG: Source and decoded data match for length %zu\n", len);
-        
-//                 OPENSSL_free(source);
-//                 OPENSSL_free(buffer_with_spaces);
-//                 OPENSSL_free(back);
-        
-                
-                
-//                 // specific to this test
-//                 ASSERT_EQUAL_INT(result_openssl, len);
-//                 ASSERT_EQUAL_SIZE(outlen_openssl, len);
-        
-//                 ASSERT_EQUAL_INT(result_simdutf, len);
-//                 ASSERT_EQUAL_SIZE(outlen_simdutf, len);
-
-//             // result r = base64_tail_decode_trim_end(NULL, back,buffer, cur_b64_len);
-//             // DEBUG_PRINT("DEBUG: base64_to_binary returned count = %zu\n", r);
-//             // if (back_bufsize % 4 != 0) {
-//             //     DEBUG_PRINT(RED_TEXT("DEBUG: base64_to_binary error: not a multiple of 4\n"));
-//             //     ASSERT_TRUE(r.error == NOT_MULTIPLE_OF_FOUR);
-//             // } else {
-//             //     DEBUG_PRINT(GREEN_TEXT("DEBUG: base64_to_binary success\n"));
-//             //     ASSERT_TRUE(r.error == BASE64_SUCCESS);
-
-//             // }
-//             // ASSERT_EQUAL_SIZE(r.count, len);
-//             // if (len > 0) {
-//             //     ASSERT_TRUE(memcmp(back, source, len) == 0);
-//             // }
-//         // }
-
-//         OPENSSL_free(source);
-//         OPENSSL_free(buffer);
-//         OPENSSL_free(back);
-//     }
-//     return 1;
-// }
 
 static int test_roundtrip_base64_with_spaces(void) {
     size_t len, i, j;
@@ -1416,7 +1268,7 @@ static int test_roundtrip_base64_with_spaces(void) {
         DEBUG_PRINT("DEBUG: Source and decoded data match for simdutf for length %zu\n", len);
 
         /* **** OpenSSL decoding **** */
-        unsigned char *back_openssl = OPENSSL_malloc(back_bufsize);
+        unsigned char *back_openssl = OPENSSL_malloc(back_bufsize + 2);
         if (back_bufsize != 0 && back_openssl == NULL) {
             TEST_error("Out of memory for OpenSSL back buffer");
             OPENSSL_free(source);
@@ -1440,7 +1292,9 @@ static int test_roundtrip_base64_with_spaces(void) {
         /* Specific assertions comparing the two decoders */
         ASSERT_EQUAL_INT(result_openssl, result_simdutf);
         ASSERT_EQUAL_SIZE(outlen_openssl, outlen_simdutf);
-        // ASSERT_EQUAL_INT(result_openssl, len);
+        ASSERT_EQUAL_INT(result_openssl, len);
+
+        ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
 
         OPENSSL_free(source);
         OPENSSL_free(buffer);
@@ -2406,30 +2260,21 @@ static int test_roundtrip_base64(void) {
             return 0;
         }
 
-        if (back_simd == NULL) {
-            // TEST_error("Out of memory for back buffer");
-            DEBUG_PRINT("back_bufsize = %zu\n", back_bufsize);
-            DEBUG_PRINT("back_simd shouldn't be NULL\n");
-            // OPENSSL_free(source);
-            // OPENSSL_free(buffer);
-            // return 0;
-        }
-
         int outlen_simdutf = 0;
         int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, buffer, s);
         DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
-        // if (len == 0) {
-        //     ASSERT_EQUAL_INT(result_simdutf, 0);
-        // } else {
-        //     ASSERT_EQUAL_INT(result_simdutf, len);
-        // }
         for (int j = 0; j < len; j++) {
             ASSERT_EQUAL_HEX(j, back_simd[j], (unsigned char)source[j]);
         }
         DEBUG_PRINT("DEBUG: Source and decoded data match for simdutf for length %zu\n", len);
 
         /* **** OpenSSL decoding **** */
-        unsigned char *back_openssl = OPENSSL_malloc(back_bufsize + 2);
+        // NOTE: OpenSSL's base64 decoder differs slightly from the one used in simdutf.
+        // Whereas simdutf's will write just the right amount of data, OpenSSL's will
+        // always write by chunks of 3 bytes, even if the last chunk is not full.
+        // hence the +2 in the malloc below.
+        unsigned char *back_openssl = OPENSSL_malloc(back_bufsize +2);
+        // back_openssl[back_bufsize] = '\0';
         if (back_bufsize != 0 && back_openssl == NULL) {
             TEST_error("Out of memory for OpenSSL back buffer");
             OPENSSL_free(source);
@@ -2438,13 +2283,8 @@ static int test_roundtrip_base64(void) {
             return 0;
         }
         int outlen_openssl = 0;
-        int result_openssl = OpenSSL_decode(NULL, (char *)back_openssl, &outlen_openssl, buffer, (int)s);
+        int result_openssl = OpenSSL_decode(NULL, (char *)back_openssl, &outlen_openssl, buffer, s);
         DEBUG_PRINT("DEBUG: Decoded binary length openssl = %d\n", result_openssl);
-        // if (len == 0) {
-        //     ASSERT_EQUAL_INT(result_openssl, 0);
-        // } else {
-        //     ASSERT_EQUAL_INT(result_openssl, -1);
-        // }
         for (int j = 0; j < len; j++) {
             ASSERT_EQUAL_HEX(j, back_openssl[j], (unsigned char)source[j]);
         }
@@ -2455,23 +2295,8 @@ static int test_roundtrip_base64(void) {
         ASSERT_EQUAL_SIZE(outlen_openssl, outlen_simdutf);
 
         ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
-        // if (result_openssl > -1) {
-        //     TEST_error("DEBUG: result_openssl not -1\n");
-        //     return 0;
-        // }
-        // ASSERT_NOT_EQUAL_INT(result_openssl, -1);
+
         ASSERT_EQUAL_INT(result_openssl, len);
-
-
-    //    if (s %4 == 0 & result_simdutf != -1) {
-    //         ASSERT_EQUAL_INT(result_openssl, len);
-    //     } 
-        // else {
-            // ASSERT_EQUAL_INT(result_openssl, -1);
-            // if (result_openssl == -1) {
-            //     TEST_error("DEBUG: result_openssl = -1\n");
-            // }
-        // }
 
         OPENSSL_free(source);
         OPENSSL_free(buffer);
@@ -3447,8 +3272,8 @@ int setup_tests(void)
     // ADD_TEST(test_seof_bad_cases);
 
     // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); // OpenSSL OK
-    // ADD_TEST(test_roundtrip_base64_with_spaces); //OpenSSL FAIL,multiple of four, incorrect len
-    ADD_TEST(test_roundtrip_base64);
+    ADD_TEST(test_roundtrip_base64_with_spaces); //OpenSSL FAIL,multiple of four, incorrect len
+    // ADD_TEST(test_roundtrip_base64);
 
 
 
