@@ -756,6 +756,7 @@ __owur int EVP_Cipher(EVP_CIPHER_CTX *c,
               size_t input_count;
               size_t output_count;
               size_t whitespaces;
+              size_t padding;
           } full_result;
           
 
