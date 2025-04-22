@@ -646,7 +646,7 @@ static int inline check_cases(case_pair *cases, size_t num_cases)
 
         // *** OpenSSL part ***
 
-        unsigned char *buffer_openssl = OPENSSL_malloc(max_len);
+        unsigned char *buffer_openssl = OPENSSL_malloc(max_len + 2);
         if (buffer_openssl == NULL) {
             TEST_error("Out of memory");
             return 0;
@@ -3200,7 +3200,7 @@ int setup_tests(void)
 
 
     // Need fixing 
-    // ADD_TEST(test_encode_base64_basic_cases); // OpenSSL OK
+    ADD_TEST(test_encode_base64_basic_cases); // OpenSSL OK
     // ADD_TEST(test_seof_bad_basic_cases); 
     // ADD_TEST(test_seof_bad_cases);
     // ADD_TEST(test_roundtrip_base64_with_spaces); //OpenSSL FAIL,multiple of four, incorrect len
