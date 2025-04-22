@@ -710,6 +710,7 @@ static int inline check_seof(case_pair *cases, size_t num_cases)
         }
         int outlen_simdutf = 0;
         int simdutf_result = simdutf_decode(NULL, (char *)buffer, &outlen_simdutf, cases[i].encoded, enc_len);
+        DEBUG_PRINT(GREEN_TEXT("DEBUG: simdutf_result = %d\n"), simdutf_result);
 
 
         // for(size_t j = 0; j < simdutf_result; j++) {
@@ -721,11 +722,11 @@ static int inline check_seof(case_pair *cases, size_t num_cases)
         //     }
         // }
 
-        buffer[simdutf_result] = '\0'; // Null-terminate the string
+        // buffer[simdutf_result] = '\0'; // Null-terminate the string
 
         // *** OpenSSL part ***
 
-        unsigned char *buffer_openssl = OPENSSL_malloc(max_len + 1);
+        unsigned char *buffer_openssl = OPENSSL_malloc(max_len + 4);
         if (buffer_openssl == NULL) {
             TEST_error("Out of memory");
             return 0;
@@ -743,7 +744,7 @@ static int inline check_seof(case_pair *cases, size_t num_cases)
         //     }
         // }
 
-        buffer_openssl[openssl_outlen] = '\0'; // Null-terminate the string
+        // buffer_openssl[openssl_outlen] = '\0'; // Null-terminate the string
 
         printf("max_len: %zu\n", max_len);
         printf("simdutf_result: %d\n", simdutf_result);
@@ -756,7 +757,7 @@ static int inline check_seof(case_pair *cases, size_t num_cases)
         // ****** TEST SPECIFIC ASSERTIONS ******
 
         ASSERT_MEM_EQUAL(buffer_openssl, buffer, outlen_simdutf);
-        PRINT_STRINGS(buffer_openssl, buffer, outlen_simdutf);
+        // PRINT_STRINGS(buffer_openssl, buffer, outlen_simdutf);
 
         // ASSERT_EQUAL_INT(openssl_outlen, strlen(cases[i].decoded));
         // ASSERT_EQUAL_INT(outlen_simdutf, strlen(cases[i].decoded));
@@ -767,6 +768,60 @@ static int inline check_seof(case_pair *cases, size_t num_cases)
     }
     return 1;
 }
+
+// static int inline check_seof(case_pair *cases, size_t num_cases)
+// {
+//     DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered base64_tail_decode_trim_end Test\n"));
+
+//     for (size_t i = 0; i < num_cases; i++) {
+//         size_t enc_len  = strlen(cases[i].encoded);
+//         size_t max_len  = maximal_binary_length_from_base64(cases[i].encoded,
+//                                                             enc_len);
+
+//         /* -- simdutf decode (needs +2 bytes for \\n and NUL) */
+//         unsigned char *simd_buf = OPENSSL_malloc(max_len + 2);
+//         if (!simd_buf) {
+//             TEST_error("Out of memory (simdutf) in case %zu", i);
+//             return 0;
+//         }
+//         int outlen_simd = 0;
+//         int simd_ret = simdutf_decode(NULL,
+//                                       (char *)simd_buf,
+//                                       &outlen_simd,
+//                                       cases[i].encoded,
+//                                       enc_len);
+//         DEBUG_PRINT("DEBUG: simdutf_ret = %d, outlen_simd = %d\n",
+//                     simd_ret, outlen_simd);
+
+//         /* -- OpenSSL decode (also needs +2) */
+//         unsigned char *ossl_buf = OPENSSL_malloc(max_len + 2);
+//         if (!ossl_buf) {
+//             TEST_error("Out of memory (OpenSSL) in case %zu", i);
+//             OPENSSL_free(simd_buf);
+//             return 0;
+//         }
+//         int outlen_ossl = 0;
+//         int ossl_ret = OpenSSL_decode(NULL,
+//                                       (char *)ossl_buf,
+//                                       &outlen_ossl,
+//                                       cases[i].encoded,
+//                                       enc_len);
+//         DEBUG_PRINT("DEBUG: ossl_ret = %d, outlen_ossl = %d\n",
+//                     ossl_ret, outlen_ossl);
+
+//         /* -- They should agree */
+//         ASSERT_EQUAL_INT(simd_ret,     ossl_ret);
+//         ASSERT_EQUAL_INT(outlen_simd,  outlen_ossl);
+
+//         /* -- Compare raw bytes (no NUL termination needed) */
+//         ASSERT_MEM_EQUAL(ossl_buf, simd_buf, outlen_simd);
+
+//         OPENSSL_free(simd_buf);
+//         OPENSSL_free(ossl_buf);
+//     }
+//     return 1;
+// }
+
 
 static int inline check_cases_no_padding(case_pair *cases, size_t num_cases)
 {
@@ -3195,13 +3250,14 @@ int setup_tests(void)
     // ADD_TEST(test_issue_509);
     // ADD_TEST(test_issue_504_8bit); 
     // ADD_TEST(test_issue_502_alt);
+    ADD_TEST(test_encode_base64_basic_cases); // OpenSSL OK
+    ADD_TEST(test_seof_bad_basic_cases); 
 
     // ADD_TEST(test_bad_padding_base64);
 
 
     // Need fixing 
-    ADD_TEST(test_encode_base64_basic_cases); // OpenSSL OK
-    // ADD_TEST(test_seof_bad_basic_cases); 
+
     // ADD_TEST(test_seof_bad_cases);
     // ADD_TEST(test_roundtrip_base64_with_spaces); //OpenSSL FAIL,multiple of four, incorrect len
     // ADD_TEST(test_roundtrip_base64_with_garbage);
