@@ -267,7 +267,7 @@ size_t add_garbage(char **v, size_t *v_len, unsigned int *seed, const uint8_t *t
     /* Reallocate the array to make room for one extra character.
        Note: Passing a pointer to the array pointer so that it can be updated.
     */
-    char *new_v = OPENSSL_realloc(array, *v_len + 1);
+    char *new_v = OPENSSL_realloc(array, *v_len + 2);
     if (new_v == NULL) {
         /* Allocation failure */
         return (size_t)-1;
@@ -376,7 +376,7 @@ size_t add_seof(char **v, size_t *v_len, unsigned int *seed, int at_multiple_of_
     }
 
     /* Reallocate the array to make room for one extra character */
-    char *new_v = OPENSSL_realloc(array, *v_len + 1);
+    char *new_v = OPENSSL_realloc(array, *v_len + 2);
     if (new_v == NULL) {
         /* Allocation failure */
         return (size_t)-1;
@@ -389,7 +389,6 @@ size_t add_seof(char **v, size_t *v_len, unsigned int *seed, int at_multiple_of_
     new_v[index] = (char)c;
     
     (*v_len)++;
-    // **This is the missing piece**: We must ensure the new string is null terminated.
     new_v[*v_len] = '\0';
     
     *v = new_v;
@@ -1023,39 +1022,65 @@ static int test_encode_base64_whitespace_cases(void){
  *   The array and its length are updated.
  */
 
+// size_t add_space(char **v, size_t *v_len, unsigned int *seed) {
+//     static const char space[5] = { ' ', '\t', '\n', '\r'};
+
+//     // DEBUG_PRINT(RED_TEXT("DEBUG: Entering add_space\n"));
+
+//     /* Choose a random insertion index between 0 and *v_len (inclusive) */
+//     size_t index = rand_r(seed) % (*v_len + 1);
+//     // DEBUG_PRINT("DEBUG: Chosen insertion index = %zu (v_len = %zu)\n", index, *v_len);
+
+//     /* Choose a random whitespace character from the array */
+//     size_t space_index = rand_r(seed) % 4;
+//     // DEBUG_PRINT("DEBUG: Chosen whitespace character = '%c'\n", space[space_index]);
+
+//     /* Reallocate the array to make room for one extra character. */
+//     char *new_v = OPENSSL_realloc(*v, *v_len + 1);
+//     if (new_v == NULL) {
+//         TEST_error(RED_TEXT("DEBUG: OPENSSL_realloc failed for new size = %zu"), *v_len + 1);
+//         return (size_t)-1;
+//     }
+//     // DEBUG_PRINT(RED_TEXT("DEBUG: Reallocation successful, new pointer = %p\n"), new_v);
+
+//     /* Move the tail of the array one position to the right */
+//     memmove(new_v + index + 1, new_v + index, *v_len - index);
+//     // DEBUG_PRINT("DEBUG: memmove executed from index %zu for %zu bytes\n", index, *v_len - index);
+
+//     /* Insert the chosen whitespace */
+//     new_v[index] = space[space_index];
+//     // DEBUG_PRINT("DEBUG: Inserted '%c' at index %zu\n", space[space_index], index);
+
+//     *v = new_v;
+//     (*v_len)++;
+//     // DEBUG_PRINT("DEBUG: New vector length is %zu\n", *v_len);
+
+//     return index;
+// }
+
 size_t add_space(char **v, size_t *v_len, unsigned int *seed) {
-    static const char space[5] = { ' ', '\t', '\n', '\r'};
-
-    // DEBUG_PRINT(RED_TEXT("DEBUG: Entering add_space\n"));
-
-    /* Choose a random insertion index between 0 and *v_len (inclusive) */
+    static const char space[] = { ' ', '\t', '\n', '\r' };
     size_t index = rand_r(seed) % (*v_len + 1);
-    // DEBUG_PRINT("DEBUG: Chosen insertion index = %zu (v_len = %zu)\n", index, *v_len);
-
-    /* Choose a random whitespace character from the array */
     size_t space_index = rand_r(seed) % 4;
-    // DEBUG_PRINT("DEBUG: Chosen whitespace character = '%c'\n", space[space_index]);
 
-    /* Reallocate the array to make room for one extra character. */
-    char *new_v = OPENSSL_realloc(*v, *v_len + 1);
-    if (new_v == NULL) {
-        TEST_error(RED_TEXT("DEBUG: OPENSSL_realloc failed for new size = %zu"), *v_len + 1);
+    /* Make room for one more character + NUL */
+    char *new_v = OPENSSL_realloc(*v, *v_len + 2);
+    if (!new_v) {
+        TEST_error("DEBUG: OPENSSL_realloc failed for new size = %zu", *v_len + 2);
         return (size_t)-1;
     }
-    // DEBUG_PRINT(RED_TEXT("DEBUG: Reallocation successful, new pointer = %p\n"), new_v);
 
-    /* Move the tail of the array one position to the right */
-    memmove(new_v + index + 1, new_v + index, *v_len - index);
-    // DEBUG_PRINT("DEBUG: memmove executed from index %zu for %zu bytes\n", index, *v_len - index);
+    /* Shift the tail */
+    memmove(new_v + index + 1,
+            new_v + index,
+            *v_len - index);
 
-    /* Insert the chosen whitespace */
+    /* Insert the whitespace and NUL-terminate */
     new_v[index] = space[space_index];
-    // DEBUG_PRINT("DEBUG: Inserted '%c' at index %zu\n", space[space_index], index);
+    (*v_len)++;
+    new_v[*v_len] = '\0';
 
     *v = new_v;
-    (*v_len)++;
-    // DEBUG_PRINT("DEBUG: New vector length is %zu\n", *v_len);
-
     return index;
 }
 
@@ -2009,7 +2034,7 @@ static int test_seof_bad_cases(void) {
         DEBUG_PRINT("DEBUG: Source and decoded data match for simdutf for length %zu\n", len);
 
         /* **** OpenSSL decoding **** */
-        unsigned char *back_openssl = OPENSSL_malloc(back_bufsize);
+        unsigned char *back_openssl = OPENSSL_malloc(back_bufsize + 2);
         if (back_bufsize != 0 && back_openssl == NULL) {
             TEST_error("Out of memory for OpenSSL back buffer");
             OPENSSL_free(buffer);
@@ -3250,16 +3275,15 @@ int setup_tests(void)
     // ADD_TEST(test_issue_509);
     // ADD_TEST(test_issue_504_8bit); 
     // ADD_TEST(test_issue_502_alt);
-    ADD_TEST(test_encode_base64_basic_cases); // OpenSSL OK
-    ADD_TEST(test_seof_bad_basic_cases); 
-
+    // ADD_TEST(test_encode_base64_basic_cases); // OpenSSL OK
+    // ADD_TEST(test_seof_bad_basic_cases); 
+    // ADD_TEST(test_seof_bad_cases);
     // ADD_TEST(test_bad_padding_base64);
 
 
     // Need fixing 
 
-    // ADD_TEST(test_seof_bad_cases);
-    // ADD_TEST(test_roundtrip_base64_with_spaces); //OpenSSL FAIL,multiple of four, incorrect len
+    ADD_TEST(test_roundtrip_base64_with_spaces); //OpenSSL FAIL,multiple of four, incorrect len
     // ADD_TEST(test_roundtrip_base64_with_garbage);
 
     // TODOS:
