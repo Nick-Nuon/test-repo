@@ -743,6 +743,7 @@ __owur int EVP_Cipher(EVP_CIPHER_CTX *c,
         NOT_MULTIPLE_OF_FOUR, // The base64 input is not a multiple of four after 
                                 // removing padding and removing white spaces at beginning.
         OTHER,                     // Not related to validation/transcoding.
+        EXTRA_PADDING, // There is extra padding in the input string that shouldn't be here.
         } error_code;
         
           typedef struct result {
@@ -756,7 +757,8 @@ __owur int EVP_Cipher(EVP_CIPHER_CTX *c,
               size_t input_count;
               size_t output_count;
               size_t whitespaces;
-              size_t padding;
+              size_t padding; // padding removed by base64_tail_decode_trim_end
+              size_t internal_padding; // padding removed by the scalar kernel
           } full_result;
           
 

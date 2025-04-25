@@ -2489,6 +2489,7 @@ static int test_bad_padding_base64(void) {
         }
 
         if (padding == 1) {
+            DEBUG_PRINT("DEBUG: Padding = 1\n");
             /* Case: one padding character exists.
              * Append an extra '=' and then insert 5 spaces. It should break
              */
@@ -2565,263 +2566,83 @@ static int test_bad_padding_base64(void) {
             OPENSSL_free(copy);
         }
 
+        else
+         if (padding == 2) {
+            DEBUG_PRINT("DEBUG: Padding = 2\n");
+            /* Case: two padding characters exist.
+             * Append “==” and then insert 5 spaces — this must also fail.
+             */
+            /* allocate s+2 bytes for the “==” plus one for the NUL */
+            char *copy2 = OPENSSL_malloc(s + 3);
+            if (!copy2) {
+                TEST_error("Out of memory for copy2");
+                OPENSSL_free(source);
+                OPENSSL_free(buffer);
+                return 0;
+            }
+            /* copy the original, append “==” */
+            memcpy(copy2, buffer, s);
+            copy2[s]   = '=';
+            copy2[s+1] = '=';
+            copy2[s+2] = '\0';
+            size_t copy2_len = s + 2;
+        
+            /* sprinkle in 5 random whitespace chars */
+            for (i = 0; i < 5; i++) {
+                size_t pos = add_space(&copy2, &copy2_len, &seed);
+                if (pos == (size_t)-1) {
+                    TEST_error("Out of memory in add_space for length %zu", copy2_len);
+                    OPENSSL_free(source);
+                    OPENSSL_free(buffer);
+                    OPENSSL_free(copy2);
+                    return 0;
+                }
+            }
+        
+            /* simdutf must reject it */
+            unsigned char *back_simd2 = OPENSSL_malloc(back_bufsize);
+            if (back_bufsize != 0 && back_simd2 == NULL) {
+                TEST_error("Out of memory for simdutf back buffer");
+                OPENSSL_free(copy2);
+                return 0;
+            }
+            int outlen_simdutf2 = 0;
+            int result_simdutf2 =
+                simdutf_decode(NULL, (char *)back_simd2, &outlen_simdutf2,
+                               copy2, copy2_len);
+            DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf2);
+            ASSERT_EQUAL_INT(result_simdutf2, -1);
+            OPENSSL_free(back_simd2);
+        
+            /* (Optionally) check that OpenSSL also rejects it */
+            unsigned char *back_openssl2 = OPENSSL_malloc(back_bufsize + 2);
+            int outlen_openssl2 = 0;
+            int result_openssl2 =
+                OpenSSL_decode(NULL, (char *)back_openssl2, &outlen_openssl2,
+                               copy2, copy2_len);
+            DEBUG_PRINT("DEBUG: Decoded binary length openssl = %d\n", result_openssl2);
+            ASSERT_EQUAL_INT(result_openssl2, -1);
+
+            ASSERT_EQUAL_INT(result_openssl2, result_simdutf2);
+            if ((copy2_len - 5) % 64 == 2) {
+                ASSERT_EQUAL_INT(outlen_openssl2, max(0,(copy2_len - 5)/4 * 3 - (((copy2_len - 5)/4 * 3) % 48)) -2);
+            } else {
+                ASSERT_EQUAL_INT(outlen_openssl2, max(0,(copy2_len - 5)/4 * 3 - (((copy2_len - 5)/4 * 3) % 48)));
+            }            
+            ASSERT_EQUAL_SIZE(outlen_openssl2, outlen_simdutf2);
+
+            OPENSSL_free(back_openssl2);
+        
+            OPENSSL_free(copy2);
+        }
+        
+
         OPENSSL_free(source);
         OPENSSL_free(buffer);
         OPENSSL_free(back);
     }
     return 1;
 }
-
-// static int test_bad_padding_base64(void)
-// {
-//     size_t len;
-//     unsigned int seed = 12345;  /* Fixed seed for reproducibility */
-
-//     for (len = 0; len < 2048; len++) {
-//         DEBUG_PRINT(CYAN_TEXT("DEBUG: Processing binary length = %zu\n"), len);
-
-//         /* --- Prepare random binary source --- */
-//         char *source = (len > 0) ? OPENSSL_malloc(len) : NULL;
-//         if (len > 0 && source == NULL) {
-//             TEST_error("Out of memory for source of length %zu", len);
-//             return 0;
-//         }
-//         for (size_t i = 0; i < len; i++) {
-//             source[i] = (char)(rand_r(&seed) % 256);
-//         }
-
-//         /* --- Base64‐encode it --- */
-//         size_t b64_expect = base64_length_from_binary(len);
-//         char *buffer = OPENSSL_malloc(b64_expect + 1);
-//         if (buffer == NULL) {
-//             TEST_error("Out of memory for Base64 buffer for length %zu", len);
-//             OPENSSL_free(source);
-//             return 0;
-//         }
-//         size_t s = tail_encode_base64(NULL, buffer, source, len);
-//         buffer[s] = '\0';
-//         DEBUG_PRINT("DEBUG: Encoded (len=%zu): \"%s\"\n", s, buffer);
-
-//         /* Shrink to exact length+NUL */
-//         if (s > 0) {
-//             char *tmp = OPENSSL_realloc(buffer, s + 1);
-//             if (tmp) buffer = tmp;
-//         }
-
-//         /* --- Detect single‐‘=’ padding case --- */
-//         size_t padding = 0;
-//         if (s > 0 && buffer[s - 1] == '=') {
-//             padding++;
-//             if (s > 1 && buffer[s - 2] == '=') {
-//                 padding++;
-//             }
-//         }
-
-//         if (padding == 1) {
-//             /* Build a “bad” copy: append one more '=' then insert 5 spaces */
-//             size_t copy_len = s + 1;
-//             char *copy = OPENSSL_malloc(copy_len + 1);
-//             if (copy == NULL) {
-//                 TEST_error("Out of memory for copy buffer");
-//                 OPENSSL_free(source);
-//                 OPENSSL_free(buffer);
-//                 return 0;
-//             }
-//             memcpy(copy, buffer, s);
-//             copy[s] = '=';
-//             for (int i = 0; i < 5; i++) {
-//                 if (add_space(&copy, &copy_len, &seed) == (size_t)-1) {
-//                     TEST_error("Out of memory in add_space for length %zu", copy_len);
-//                     OPENSSL_free(source);
-//                     OPENSSL_free(buffer);
-//                     OPENSSL_free(copy);
-//                     return 0;
-//                 }
-//             }
-//             copy[copy_len] = '\0';
-
-//             size_t back_bufsize = maximal_binary_length_from_base64(copy, copy_len);
-//             DEBUG_PRINT("DEBUG: back_bufsize = %zu\n", back_bufsize);
-
-//             /* ---- simdutf decoding ---- */
-//             unsigned char *back_simd = OPENSSL_malloc(back_bufsize + 1);
-//             if (back_bufsize != 0 && back_simd == NULL) {
-//                 TEST_error("Out of memory for simdutf back buffer");
-//                 OPENSSL_free(source);
-//                 OPENSSL_free(buffer);
-//                 OPENSSL_free(copy);
-//                 return 0;
-//             }
-//             int outlen_simd = 0;
-//             int rc_simd = simdutf_decode(NULL, (char *)back_simd, &outlen_simd, copy, copy_len);
-//             DEBUG_PRINT("DEBUG: simdutf_decode → rc=%d, outlen=%d\n", rc_simd, outlen_simd);
-//             ASSERT_EQUAL_INT(rc_simd,    -1);
-//             ASSERT_EQUAL_INT(outlen_simd, 0);
-//             OPENSSL_free(back_simd);
-
-//             /* ---- OpenSSL decoding ---- */
-//             unsigned char *back_ssl = OPENSSL_malloc(back_bufsize + 2);
-//             if (back_bufsize != 0 && back_ssl == NULL) {
-//                 TEST_error("Out of memory for OpenSSL back buffer");
-//                 OPENSSL_free(source);
-//                 OPENSSL_free(buffer);
-//                 OPENSSL_free(copy);
-//                 return 0;
-//             }
-//             int outlen_ssl = 0;
-//             int rc_ssl = OpenSSL_decode(NULL, (char *)back_ssl, &outlen_ssl, copy, copy_len);
-//             DEBUG_PRINT("DEBUG: OpenSSL_decode → rc=%d, outlen=%d\n", rc_ssl, outlen_ssl);
-//             ASSERT_EQUAL_INT(rc_ssl,    -1);
-//             ASSERT_EQUAL_INT(outlen_ssl, 0);
-//             OPENSSL_free(back_ssl);
-
-//             /* Both implementations must agree */
-//             ASSERT_EQUAL_INT(rc_ssl,    rc_simd);
-//             ASSERT_EQUAL_SIZE(outlen_ssl, outlen_simd);
-
-//             OPENSSL_free(copy);
-//         }
-
-//         OPENSSL_free(source);
-//         OPENSSL_free(buffer);
-//     }
-
-//     return 1;
-// }
-
-// static int test_bad_padding_base64(void) {
-//     size_t len, trial, i;
-//     unsigned int seed = 12345;  /* Fixed seed for reproducibility */
-//     DEBUG_PRINT(CYAN_TEXT("DEBUG: Entered test_bad_padding_base64\n"));
-
-//     for (len = 0; len < 2048; len++) {
-//         DEBUG_PRINT(BRIGHT_YELLOW_BG(BRIGHT_WHITE_TEXT("DEBUG: Processing length = %zu\n")), len);
-
-//         /* Allocate source binary data */
-//         char *source = (len > 0) ? OPENSSL_malloc(len) : NULL;
-//         if (len > 0 && !source) {
-//             TEST_error("Out of memory for source of length %zu", len);
-//             return 0;
-//         }
-//         for (i = 0; i < len; i++) {
-//             source[i] = (char)(rand_r(&seed) % 256);
-//         }
-
-//         /* Allocate buffer for Base64 conversion */
-//         size_t b64_len_expected = base64_length_from_binary(len);
-//         char *buffer = OPENSSL_malloc(b64_len_expected + 1);
-//         if (!buffer) {
-//             TEST_error("Out of memory for Base64 buffer for length %zu", len);
-//             if (source) OPENSSL_free(source);
-//             return 0;
-//         }
-//         size_t s = tail_encode_base64(NULL, buffer, source, len);
-//         buffer[s] = '\0';
-//         DEBUG_PRINT("DEBUG: Base64 encoded result (length %zu): \"%s\"\n", s, buffer);
-
-//         /* Determine padding count in the encoded string */
-//         size_t padding = 0;
-//         if (s > 0 && buffer[s - 1] == '=') {
-//             padding++;
-//             if (s > 1 && buffer[s - 2] == '=') {
-//                 padding++;
-//             }
-//         }
-
-//         /* Shrink to actual length (so realloc at zero won’t free it) */
-//         if (s != 0) {
-//             char *tmp = OPENSSL_realloc(buffer, s);
-//             if (tmp) buffer = tmp;
-//         }
-
-//         /* Prepare decode buffer */
-//         size_t back_bufsize = maximal_binary_length_from_base64(buffer, s);
-//         DEBUG_PRINT("DEBUG: Back buffer size (maximal binary length) = %zu\n", back_bufsize);
-//         char *back = OPENSSL_malloc(back_bufsize);
-//         if (!back && back_bufsize != 0) {
-//             TEST_error("Out of memory for back buffer");
-//             OPENSSL_free(source);
-//             OPENSSL_free(buffer);
-//             return 0;
-//         }
-
-//         if (padding == 1) {
-//             /* Case: one padding char.  Append '=' and then insert 5 spaces. */
-//             char *copy = OPENSSL_malloc(s + 1);
-//             if (!copy) {
-//                 TEST_error("Out of memory for copy");
-//                 OPENSSL_free(source);
-//                 OPENSSL_free(buffer);
-//                 OPENSSL_free(back);
-//                 return 0;
-//             }
-//             memcpy(copy, buffer, s);
-//             copy[s] = '=';         /* now length = s+1 */
-//             size_t copy_len = s + 1;
-
-//             /* insert 5 spaces at random positions */
-//             for (i = 0; i < 5; i++) {
-//                 if (add_space(&copy, &copy_len, &seed) == (size_t)-1) {
-//                     TEST_error("Out of memory in add_space for length %zu", copy_len);
-//                     OPENSSL_free(source);
-//                     OPENSSL_free(buffer);
-//                     OPENSSL_free(back);
-//                     OPENSSL_free(copy);
-//                     return 0;
-//                 }
-//             }
-
-//             /* ensure room for final '\0' */
-//             {
-//                 char *tmp = OPENSSL_realloc(copy, copy_len + 1);
-//                 if (!tmp) {
-//                     TEST_error("Out of memory resizing copy to %zu+1", copy_len);
-//                     OPENSSL_free(source);
-//                     OPENSSL_free(buffer);
-//                     OPENSSL_free(back);
-//                     OPENSSL_free(copy);
-//                     return 0;
-//                 }
-//                 copy = tmp;
-//             }
-//             copy[copy_len] = '\0';
-
-//             /* **** simdutf decoding **** */
-//             unsigned char *back_simd = OPENSSL_malloc(back_bufsize);
-//             if (back_bufsize != 0 && back_simd == NULL) {
-//                 TEST_error("Out of memory for simdutf back buffer");
-//                 OPENSSL_free(source);
-//                 OPENSSL_free(buffer);
-//                 OPENSSL_free(back);
-//                 OPENSSL_free(copy);
-//                 return 0;
-//             }
-//             int outlen_simdutf = 0;
-//             int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, copy, copy_len);
-//             DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
-//             ASSERT_EQUAL_INT(result_simdutf, -1);
-//             OPENSSL_free(back_simd);
-
-//             /* **** OpenSSL decoding **** */
-//             unsigned char *back_openssl = OPENSSL_malloc(back_bufsize +2);
-//             int outlen_openssl = 0;
-//             int result_openssl = OpenSSL_decode(NULL, (char *)back_openssl, &outlen_openssl, copy, copy_len);
-//             DEBUG_PRINT("DEBUG: Decoded binary length openssl = %d\n", result_openssl);
-//             ASSERT_EQUAL_INT(result_openssl, -1);
-//             ASSERT_EQUAL_INT(outlen_openssl, 0);
-//             OPENSSL_free(back_openssl);
-
-//             OPENSSL_free(copy);
-//         }
-
-//         OPENSSL_free(source);
-//         OPENSSL_free(buffer);
-//         OPENSSL_free(back);
-//     }
-
-//     return 1;
-// }
-
 
 // static int test_doomed_base64_roundtrip(void)
 // {
@@ -3261,32 +3082,29 @@ static int test_bad_padding_base64(void) {
 int setup_tests(void)
 {
     // // Register our sample test. The macro ADD_TEST() takes our test function.
-    // ADD_TEST(test_decode_base64_cases); // OpenSSL FAIL: multiple of four
-    // ADD_TEST(test_complete_decode_base64_cases); // OpenSSL FAIL: multiple of four
-    // ADD_TEST(test_encode_base64_no_padding_cases); // OpenSSL OK
-    // ADD_TEST(test_seof_good_basic_cases); 
-    // ADD_TEST(test_multiple_of_4_good);
-    // ADD_TEST(test_multiple_of_4_bad);
-    // ADD_TEST(test_seof_good_cases);
-    // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); // OpenSSL OK
-    // ADD_TEST(test_roundtrip_base64);
-    // ADD_TEST(test_base64_decode_just_one_padding_loose);
-    // ADD_TEST(test_issue_520);
-    // ADD_TEST(test_issue_509);
-    // ADD_TEST(test_issue_504_8bit); 
-    // ADD_TEST(test_issue_502_alt);
-    // ADD_TEST(test_encode_base64_basic_cases); // OpenSSL OK
-    // ADD_TEST(test_seof_bad_basic_cases); 
-    // ADD_TEST(test_seof_bad_cases);
-    // ADD_TEST(test_bad_padding_base64);
-
-
-    // Need fixing 
+    ADD_TEST(test_decode_base64_cases); // OpenSSL FAIL: multiple of four
+    ADD_TEST(test_complete_decode_base64_cases); // OpenSSL FAIL: multiple of four
+    ADD_TEST(test_encode_base64_no_padding_cases); // OpenSSL OK
+    ADD_TEST(test_seof_good_basic_cases); 
+    ADD_TEST(test_multiple_of_4_good);
+    ADD_TEST(test_multiple_of_4_bad);
+    ADD_TEST(test_seof_good_cases);
+    ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); // OpenSSL OK
+    ADD_TEST(test_roundtrip_base64);
+    ADD_TEST(test_base64_decode_just_one_padding_loose);
+    ADD_TEST(test_issue_520);
+    ADD_TEST(test_issue_509);
+    ADD_TEST(test_issue_504_8bit); 
+    ADD_TEST(test_issue_502_alt);
+    ADD_TEST(test_encode_base64_basic_cases); // OpenSSL OK
+    ADD_TEST(test_seof_bad_basic_cases); 
+    ADD_TEST(test_seof_bad_cases);
 
     ADD_TEST(test_roundtrip_base64_with_spaces); //OpenSSL FAIL,multiple of four, incorrect len
-    // ADD_TEST(test_roundtrip_base64_with_garbage);
+    ADD_TEST(test_roundtrip_base64_with_garbage);
 
     // TODOS:
+    ADD_TEST(test_bad_padding_base64);
     // ADD_TEST(test_doomed_truncated_base64_roundtrip);
     // ADD_TEST(test_doomed_base64_roundtrip);
     // ADD_TEST(test_streaming_base64_roundtrip);
