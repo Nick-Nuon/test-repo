@@ -267,7 +267,7 @@ size_t add_garbage(char **v, size_t *v_len, unsigned int *seed, const uint8_t *t
     /* Reallocate the array to make room for one extra character.
        Note: Passing a pointer to the array pointer so that it can be updated.
     */
-    char *new_v = OPENSSL_realloc(array, *v_len + 2);
+    char *new_v = OPENSSL_realloc(array, *v_len +2);
     if (new_v == NULL) {
         /* Allocation failure */
         return (size_t)-1;
@@ -283,6 +283,7 @@ size_t add_garbage(char **v, size_t *v_len, unsigned int *seed, const uint8_t *t
     
     *v = new_v;
     (*v_len)++;
+    new_v[*v_len] = '\0';
     return index;
 }
 
@@ -1514,7 +1515,7 @@ const static uint8_t to_base64_value[] = {
             DEBUG_PRINT("DEBUG: Source and decoded data match for simdutf for length %zu\n", len);
 
             /* **** OpenSSL decoding **** */
-            unsigned char *back_openssl = OPENSSL_malloc(back_bufsize);
+            unsigned char *back_openssl = OPENSSL_malloc(back_bufsize + 3);
             if (back_bufsize != 0 && back_openssl == NULL) {
                 TEST_error("Out of memory for OpenSSL back buffer");
                 OPENSSL_free(source);
@@ -3218,31 +3219,31 @@ static int test_bad_padding_base64(void) {
 int setup_tests(void)
 {
     // // Register our sample test. The macro ADD_TEST() takes our test function.
-    // ADD_TEST(test_decode_base64_cases); // OpenSSL FAIL: multiple of four
-    // ADD_TEST(test_complete_decode_base64_cases); // OpenSSL FAIL: multiple of four
-    // ADD_TEST(test_encode_base64_no_padding_cases); // OpenSSL OK
-    // ADD_TEST(test_seof_good_basic_cases); 
-    // ADD_TEST(test_multiple_of_4_good);
-    // ADD_TEST(test_multiple_of_4_bad);
-    // ADD_TEST(test_seof_good_cases);
-    // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); // OpenSSL OK
-    // ADD_TEST(test_roundtrip_base64);
-    // ADD_TEST(test_base64_decode_just_one_padding_loose);
-    // ADD_TEST(test_issue_520);
-    // ADD_TEST(test_issue_509);
-    // ADD_TEST(test_issue_504_8bit); 
-    // ADD_TEST(test_issue_502_alt);
-    // ADD_TEST(test_encode_base64_basic_cases); // OpenSSL OK
-    // ADD_TEST(test_seof_bad_basic_cases); 
-    // ADD_TEST(test_seof_bad_cases);
+    ADD_TEST(test_decode_base64_cases); 
+    ADD_TEST(test_complete_decode_base64_cases); 
+    ADD_TEST(test_encode_base64_no_padding_cases); 
+    ADD_TEST(test_seof_good_basic_cases); 
+    ADD_TEST(test_multiple_of_4_good);
+    ADD_TEST(test_multiple_of_4_bad);
+    ADD_TEST(test_seof_good_cases);
+    ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); 
+    ADD_TEST(test_roundtrip_base64);
+    ADD_TEST(test_base64_decode_just_one_padding_loose);
+    ADD_TEST(test_issue_520);
+    ADD_TEST(test_issue_509);
+    ADD_TEST(test_issue_504_8bit); 
+    ADD_TEST(test_issue_502_alt);
+    ADD_TEST(test_encode_base64_basic_cases); 
+    ADD_TEST(test_seof_bad_basic_cases); 
+    ADD_TEST(test_seof_bad_cases);
+    ADD_TEST(test_roundtrip_base64_with_spaces); 
+    ADD_TEST(test_roundtrip_base64_with_garbage);
+    ADD_TEST(test_bad_padding_base64);
 
-    // ADD_TEST(test_roundtrip_base64_with_spaces); //OpenSSL FAIL,multiple of four, incorrect len
-    // ADD_TEST(test_roundtrip_base64_with_garbage);
 
     // TODOS:
-    ADD_TEST(test_bad_padding_base64);
     // ADD_TEST(test_doomed_truncated_base64_roundtrip);
-    // ADD_TEST(test_doomed_base64_roundtrip);
+    // ADD_TEST(test_doomed_base64_roundtrip); // TODO: Probably a duplicate
     // ADD_TEST(test_streaming_base64_roundtrip);
     // ADD_TEST(test_readme_test);
     // ADD_TEST(test_doomed_partial_buffer_utf8);
