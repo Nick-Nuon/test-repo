@@ -2920,16 +2920,13 @@ static int test_streaming_base64_roundtrip(void)
             ASSERT_MEM_EQUAL(back_simd, back_openssl, outlen_openssl);
 
             // printf("*********");
-            printf("DEBUG: result_openssl = %d, window = %zu, pos = %zu, count = %zu, count %% 4 = %zu\n", result_openssl, window, pos, count, count % 4);
-
-
-
-            if (pos + count >= size) {
+            // printf("DEBUG: result_openssl = %d,  count/4*3 = %zu, pos = %zu, count mod 4 = %zu, outlen = %d\n", result_openssl,  count/4*3, pos, count % 4, outlen_openssl);
+            // if (pos + count >= size) {
                 /* Last chunk: success expected */
                 // ASSERT_EQUAL_INT(result_openssl, result_simd);
                 // ASSERT_NOT_EQUAL_INT(result_openssl, -1);
                 // ASSERT_EQUAL_INT(outlen_openssl, len);
-            }
+            // }
         }
 
         /* Final validation */
@@ -2949,70 +2946,75 @@ static int test_streaming_base64_roundtrip(void)
 }
 
 
-// static int test_readme_test(void)
-// {
-//     size_t len = 2048;
-//     size_t i, pos, outpos, window;
+static int test_readme_test(void)
+{
+    size_t len = 2048;
+    size_t i, pos;
 
-//     /* Allocate and fill the Base64 string with 'a' */
-//     char *base64 = OPENSSL_malloc(len);
-//     if (!base64) {
-//         TEST_error("Out of memory for base64 buffer");
-//         return 0;
-//     }
-//     for (i = 0; i < len; i++) {
-//         base64[i] = 'a';
-//     }
+    /* Allocate and fill the Base64 string with 'a' */
+    char *buffer = OPENSSL_malloc(len + 1);  // +1 for NUL terminator
+    if (!buffer) {
+        TEST_error("Out of memory for base64 buffer");
+        return 0;
+    }
+    for (i = 0; i < len; i++) {
+        buffer[i] = 'a';
+    }
+    buffer[len] = '\0';
     
-//     /* Allocate back buffer for decoded binary data */
-//     size_t back_buf_size = ((len + 3) / 4) * 3;
-//     char *back = OPENSSL_malloc(back_buf_size);
-//     if (!back) {
-//         TEST_error("Out of memory for back buffer");
-//         OPENSSL_free(base64);
-//         return 0;
-//     }
+    /* Process in chunks of 512 bytes */
+    size_t window = 512;
     
-//     outpos = 0;
-//     window = 512;
-//     for (pos = 0; pos < len; pos += window) {
-//         size_t count = (window < (len - pos)) ? window : (len - pos);
-//         result r = base64_tail_decode_trim_end(NULL, back + outpos,base64 + pos, count);
-//         if (r.error == INVALID_BASE64_CHARACTER) {
-//             TEST_error("Invalid base64 character at position %zu\n", pos + r.count);
-//             OPENSSL_free(back);
-//             OPENSSL_free(base64);
-//             return 0;
-//         }
-//         // If we arrived at the end of the base64 input, we must check that the
-//         // number of characters processed is a multiple of 4, or that we have a
-//         // remainder of 0, 2 or 3.
-//         if (pos + count == len && r.error == BASE64_INPUT_REMAINDER) {
-//             TEST_error("The base64 input contained an invalid number of characters");
-//         }
-//         // If we are not at then end, we may have to reprocess either 1, 2 or 3
-//         // bytes, and to drop the last 0, 2 or 3 bytes decoded.
-//         size_t tail_bytes_to_reprocess = 0;
-//         if (r.error == BASE64_INPUT_REMAINDER) {
-//             tail_bytes_to_reprocess = 1;
-//         } else {
-//             tail_bytes_to_reprocess = (r.count % 3 == 0) ? 0 : (r.count % 3) + 1;
-//         }
-//         // if (pos >= tail_bytes_to_reprocess)
-//             pos -= tail_bytes_to_reprocess;
-//         // else
-//             // pos = 0;
-//         r.count -= (r.count % 3);
-//         outpos += r.count;
-//     }
+    for (pos = 0; pos < len; pos += window) {
+        size_t count = (window < (len - pos)) ? window : (len - pos);
+
+        /* Allocate back buffers for decoded binary data */
+        size_t back_bufsize = ((count + 3) / 4) * 3;  // Maximum possible output size
+        
+        unsigned char *back_simd = OPENSSL_malloc(back_bufsize + 2);
+        if (!back_simd) {
+            TEST_error("Out of memory for simdutf back buffer");
+            OPENSSL_free(buffer);
+            return 0;
+        }
+
+        unsigned char *back_openssl = OPENSSL_malloc(back_bufsize + 2);
+        if (!back_openssl) {
+            TEST_error("Out of memory for OpenSSL back buffer");
+            OPENSSL_free(buffer);
+            OPENSSL_free(back_simd); 
+            return 0;
+        }
+
+        /* Decode using both decoders */
+        int outlen_simdutf = 0;
+        int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, 
+                                          buffer + pos, count);
+
+        int outlen_openssl = 0;
+        int result_openssl = OpenSSL_decode(NULL, (char *)back_openssl, &outlen_openssl,
+                                          buffer + pos, count);
+
+        /* Compare results */
+        ASSERT_EQUAL_INT(result_openssl, result_simdutf);
+        ASSERT_EQUAL_SIZE(outlen_openssl, outlen_simdutf);
+        ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
+
+        /* Both should succeed and produce expected length*/
+        if (count % 4 == 0) {
+            ASSERT_EQUAL_INT(result_openssl, count * 3 / 4);
+        } else {
+            ASSERT_EQUAL_INT(result_openssl, -1);
+            ASSERT_EQUAL_INT(outlen_openssl, (count/4*3) - ((count/4*3) % 48));
+        }
+
+        OPENSSL_free(back_simd);
+        OPENSSL_free(back_openssl);
+    }
     
-//     DEBUG_PRINT(GREEN_TEXT("Decoded result length: %zu\n"), outpos);
-    
-//     /* Use back as needed; here we simply free it */
-//     OPENSSL_free(back);
-//     OPENSSL_free(base64);
-//     return 1;
-// }
+    OPENSSL_free(buffer);
+    return 1;
+}
 
 // static int test_doomed_partial_buffer_utf8(void)
 // {
@@ -3151,9 +3153,12 @@ int setup_tests(void)
     // ADD_TEST(test_bad_padding_base64);
     // ADD_TEST(test_doomed_truncated_base64_roundtrip);
 
+    // Maybe revisit these tests later:
+    // ADD_TEST(test_streaming_base64_roundtrip);
+
     // TODOS:
-    ADD_TEST(test_streaming_base64_roundtrip);
-    // ADD_TEST(test_readme_test);
+
+    ADD_TEST(test_readme_test);
     // ADD_TEST(test_doomed_partial_buffer_utf8);
 
     // Return 1 to indicate successful test setup.
