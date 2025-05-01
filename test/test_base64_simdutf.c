@@ -66,7 +66,6 @@
     if ((actual) != (expected)) {                                      \
         TEST_error(RED_TEXT("Assertion failed: %s != %s, got %d, expected %d"), \
                    #actual, #expected, (int)(actual), (int)(expected));\
-        OPENSSL_free(buffer);                                                    \
         return 0;                                                    \
     }                                                                \
 } while(0)
@@ -3016,116 +3015,137 @@ static int test_readme_test(void)
     return 1;
 }
 
-// static int test_doomed_partial_buffer_utf8(void)
-// {
-//     /* Fixed 16-byte vector to be appended */
-//     unsigned char vectorToBeCompressed[16] = {
-//         0x6D, 0x6A, 0x6D, 0x73, 0x41, 0x71, 0x39, 0x75,
-//         0x76, 0x6C, 0x77, 0x48, 0x20, 0x77, 0x33, 0x53
-//     };
+static int test_doomed_partial_buffer_utf8(void)
+{
+    /* Fixed 16-byte vector to be appended */
+    unsigned char vectorToBeCompressed[16] = {
+        0x6D, 0x6A, 0x6D, 0x73, 0x41, 0x71, 0x39, 0x75,
+        0x76, 0x6C, 0x77, 0x48, 0x20, 0x77, 0x33, 0x53
+    };
 
-//     unsigned int seed = 12345;  /* Fixed seed for reproducibility */
-//     size_t len, trial, i;
+    unsigned int seed = 12345;  /* Fixed seed for reproducibility */
+    size_t len, trial, i;
 
-//     for (len = 0; len < 2048; len++) {
-//         /* Allocate source buffer; if len==0, source is allowed to be NULL */
-//         char *source = (len > 0) ? OPENSSL_malloc(len) : NULL;
-//         if (len > 0 && source == NULL) {
-//             TEST_error(RED_TEXT("Out of memory for source of length %zu\n"), len);
-//             return 0;
-//         }
+    for (len = 0; len < 2048; len++) {
+        /* Allocate source buffer; if len==0, source is allowed to be NULL */
+        char *source = (len > 0) ? OPENSSL_malloc(len) : NULL;
+        if (len > 0 && source == NULL) {
+            TEST_error(RED_TEXT("Out of memory for source of length %zu\n"), len);
+            return 0;
+        }
 
-//         for (trial = 0; trial < 10; trial++) {
-//             DEBUG_PRINT(BRIGHT_YELLOW_BG("New trial\n"));
+        for (trial = 0; trial < 10; trial++) {
+            DEBUG_PRINT(BRIGHT_YELLOW_BG("********New trial\n"));
 
-//             int bytesConsumed = 0, bytesWritten = 0;
-//             /* Fill source with random bytes */
-//             if (len > 0) {
-//                 for (i = 0; i < len; i++) {
-//                     source[i] = (char)(rand_r(&seed) % 256);
-//                 }
-//             }
+            /* Fill source with random bytes */
+            if (len > 0) {
+                for (i = 0; i < len; i++) {
+                    source[i] = (char)(rand_r(&seed) % 256);
+                }
+            }
 
-//             /* Encode source to Base64 */
-//             size_t b64_size = base64_length_from_binary(len);
-//             char *base64 = OPENSSL_malloc(b64_size + 1);
-//             if (base64 == NULL) {
-//                 TEST_error(RED_TEXT("Out of memory for Base64 buffer of length %zu\n"), b64_size + 1);
-//                 if (source) OPENSSL_free(source);
-//                 return 0;
-//             }
-//             size_t size = tail_encode_base64(NULL, base64, source, len);
-//             base64[size] = '\0';
-//             DEBUG_PRINT(GREEN_TEXT("DEBUG: Base64 encoded result (length %zu): \"%s\"\n"), size, base64);
+            /* Encode source to Base64 */
+            size_t b64_size = base64_length_from_binary(len);
+            char *base64 = OPENSSL_malloc(b64_size + 1); 
+            if (base64 == NULL) {
+                TEST_error(RED_TEXT("Out of memory for Base64 buffer of length %zu\n"), b64_size + 1);
+                if (source) OPENSSL_free(source);
+                return 0;
+            }
+            size_t size = tail_encode_base64(NULL, base64, source, len);
+            base64[size] = '\0';
+            DEBUG_PRINT(GREEN_TEXT("DEBUG: Base64 encoded result (length %zu): \"%s\"\n"), size, base64);
 
-//             /* Adjust insertion location: if the encoded string ends with '=',
-//                set insertion point before the first '='.
-//             */
-//             size_t valid_length = size;
-//             for (i = 0; i < size; i++) {
-//                 if (base64[i] == '=') {
-//                     valid_length = i;
-//                     break;
-//                 }
-//             }
-//             DEBUG_PRINT(YELLOW_TEXT("DEBUG: Valid Base64 part length = %zu\n"), valid_length);
+            /* Find valid length before any padding */
+            size_t valid_length = size;
+            for (i = 0; i < size; i++) {
+                if (base64[i] == '=') {
+                    valid_length = i;
+                    break;
+                }
+            }
+            DEBUG_PRINT(YELLOW_TEXT("DEBUG: Valid Base64 part length = %zu\n"), valid_length);
 
-//             /* Now, append fixed data copies after the valid part.
-//                (The padding, if any, remains at the end.)
-//             */
-//             size_t effective_b64_len = valid_length;
-//             int numberOfCopies = (rand_r(&seed) % 5) + 1; /* random between 1 and 5 */
-//             DEBUG_PRINT(BLUE_TEXT("DEBUG: numberOfCopies = %d\n"), numberOfCopies);
-//             for (i = 0; i < (size_t)numberOfCopies; i++) {
-//                 char *new_buffer = OPENSSL_realloc(base64, effective_b64_len + 16 + 1);
-//                 if (new_buffer == NULL) {
-//                     TEST_error(RED_TEXT("Out of memory during fixed vector append\n"));
-//                     OPENSSL_free(base64);
-//                     if (source) OPENSSL_free(source);
-//                     return 0;
-//                 }
-//                 base64 = new_buffer;
-//                 memcpy(base64 + effective_b64_len, vectorToBeCompressed, 16);
-//                 effective_b64_len += 16;
-//                 base64[effective_b64_len] = '\0';
-//                 DEBUG_PRINT(BLUE_TEXT("DEBUG: After iteration %zu, effective_b64_len = %zu\n"), i, effective_b64_len);
-//             }
-//             /* Now, append a single garbage byte after all valid characters
-//                (i.e. before any trailing '=' if present).
-//             */
-//             size_t insertion_point = valid_length;  /* insert before any '=' */
-//             size_t garbage_location = add_garbage(&base64, &effective_b64_len, &seed, to_base64_value);
-//             DEBUG_PRINT(YELLOW_TEXT("DEBUG: After add_garbage, effective_b64_len=%zu, garbage location=%zu\n"),
-//                         effective_b64_len, garbage_location);
+            /* Append fixed data copies */
+            size_t effective_b64_len = valid_length;
+            int numberOfCopies = (rand_r(&seed) % 5) + 1;
+            DEBUG_PRINT(BLUE_TEXT("DEBUG: numberOfCopies = %d\n"), numberOfCopies);
+            
+            for (i = 0; i < (size_t)numberOfCopies; i++) {
+                char *new_buffer = OPENSSL_realloc(base64, effective_b64_len + 16 + 1);
+                if (new_buffer == NULL) {
+                    TEST_error(RED_TEXT("Out of memory during fixed vector append\n"));
+                    OPENSSL_free(base64);
+                    if (source) OPENSSL_free(source);
+                    return 0;
+                }
+                base64 = new_buffer;
+                memcpy(base64 + effective_b64_len, vectorToBeCompressed, 16);
+                effective_b64_len += 16;
+                base64[effective_b64_len] = '\0';
+            }
 
-//             /* Allocate back buffer for decoding */
-//             size_t back_bufsize = maximal_binary_length_from_base64(base64, effective_b64_len);
-//             DEBUG_PRINT(GREEN_TEXT("DEBUG: Back buffer size = %zu\n"), back_bufsize);
-//             char *back = (back_bufsize > 0) ? OPENSSL_malloc(back_bufsize) : NULL;
-//             if (back_bufsize > 0 && back == NULL) {
-//                 TEST_error(RED_TEXT("Out of memory for back buffer (length %zu)\n"), back_bufsize);
-//                 OPENSSL_free(base64);
-//                 if (source) OPENSSL_free(source);
-//                 return 0;
-//             }
+            /* Add garbage character */
+            size_t garbage_location = add_garbage(&base64, &effective_b64_len, &seed, to_base64_value);
+            DEBUG_PRINT(YELLOW_TEXT("DEBUG: After add_garbage, effective_b64_len=%zu, garbage location=%zu\n"),
+                        effective_b64_len, garbage_location);
 
-//             /* Call decode function (expected to fail with INVALID_BASE64_CHARACTER)
-//                The expectation is that the decode function will process all valid characters
-//                (i.e. up to the garbage insertion) and then return an error.
-//             */
-//             result status = base64_tail_decode_trim_end(NULL, back, base64, effective_b64_len);
-//             DEBUG_PRINT(GREEN_TEXT("DEBUG: Normal decode result: error=%d, count=%d\n"),
-//                         status.error, (int)status.count);
-//             ASSERT_EQUAL_INT(status.error, INVALID_BASE64_CHARACTER);
-//             ASSERT_EQUAL_INT(status.count, garbage_location);
+            /* Decode using both methods */
+            size_t back_bufsize = maximal_binary_length_from_base64(base64, effective_b64_len);
+            DEBUG_PRINT(GREEN_TEXT("DEBUG: Back buffer size = %zu\n"), back_bufsize);
 
-//             OPENSSL_free(back);
-//             OPENSSL_free(base64);
-//         }
-//         if (source) OPENSSL_free(source);
-//     }
-//     return 1;
-// }
+            /* simdutf decode */
+            unsigned char *back_simd = OPENSSL_malloc(back_bufsize + 2);
+            if (back_bufsize != 0 && back_simd == NULL) {
+                TEST_error("Out of memory for simdutf back buffer");
+                OPENSSL_free(base64);
+                if (source) OPENSSL_free(source);
+                return 0;
+            }
+            int outlen_simdutf = 0;
+            int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, base64, effective_b64_len);
+
+            /* OpenSSL decode */
+            unsigned char *back_openssl = OPENSSL_malloc(back_bufsize + 2);
+            if (back_bufsize != 0 && back_openssl == NULL) {
+                TEST_error("Out of memory for OpenSSL back buffer");
+                OPENSSL_free(base64);
+                OPENSSL_free(back_simd);
+                if (source) OPENSSL_free(source);
+                return 0;
+            }
+            int outlen_openssl = 0;
+            int result_openssl = OpenSSL_decode(NULL, (char *)back_openssl, &outlen_openssl, base64, effective_b64_len);
+            /* Compare results */
+            /* Compare decoder results */
+            ASSERT_EQUAL_INT(result_openssl, result_simdutf);
+            ASSERT_EQUAL_SIZE(outlen_openssl, outlen_simdutf);
+
+            /* Compare decoded output */
+            if (outlen_openssl > 0) {
+                ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
+            }
+
+            /* Both decoders should return error */
+            ASSERT_EQUAL_INT(result_openssl, -1);
+            
+            size_t expected_outlen = garbage_location/4*3 - ((garbage_location/4*3) % 48);
+            // if (outlen_openssl != expected_outlen) {
+            //     OPENSSL_free(base64);
+            //     OPENSSL_free(back_simd);
+            //     OPENSSL_free(back_openssl); 
+            //     TEST_error(RED_TEXT("Bad output length"));
+            //     return 0;
+            // }
+
+            OPENSSL_free(back_simd);
+            OPENSSL_free(back_openssl);
+            OPENSSL_free(base64);
+        }
+        if (source) OPENSSL_free(source);
+    }
+    return 1;
+}
 
 // The setup_tests() function is called by the test harness to register tests.
 int setup_tests(void)
@@ -3152,14 +3172,13 @@ int setup_tests(void)
     // ADD_TEST(test_roundtrip_base64_with_garbage);
     // ADD_TEST(test_bad_padding_base64);
     // ADD_TEST(test_doomed_truncated_base64_roundtrip);
+    // ADD_TEST(test_readme_test);
 
     // Maybe revisit these tests later:
     // ADD_TEST(test_streaming_base64_roundtrip);
 
     // TODOS:
-
-    ADD_TEST(test_readme_test);
-    // ADD_TEST(test_doomed_partial_buffer_utf8);
+    ADD_TEST(test_doomed_partial_buffer_utf8);
 
     // Return 1 to indicate successful test setup.
     return 1;

@@ -25,7 +25,7 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
 char *input, size_t length);
 
 
-#define DEBUG 0 // Set to 1 to enable debug prints, 0 to disable
+#define DEBUG 1 // Set to 1 to enable debug prints, 0 to disable
 #define RED_TEXT(str) "\033[31m" str "\033[0m"
 #define GREEN_TEXT(str) "\033[32m" str "\033[0m"
 
