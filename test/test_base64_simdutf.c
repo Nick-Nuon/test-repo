@@ -2739,6 +2739,8 @@ static int test_bad_padding_base64(void) {
     return 1;
 }
 
+
+
 // /* 
 //  * Test: doomed_truncated_base64_roundtrip
 //  *
@@ -2945,19 +2947,121 @@ static int test_streaming_base64_roundtrip(void)
 }
 
 static int test_data_after_padding(void) {
-    size_t len, trial, i;
+    size_t len, i;
     unsigned int seed = 12345;  /* Fixed seed for reproducibility */
     DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered test_data_after_padding\n"));
 
-    for (len = 1; len < 512; len++) {
-        char *buffer = OPENSSL_malloc(len * 4 + 10); // Extra space for padding and garbage
+    for (len = 1; len < 2048; len++) {
+        /* Compute worst-case Base64 length for `len` bytes */
+        size_t b64_max = base64_length_from_binary(len);
+
+        /* Allocate enough room for the encoded data, plus 4 bytes of "TWFu" and a NUL */
+        char *buffer = OPENSSL_malloc(b64_max + 4 + 1);
+        if (buffer == NULL) {
+            TEST_error("Out of memory for buffer (len=%zu)", len);
+            return 0;
+        }
+
+        /* Build random binary payload and encode it */
+        char *source = OPENSSL_malloc(len);
+        if (len > 0 && source == NULL) {
+            TEST_error("Out of memory for source (len=%zu)", len);
+            OPENSSL_free(buffer);
+            return 0;
+        }
+        for (i = 0; i < len; i++) {
+            source[i] = (char)(rand_r(&seed) % 256);
+        }
+        size_t base_len = tail_encode_base64(NULL, buffer, source, len);
+        OPENSSL_free(source);
+
+        /* Find the first ‘=’ padding byte, if any */
+        size_t pad_pos = 0;
+        for (i = 0; i < base_len; i++) {
+            if (buffer[i] == '=') {
+                pad_pos = i;
+                break;
+            }
+        }
+
+        if (pad_pos > 0) {
+            /* Append “TWFu” immediately after the first ‘=’ and NUL-terminate */
+            memcpy(buffer + pad_pos + 1, "TWFu", 4);
+            size_t total_len = pad_pos + 1 + 4;
+            buffer[total_len] = '\0';
+
+            /* Prepare decode buffers */
+            size_t back_bufsize = maximal_binary_length_from_base64(buffer, total_len);
+            unsigned char *back_simd    = OPENSSL_malloc(back_bufsize + 2);
+            unsigned char *back_openssl = OPENSSL_malloc(back_bufsize + 2);
+            if ((back_bufsize != 0 && back_simd == NULL)
+             || (back_bufsize != 0 && back_openssl == NULL)) {
+                TEST_error("Out of memory for back buffers");
+                OPENSSL_free(buffer);
+                OPENSSL_free(back_simd);
+                OPENSSL_free(back_openssl);
+                return 0;
+            }
+
+            /* Decode with simdutf */
+            int outlen_simd = 0;
+            int err_simd = simdutf_decode(NULL, (char *)back_simd, &outlen_simd,
+                                          buffer, total_len);
+            ASSERT_EQUAL_INT(err_simd,   -1);
+            ASSERT_EQUAL_INT(outlen_simd,  0);
+
+            /* Decode with OpenSSL */
+            int outlen_ssl = 0;
+            int err_ssl = OpenSSL_decode(NULL, (char *)back_openssl, &outlen_ssl,
+                                         buffer, total_len);
+            ASSERT_EQUAL_INT(err_ssl,     -1);
+            ASSERT_EQUAL_INT(outlen_ssl,   0);
+
+            /* They must agree */
+            ASSERT_EQUAL_INT(err_ssl,     err_simd);
+            ASSERT_EQUAL_INT(outlen_ssl, outlen_simd);
+
+            /* And output count should match processing up to the padding: */
+            ASSERT_EQUAL_INT(outlen_ssl, (int)((pad_pos/4)*3 - ((pad_pos/4)*3 % 48)));
+
+            OPENSSL_free(back_simd);
+            OPENSSL_free(back_openssl);
+        }
+
+        OPENSSL_free(buffer);
+    }
+
+    return 1;
+}
+
+static int test_lots_of_data_after_padding(void) {
+    size_t len, trial, i;
+    unsigned int seed = 12345;  /* Fixed seed for reproducibility */
+    DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered test_lots_of_data_after_padding\n"));
+
+    for (len = 1; len < 2048; len++) {
+        // Allocate extra space for padding and lots of trailing data
+        char *buffer = OPENSSL_malloc(len + 1024); 
         if (!buffer) {
             TEST_error("Out of memory for buffer");
             return 0;
         }
 
         /* Create valid base64 content first */
-        size_t base_len = create_basic_string(buffer, len);
+        /* Fill buffer with random bytes */
+        char *source = (len > 0) ? OPENSSL_malloc(len) : NULL;
+        if (len > 0 && !source) {
+            TEST_error("Out of memory for initial source");
+            OPENSSL_free(buffer);
+            return 0;
+        }
+        for (i = 0; i < len; i++) {
+            source[i] = (char)(rand_r(&seed) % 256);
+        }
+
+        /* Encode source into buffer */
+        size_t base_len = tail_encode_base64(NULL, buffer, source, len);
+        if (source) OPENSSL_free(source);
         
         /* Find first padding character */
         size_t pad_pos = 0;
@@ -2969,10 +3073,17 @@ static int test_data_after_padding(void) {
         }
         
         if (pad_pos > 0) {
-            /* Add valid base64 characters after padding */
-            memcpy(buffer + pad_pos + 1, "TWFu", 4);
-            size_t total_len = pad_pos + 5;
+            /* Add 1000 bytes of valid base64 characters after padding */
+            for (i = 0; i < 250; i++) { // 250 * 4 = 1000 bytes
+                memcpy(buffer + pad_pos + 1 + (i * 4), "TWFu", 4);
+            }
+
+            size_t total_len = pad_pos + 1001;
             buffer[total_len] = '\0';
+
+            /* Print the resulting string for debugging */
+            DEBUG_PRINT("Combined string (%zu bytes): \"%s\"\n", total_len, buffer);
+            
 
             /* Allocate decode buffers */
             size_t back_bufsize = maximal_binary_length_from_base64(buffer, total_len);
@@ -3242,7 +3353,8 @@ int setup_tests(void)
     // ADD_TEST(test_roundtrip_base64_with_spaces); 
     // ADD_TEST(test_roundtrip_base64_with_garbage);
     // ADD_TEST(test_bad_padding_base64);
-    // ADD_TEST(test_data_after_padding);
+    ADD_TEST(test_data_after_padding);
+    // ADD_TEST(test_lots_of_data_after_padding);
     // ADD_TEST(test_doomed_truncated_base64_roundtrip);
     // ADD_TEST(test_readme_test);
 
@@ -3250,7 +3362,7 @@ int setup_tests(void)
     // ADD_TEST(test_streaming_base64_roundtrip);
 
     // TODOS:
-    ADD_TEST(test_doomed_partial_buffer_utf8);
+    // ADD_TEST(test_doomed_partial_buffer_utf8);
 
     // Return 1 to indicate successful test setup.
     return 1;

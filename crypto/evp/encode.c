@@ -25,7 +25,7 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
 char *input, size_t length);
 
 
-#define DEBUG 0 // Set to 1 to enable debug prints, 0 to disable
+#define DEBUG 1 // Set to 1 to enable debug prints, 0 to disable
 #define RED_TEXT(str) "\033[31m" str "\033[0m"
 #define GREEN_TEXT(str) "\033[32m" str "\033[0m"
 
@@ -862,52 +862,52 @@ int tail_encode_base64(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
     t1 = (uint8_t)src[i];
     t2 = (uint8_t)src[i + 1];
     t3 = (uint8_t)src[i + 2];
-    DEBUG_PRINT(
-        RED_TEXT("DEBUG: Processing bytes at index %zu: %02x %02x %02x\n"), i,
-        t1, t2, t3);
+    // DEBUG_PRINT(
+    //     RED_TEXT("DEBUG: Processing bytes at index %zu: %02x %02x %02x\n"), i,
+    //     t1, t2, t3);
 
     *out++ = e0[t1];
     *out++ = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
     *out++ = e1[((t2 & 0x0F) << 2) | ((t3 >> 6) & 0x03)];
     *out++ = e2[t3];
 
-    DEBUG_PRINT(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst),
-                dst);
+    // DEBUG_PRINT(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst),
+    //             dst);
   }
   size_t remaining = srclen - i;
-  DEBUG_PRINT(RED_TEXT("DEBUG: Remaining bytes = %zu\n"), remaining);
+  // DEBUG_PRINT(RED_TEXT("DEBUG: Remaining bytes = %zu\n"), remaining);
   switch (remaining) {
   case 0:
     break;
   case 1:
     t1 = (uint8_t)src[i];
-    DEBUG_PRINT(RED_TEXT("DEBUG: Processing last byte at index %zu: %02x\n"), i,
-                t1);
+    // DEBUG_PRINT(RED_TEXT("DEBUG: Processing last byte at index %zu: %02x\n"), i,
+    //             t1);
     *out++ = e0[t1];
     *out++ = e1[(t1 & 0x03) << 4];
     *out++ = '=';
     *out++ = '=';
-    DEBUG_PRINT(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst),
-                dst);
+    // DEBUG_PRINT(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst),
+    //             dst);
     break;
   case 2:
     t1 = (uint8_t)src[i];
     t2 = (uint8_t)src[i + 1];
-    DEBUG_PRINT(
-        RED_TEXT("DEBUG: Processing last 2 bytes at index %zu: %02x %02x\n"), i,
-        t1, t2);
+    // DEBUG_PRINT(
+    //     RED_TEXT("DEBUG: Processing last 2 bytes at index %zu: %02x %02x\n"), i,
+    //     t1, t2);
     *out++ = e0[t1];
     *out++ = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
     *out++ = e2[(t2 & 0x0F) << 2];
     *out++ = '=';
-    DEBUG_PRINT(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst),
-                dst);
+    // DEBUG_PRINT(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst),
+    //             dst);
     break;
   }
   int total = (int)(out - dst);
-  DEBUG_PRINT(
-      RED_TEXT("DEBUG: Exiting tail_encode_base64, total output bytes = %d\n"),
-      total);
+  // DEBUG_PRINT(
+  //     RED_TEXT("DEBUG: Exiting tail_encode_base64, total output bytes = %d\n"),
+  //     total);
   return total;
 }
 
@@ -946,26 +946,26 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     //TODO: There is probably a way to Simplify/unify this!!!!
 
     int len_wo_ws = length - r.whitespaces;
-    int len_wo_ws_pad = length - r.whitespaces - r.padding;
-    int in_cnt_wo_vs_pad = r.input_count - r.whitespaces + r.padding;
+    int len_wo_ws_ext_pad = length - r.whitespaces - r.padding;
+    int in_cnt_wo_ws_ext_pad = r.input_count - r.whitespaces + r.padding;
     DEBUG_PRINT(RED_TEXT("DEBUG: length - length mod 64: %d\n"), length - length % 64);
     DEBUG_PRINT(RED_TEXT("DEBUG: len_wo_ws: %d\n"), len_wo_ws);
-    DEBUG_PRINT(RED_TEXT("DEBUG: len_wo_ws_pad: %d\n"), len_wo_ws_pad);
-    DEBUG_PRINT(RED_TEXT("DEBUG: in_cnt_wo_vs_pad: %d\n"), in_cnt_wo_vs_pad);
-    // DEBUG_PRINT(RED_TEXT("DEBUG: in_cnt_wo_vs_pad mod 4: %d\n"), (in_cnt_wo_vs_pad) % 4);
-    // DEBUG_PRINT(RED_TEXT("DEBUG: in_cnt_wo_vs_pad mod 64: %d\n"), (in_cnt_wo_vs_pad) % 64);
+    DEBUG_PRINT(RED_TEXT("DEBUG: len_wo_ws_ext_pad: %d\n"), len_wo_ws_ext_pad);
+    DEBUG_PRINT(RED_TEXT("DEBUG: in_cnt_wo_ws_ext_pad: %d\n"), in_cnt_wo_ws_ext_pad);
+    // DEBUG_PRINT(RED_TEXT("DEBUG: in_cnt_wo_ws_ext_pad mod 4: %d\n"), (in_cnt_wo_ws_ext_pad) % 4);
+    // DEBUG_PRINT(RED_TEXT("DEBUG: in_cnt_wo_ws_ext_pad mod 64: %d\n"), (in_cnt_wo_ws_ext_pad) % 64);
 
 
   if (r.error == EXTRA_PADDING){
       DEBUG_PRINT(RED_TEXT("DEBUG: Simdutf Extra padding found in core kernel\n"));
       // Calculate the number of bytes that constitute the valid part.
      
-      if (r.input_count > 64 && len_wo_ws_pad % 64 == 0){
+      if (r.input_count > 64 && len_wo_ws_ext_pad % 64 == 0){
         DEBUG_PRINT(RED_TEXT("DEBUG: First option\n"));
         // we cap possible padding to 2 because OpenSSL only removes 2 padding from *outlen
         int surplus_paddings = r.padding + r.internal_padding > 2 ? 2 : r.padding + r.internal_padding;
-        // int valid = len_wo_ws_pad/4 *3 - r.internal_padding;
-        int valid = len_wo_ws_pad/4 *3 - surplus_paddings;
+        int valid = len_wo_ws_ext_pad/4 *3 - surplus_paddings;
+        // int valid = in_cnt_wo_ws_ext_pad/4 *3 - surplus_paddings;
         valid = valid > 0 ? valid : 0;
   
         *outl = (int) valid;
@@ -975,14 +975,14 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         // OPENSSL_cleanse(output + valid, to_cleanse);
         return -1;
       }
-      else if (in_cnt_wo_vs_pad % 64 == 0) {
+      if (in_cnt_wo_ws_ext_pad % 64 == 0) {
         DEBUG_PRINT(RED_TEXT("DEBUG: Second option\n"));
 
         // we cap possible padding to 2 because OpenSSL only removes 2 padding from *outlen
         int surplus_paddings = r.padding + r.internal_padding > 2 ? 2 : r.padding + r.internal_padding;
         DEBUG_PRINT(RED_TEXT("DEBUG: surplus_paddings: %d\n"), surplus_paddings);  
 
-        int valid = in_cnt_wo_vs_pad/4 *3 - surplus_paddings;
+        int valid = in_cnt_wo_ws_ext_pad/4 *3 - surplus_paddings;
         valid = valid > 0 ? valid : 0;
   
         *outl = (int) valid;
@@ -992,14 +992,14 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         // OPENSSL_cleanse(output + valid, to_cleanse);
         return -1;
       }
-      else if (in_cnt_wo_vs_pad % 64 == 63) {
+      else if (in_cnt_wo_ws_ext_pad % 64 == 63) {
         DEBUG_PRINT(RED_TEXT("DEBUG: Theird option\n"));
 
         // we cap possible padding to 2 because OpenSSL only removes 2 padding from *outlen
         int surplus_paddings = r.padding + r.internal_padding > 2 ? 2 : r.padding + r.internal_padding;
         DEBUG_PRINT(RED_TEXT("DEBUG: surplus_paddings: %d\n"), surplus_paddings);  
 
-        int valid = (in_cnt_wo_vs_pad +1)/4 *3 - surplus_paddings;
+        int valid = (in_cnt_wo_ws_ext_pad +1)/4 *3 - surplus_paddings;
         valid = valid > 0 ? valid : 0;
   
         *outl = (int) valid;
@@ -1022,11 +1022,11 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   } 
   // e.g.  last bytes were ended with XXX=|= where ‘X’ denotes a valid character, ‘=’ denotes padding and ‘|’ denotes the point where the 64 buffer ends
   // OpenSSL's outln will take up to '|' into account but no more 
-  else if (r.error == NOT_MULTIPLE_OF_FOUR && r.padding == 2 && ((in_cnt_wo_vs_pad % 64) == 0 || (in_cnt_wo_vs_pad % 64) == 1) ) {
+  else if (r.error == NOT_MULTIPLE_OF_FOUR && r.padding == 2 && ((in_cnt_wo_ws_ext_pad % 64) == 0 || (in_cnt_wo_ws_ext_pad % 64) == 1) ) {
         DEBUG_PRINT(RED_TEXT("DEBUG: Simdutf decode failed, invalid base64 character with padding at seems\n"));
         // Calculate the number of bytes that constitute the valid part.
        
-        // int valid = (in_cnt_wo_vs_pad)/4 * 3 - (((in_cnt_wo_vs_pad)/4 * 3) % 48) -1;
+        // int valid = (in_cnt_wo_ws_ext_pad)/4 * 3 - (((in_cnt_wo_ws_ext_pad)/4 * 3) % 48) -1;
         int valid = r.output_count + r.padding;
         // int valid = r.output_count - (r.output_count % 48) -1;
         valid = valid > 0 ? valid : 0;
@@ -1210,12 +1210,10 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
           // all padding have already been removed by the caller
           DEBUG_PRINT("Extraneous Padding detected inside core kernel\n");
           int internal_padding = 0;
-          int internal_whitespaces = 0;
           DEBUG_PRINT("equalsigns: %d\n", equalsigns);
           const char* temp_src = srcend ;  // Start from the end
           
-            // while (temp_src > src && (*temp_src == '='|| is_ascii_white_space(*temp_src))) {
-              while (temp_src > src && (*temp_src == '=')) {
+          while (temp_src > src && (*temp_src == '=')) {
             DEBUG_PRINT("Found padding character: %c\n", *temp_src);
             internal_padding++;
             temp_src--;
@@ -1223,17 +1221,17 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
           DEBUG_PRINT("Internal padding count inside core: %d\n", internal_padding);
           DEBUG_PRINT("src - srcinit: %zu\n", (size_t)(src - srcinit));
           
-          // // Add this where you want to see the consumed input
-          // int consumed_length = src - srcinit;
-          // DEBUG_PRINT("DEBUG: Consumed input (length %d): ", consumed_length);
+          // Add this where you want to see the consumed input
+          int consumed_length = src - srcinit;
+          DEBUG_PRINT("DEBUG: Consumed input (length %d): ", consumed_length);
+          for (int i = 0; i < consumed_length; i++) {
+              DEBUG_PRINT("%c", srcinit[i]);
+          }
+          // DEBUG_PRINT("\nConsumed input (hex): ");
           // for (int i = 0; i < consumed_length; i++) {
-          //     DEBUG_PRINT("%c", srcinit[i]);
+          //     DEBUG_PRINT("%02x ", (unsigned char)srcinit[i]);
           // }
-          // // DEBUG_PRINT("\nConsumed input (hex): ");
-          // // for (int i = 0; i < consumed_length; i++) {
-          // //     DEBUG_PRINT("%02x ", (unsigned char)srcinit[i]);
-          // // }
-          // DEBUG_PRINT("\n");
+          DEBUG_PRINT("\n");
 
           return (full_result){EXTRA_PADDING, (size_t)(src - srcinit),
             (size_t)((dst - dstinit)),  whitespaces, equalsigns, internal_padding};
