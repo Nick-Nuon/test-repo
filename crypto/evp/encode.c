@@ -25,7 +25,7 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
 char *input, size_t length);
 
 
-#define DEBUG 1 // Set to 1 to enable debug prints, 0 to disable
+#define DEBUG 0 // Set to 1 to enable debug prints, 0 to disable
 #define RED_TEXT(str) "\033[31m" str "\033[0m"
 #define GREEN_TEXT(str) "\033[32m" str "\033[0m"
 
@@ -920,10 +920,7 @@ static inline int is_ascii_white_space(char c) {
 int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length) {
     full_result r = base64_tail_decode_trim_end(ctx, output, outl, input, length);
-    // int orginal_length = length;
 
-    // DEBUG_PRINT(RED_TEXT("DEBUG: 
-    
     DEBUG_PRINT(RED_TEXT("DEBUG: r.error Simdutf: %d\n"),
                 r.error);
 
@@ -952,6 +949,7 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     DEBUG_PRINT(RED_TEXT("DEBUG: len_wo_ws: %d\n"), len_wo_ws);
     DEBUG_PRINT(RED_TEXT("DEBUG: len_wo_ws_ext_pad: %d\n"), len_wo_ws_ext_pad);
     DEBUG_PRINT(RED_TEXT("DEBUG: in_cnt_wo_ws_ext_pad: %d\n"), in_cnt_wo_ws_ext_pad);
+    DEBUG_PRINT(RED_TEXT("DEBUG: length - r.whitespaces: %d\n"), length - r.whitespaces);
     // DEBUG_PRINT(RED_TEXT("DEBUG: in_cnt_wo_ws_ext_pad mod 4: %d\n"), (in_cnt_wo_ws_ext_pad) % 4);
     // DEBUG_PRINT(RED_TEXT("DEBUG: in_cnt_wo_ws_ext_pad mod 64: %d\n"), (in_cnt_wo_ws_ext_pad) % 64);
 
@@ -959,7 +957,69 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   if (r.error == EXTRA_PADDING){
       DEBUG_PRINT(RED_TEXT("DEBUG: Simdutf Extra padding found in core kernel\n"));
       // Calculate the number of bytes that constitute the valid part.
-     
+      DEBUG_PRINT(RED_TEXT("DEBUG: r.padding: %d\n"), r.padding);
+
+      // if padding is in the middle of the string, there is extra data after it
+      if (r.padding == 0){
+        DEBUG_PRINT(RED_TEXT("DEBUG: padding == 0\n"));
+
+        // Count internal padding after r.input_count, capped at 2
+        size_t max_internal_padding = 0;
+        const char* p = input + r.input_count;
+        while (p < input + length && max_internal_padding < 2) {
+            if (*p == '=') {
+          max_internal_padding++;
+            } else if (!is_ascii_white_space(*p)) {
+          break;
+            }
+            p++;
+        }
+
+        DEBUG_PRINT(RED_TEXT("DEBUG: max_internal_padding: %zu\n"), max_internal_padding);
+        if ((r.input_count + max_internal_padding) % 64 ==  0)
+        // if ((r.input_count + max_internal_padding) >= 64)
+        {        
+        // we cap possible padding to 2 because OpenSSL only removes 2 padding from *outlen
+        // int surplus_paddings = r.padding + r.internal_padding > 2 ? 2 : r.padding + r.internal_padding;
+        // int valid = in_cnt_wo_ws_ext_pad/4 *3 - surplus_paddings;
+        DEBUG_PRINT(RED_TEXT("DEBUG: Zeroth option\n"));
+                
+        int valid = (r.input_count + max_internal_padding)/4*3 - max_internal_padding;
+        valid = valid > 0 ? valid : 0;
+  
+        *outl = (int) valid;
+        return -1;
+        // Cleanse (erase) the remaining incomplete portion.
+
+        } else if ((r.input_count + max_internal_padding) <  64)
+        {
+          // we cap possible padding to 2 because OpenSSL only removes 2 padding from *outlen
+          // int surplus_paddings = r.padding + r.internal_padding > 2 ? 2 : r.padding + r.internal_padding;
+          // int valid = in_cnt_wo_ws_ext_pad/4 *3 - surplus_paddings;
+          DEBUG_PRINT(RED_TEXT("r.input_count + max_internal_padding) <  64\n"));
+                
+          // int valid = (r.input_count + max_internal_padding)/4*3 - max_internal_padding;
+          // valid = valid > 0 ? valid : 0;
+          int valid = 0;
+  
+          *outl = (int) valid;
+          return -1;
+        } 
+        else if ((r.input_count + max_internal_padding) % 64 != 0)
+        {
+          DEBUG_PRINT(RED_TEXT("DEBUG: r.input_count + max_internal_padding) % 64 != 0\n"));
+          int valid = (r.input_count + max_internal_padding)/4*3 - ((r.input_count + max_internal_padding)/4*3) % 48;
+  
+          *outl = (int) valid;
+          return -1;
+        }
+        else 
+        {
+          // TODO : fix this
+          DEBUG_PRINT(RED_TEXT("DEBUG: You forget an edge case here\n"));
+          return -1;
+        }
+      }
       if (r.input_count > 64 && len_wo_ws_ext_pad % 64 == 0){
         DEBUG_PRINT(RED_TEXT("DEBUG: First option\n"));
         // we cap possible padding to 2 because OpenSSL only removes 2 padding from *outlen
@@ -980,6 +1040,7 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
 
         // we cap possible padding to 2 because OpenSSL only removes 2 padding from *outlen
         int surplus_paddings = r.padding + r.internal_padding > 2 ? 2 : r.padding + r.internal_padding;
+        // surplus_paddings = 2;
         DEBUG_PRINT(RED_TEXT("DEBUG: surplus_paddings: %d\n"), surplus_paddings);  
 
         int valid = in_cnt_wo_ws_ext_pad/4 *3 - surplus_paddings;
@@ -992,13 +1053,16 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         // OPENSSL_cleanse(output + valid, to_cleanse);
         return -1;
       }
+      // XX,=|== where ‘X’ denotes a valid character, ‘=’ denotes padding and ‘|’ denotes the point where the 64 buffer ends
       else if (in_cnt_wo_ws_ext_pad % 64 == 63) {
-        DEBUG_PRINT(RED_TEXT("DEBUG: Theird option\n"));
+        DEBUG_PRINT(RED_TEXT("DEBUG: Third option\n"));
 
         // we cap possible padding to 2 because OpenSSL only removes 2 padding from *outlen
         int surplus_paddings = r.padding + r.internal_padding > 2 ? 2 : r.padding + r.internal_padding;
+        // surplus_paddings = 2;
         DEBUG_PRINT(RED_TEXT("DEBUG: surplus_paddings: %d\n"), surplus_paddings);  
 
+        // The + 1 is because we need to go up to the next multiple of 64
         int valid = (in_cnt_wo_ws_ext_pad +1)/4 *3 - surplus_paddings;
         valid = valid > 0 ? valid : 0;
   
@@ -1074,6 +1138,7 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
   DEBUG_PRINT("\n");
   DEBUG_PRINT(GREEN_TEXT("DEBUG: Length: %zu\n"), length);
 
+  // TODO: there is probably a far more performant way to calculate whitespaces
   int easy_whitespaces = 0;
   for (size_t i = 0; i < length; i++) {
     if (is_ascii_white_space(input[i])) {
@@ -1120,7 +1185,8 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
               r.input_count, r.output_count);
 
   // DEBUG_PRINT(GREEN_TEXT("DEBUG: r.whitespaces: %d\n"), r.whitespaces);
-            
+  
+  // Here , the internal function was successful
   if (r.error == BASE64_SUCCESS && equalsigns > 0) {
     // additional checks
     DEBUG_PRINT(
