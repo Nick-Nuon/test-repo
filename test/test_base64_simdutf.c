@@ -2955,6 +2955,81 @@ static int test_random_padding_insertion(void) {
     return 1;
 }
 
+static int test_random_padding_and_spaces(void) {
+    size_t len, i;
+    unsigned int seed = 12345;  /* Fixed seed for reproducibility */
+    DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered test_random_padding_and_spaces\n"));
+
+    for (len = 1; len < 512; len++) {
+        /* Create basic string using create_basic_string() */
+        size_t bufsize = len * 4 + 2; // space for "TWFu" pattern * len plus pad and NUL
+        char *buffer = OPENSSL_malloc(bufsize);
+        if (!buffer) {
+            TEST_error("Out of memory for buffer");
+            return 0;
+        }
+
+        size_t actual_len = create_basic_string(buffer, len);
+        
+        /* Insert random padding char '=' at non-end position */
+        size_t pad_pos = rand_r(&seed) % (actual_len - 1);  // Exclude last position
+        if (pad_pos > 0 && buffer[pad_pos-1] == '=') {
+            pad_pos++;  // Avoid consecutive padding chars
+        }
+        buffer[pad_pos] = '=';
+        buffer[actual_len] = '\0';
+
+        /* Add lots of random spaces (20-50) */
+        size_t num_spaces = 20 + (rand_r(&seed) % 31);
+        for (i = 0; i < num_spaces; i++) {
+            size_t pos = add_space(&buffer, &actual_len, &seed);
+            if (pos == (size_t)-1) {
+                TEST_error("Failed to add space");
+                OPENSSL_free(buffer);
+                return 0;
+            }
+        }
+
+        DEBUG_PRINT("Created string with padding at pos %zu and %zu spaces: %s\n", 
+                   pad_pos, num_spaces, buffer);
+
+        /* Allocate decode buffers */
+        size_t back_bufsize = maximal_binary_length_from_base64(buffer, actual_len);
+        unsigned char *back_simd = OPENSSL_malloc(back_bufsize + 2);
+        unsigned char *back_openssl = OPENSSL_malloc(back_bufsize + 2);
+        
+        if (!back_simd || !back_openssl) {
+            TEST_error("Out of memory for back buffers");
+            OPENSSL_free(buffer);
+            if (back_simd) OPENSSL_free(back_simd);
+            if (back_openssl) OPENSSL_free(back_openssl);
+            return 0;
+        }
+
+        /* Test both decoders */
+        int outlen_simdutf = 0;
+        int outlen_openssl = 0;
+        
+        int result_simdutf = simdutf_decode(NULL, (char *)back_simd, 
+                                           &outlen_simdutf, buffer, actual_len);
+        int result_openssl = OpenSSL_decode(NULL, (char *)back_openssl, 
+                                          &outlen_openssl, buffer, actual_len);
+
+        /* Both decoders should fail with -1 */
+        ASSERT_EQUAL_INT(result_openssl, -1);
+        
+        /* Decoders should agree */
+        ASSERT_EQUAL_INT(result_openssl, result_simdutf);
+        ASSERT_EQUAL_SIZE(outlen_openssl, outlen_simdutf);
+        // ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
+
+        OPENSSL_free(back_simd);
+        OPENSSL_free(back_openssl);
+        OPENSSL_free(buffer);
+    }
+    return 1;
+}
+
 static int test_readme_test(void)
 {
     size_t len = 2048;
@@ -3186,6 +3261,7 @@ int setup_tests(void)
     ADD_TEST(test_readme_test);
     ADD_TEST(test_data_after_padding);
     ADD_TEST(test_lots_of_data_after_padding);
+    ADD_TEST(test_random_padding_and_spaces);
 
     // Maybe revisit these tests later:
     ADD_TEST(test_streaming_base64_roundtrip);
