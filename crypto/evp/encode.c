@@ -426,7 +426,7 @@ int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
       // e.g. if the 64 bit block fails, then the pointers ret and out aren't incremented 
       ret += decoded_len - eof; // advance the "partial error" pointer
       out += decoded_len - eof; //advance the write pointer, for internal use
-      DEBUG_PRINT("DEBUG: eof: %d, \n", eof);
+      DEBUG_PRINT("DEBUG: eof after buffering: %d, \n", eof);
     }
   }
 
@@ -459,8 +459,8 @@ tail:
   rv = seof || (n == 0 && eof) ? 0 : 1;
 end:
   /* Legacy behaviour. This should probably rather be zeroed on error. */
-  // DEBUG_PRINT(GREEN_TEXT("DEBUG: EVP_DecodeUpdate: outl: %d, ret: %d, n: %d, eof: %d, rv: %d\n", temp_total: %d\n"), *outl, ret, n, eof, rv, temp_total);
   *outl = ret; 
+  DEBUG_PRINT(GREEN_TEXT("DEBUG: EVP_DecodeUpdate: outl: %d, ret: %d, n: %d, eof: %d, rv: %d, temp_total: %d\n"), *outl, ret, n, eof, rv, temp_total);
   ctx->num = n;
   return rv;
 }
@@ -976,22 +976,37 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         }
 
         DEBUG_PRINT(RED_TEXT("DEBUG: max_internal_padding: %zu\n"), max_internal_padding);
-        if ((r.input_count + max_internal_padding) % 64 ==  0)
-        // if ((r.input_count + max_internal_padding) >= 64)
+
+        // (r.input_count + max_internal_padding) ==  64 messes up , Outlen is 0 in certain circumnstacnes and non vero in others but where ?
+        // sol'n : I wasn't taking white spaces into account!
+        // Count whitespaces up to r.input_count
+        size_t whitespaces_up_to_input = 0;
+        for (size_t i = 0; i < r.input_count && i < length; i++) {
+          if (is_ascii_white_space(input[i])) {
+            whitespaces_up_to_input++;
+          }
+        }
+
+
+        // int true_input_count = r.input_count  + max_internal_padding;
+        int true_input_count = r.input_count - whitespaces_up_to_input + max_internal_padding;
+        // if ((r.input_count + max_internal_padding) % 64 ==  0 && (r.input_count + max_internal_padding) >  64)
+        if (true_input_count % 64 ==  0)        
         {        
         // we cap possible padding to 2 because OpenSSL only removes 2 padding from *outlen
         // int surplus_paddings = r.padding + r.internal_padding > 2 ? 2 : r.padding + r.internal_padding;
         // int valid = in_cnt_wo_ws_ext_pad/4 *3 - surplus_paddings;
         DEBUG_PRINT(RED_TEXT("DEBUG: Zeroth option\n"));
                 
-        int valid = (r.input_count + max_internal_padding)/4*3 - max_internal_padding;
+        int valid = true_input_count/4*3 - max_internal_padding;
         valid = valid > 0 ? valid : 0;
   
         *outl = (int) valid;
         return -1;
         // Cleanse (erase) the remaining incomplete portion.
 
-        } else if ((r.input_count + max_internal_padding) <  64)
+        } else 
+        if (true_input_count <=  64)
         {
           // we cap possible padding to 2 because OpenSSL only removes 2 padding from *outlen
           // int surplus_paddings = r.padding + r.internal_padding > 2 ? 2 : r.padding + r.internal_padding;
@@ -1005,10 +1020,10 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
           *outl = (int) valid;
           return -1;
         } 
-        else if ((r.input_count + max_internal_padding) % 64 != 0)
+        else if (true_input_count % 64 != 0)
         {
           DEBUG_PRINT(RED_TEXT("DEBUG: r.input_count + max_internal_padding) % 64 != 0\n"));
-          int valid = (r.input_count + max_internal_padding)/4*3 - ((r.input_count + max_internal_padding)/4*3) % 48;
+          int valid = true_input_count/4*3 - (true_input_count/4*3) % 48;
   
           *outl = (int) valid;
           return -1;
@@ -1125,20 +1140,27 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
       DEBUG_CHECK_NULL(output);
 
 
-  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (hex): "));
+  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (hex): \n"));
   for (size_t i = 0; i < (size_t)length; i++) {
     DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)input[i]);
+    if ((i + 1) % 8 == 0) {
+      DEBUG_PRINT("\n");
+    }
   }
-  DEBUG_PRINT("\n");
+  DEBUG_PRINT("\n\n");
 
-  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (char): "));
+  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (char): \n")); 
   for (size_t i = 0; i < (size_t)length; i++) {
     DEBUG_PRINT(GREEN_TEXT("%c "), (unsigned char)input[i]);
+    if ((i + 1) % 8 == 0) {
+      DEBUG_PRINT("\n");
+    }
   }
   DEBUG_PRINT("\n");
   DEBUG_PRINT(GREEN_TEXT("DEBUG: Length: %zu\n"), length);
 
   // TODO: there is probably a far more performant way to calculate whitespaces
+  // This is merely a placeholder
   int easy_whitespaces = 0;
   for (size_t i = 0; i < length; i++) {
     if (is_ascii_white_space(input[i])) {
@@ -1288,11 +1310,11 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
           DEBUG_PRINT("src - srcinit: %zu\n", (size_t)(src - srcinit));
           
           // Add this where you want to see the consumed input
-          int consumed_length = src - srcinit;
-          DEBUG_PRINT("DEBUG: Consumed input (length %d): ", consumed_length);
-          for (int i = 0; i < consumed_length; i++) {
-              DEBUG_PRINT("%c", srcinit[i]);
-          }
+          // int consumed_length = src - srcinit;
+          // DEBUG_PRINT("DEBUG: Consumed input (length %d): ", consumed_length);
+          // for (int i = 0; i < consumed_length; i++) {
+          //     DEBUG_PRINT("%c", srcinit[i]);
+          // }
           // DEBUG_PRINT("\nConsumed input (hex): ");
           // for (int i = 0; i < consumed_length; i++) {
           //     DEBUG_PRINT("%02x ", (unsigned char)srcinit[i]);
@@ -1307,6 +1329,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
                              (size_t)((dst - dstinit)),  whitespaces};
         }
       } else {
+        // TODO: change the tables
         if (c == '\f') {
           DEBUG_PRINT("Simdutf:Form feed detected!!!!Not a valid b64 char by OpenSSL standards!\n");
           return (full_result){INVALID_BASE64_CHARACTER, (size_t)(src - srcinit),
