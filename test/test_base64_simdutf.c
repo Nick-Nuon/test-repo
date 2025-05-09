@@ -2874,6 +2874,7 @@ static int test_lots_of_data_after_padding(void) {
             /* Decoders should agree */
             ASSERT_EQUAL_INT(result_openssl, result_simdutf);
             ASSERT_EQUAL_SIZE(outlen_openssl, outlen_simdutf);
+            ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
             
             /* Output length should match processed data up to padding */
             // ASSERT_EQUAL_INT(outlen_openssl, (pad_pos/4)*3 - ((pad_pos/4)*3 % 48));
@@ -2944,7 +2945,7 @@ static int test_random_padding_insertion(void) {
         
         
         /* Compare memory contents */
-        // ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
+        ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
 
         /* Output length should be aligned to 48 bytes */
         // ASSERT_EQUAL_INT(outlen_openssl, (pad_pos/4)*3 - ((pad_pos/4)*3 % 48));
@@ -3022,7 +3023,7 @@ static int test_random_padding_and_spaces(void) {
         /* Decoders should agree */
         ASSERT_EQUAL_INT(result_openssl, result_simdutf);
         ASSERT_EQUAL_SIZE(outlen_openssl, outlen_simdutf);
-        // ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
+        ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
 
         OPENSSL_free(back_simd);
         OPENSSL_free(back_openssl);
@@ -3209,7 +3210,7 @@ static int test_doomed_partial_buffer_utf8(void)
 
             /* Compare decoded output */
             if (outlen_openssl > 0) {
-                // ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
+                ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
             }
 
             /* Both decoders should return error */
@@ -3237,39 +3238,39 @@ static int test_doomed_partial_buffer_utf8(void)
 int setup_tests(void)
 {
     // // Register our sample test. The macro ADD_TEST() takes our test function.
-    // ADD_TEST(test_decode_base64_cases); 
-    // ADD_TEST(test_complete_decode_base64_cases); 
-    // ADD_TEST(test_encode_base64_no_padding_cases); 
-    // ADD_TEST(test_seof_good_basic_cases); 
-    // ADD_TEST(test_multiple_of_4_good);
-    // ADD_TEST(test_multiple_of_4_bad);
-    // ADD_TEST(test_seof_good_cases);
-    // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); 
-    // ADD_TEST(test_roundtrip_base64);
-    // ADD_TEST(test_base64_decode_just_one_padding_loose);
-    // ADD_TEST(test_issue_520);
-    // ADD_TEST(test_issue_509);
-    // ADD_TEST(test_issue_504_8bit); 
-    // ADD_TEST(test_issue_502_alt);
-    // ADD_TEST(test_encode_base64_basic_cases); 
-    // ADD_TEST(test_seof_bad_basic_cases); 
-    // ADD_TEST(test_seof_bad_cases);
-    // ADD_TEST(test_roundtrip_base64_with_spaces); 
-    // ADD_TEST(test_roundtrip_base64_with_garbage);
-    // ADD_TEST(test_doomed_truncated_base64_roundtrip);
+    ADD_TEST(test_decode_base64_cases); 
+    ADD_TEST(test_complete_decode_base64_cases); 
+    ADD_TEST(test_encode_base64_no_padding_cases); 
+    ADD_TEST(test_seof_good_basic_cases); 
+    ADD_TEST(test_multiple_of_4_good);
+    ADD_TEST(test_multiple_of_4_bad);
+    ADD_TEST(test_seof_good_cases);
+    ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); 
+    ADD_TEST(test_roundtrip_base64);
+    ADD_TEST(test_base64_decode_just_one_padding_loose);
+    ADD_TEST(test_issue_520);
+    ADD_TEST(test_issue_509);
+    ADD_TEST(test_issue_504_8bit); 
+    ADD_TEST(test_issue_502_alt);
+    ADD_TEST(test_encode_base64_basic_cases); 
+    ADD_TEST(test_seof_bad_basic_cases); 
+    ADD_TEST(test_seof_bad_cases);
+    ADD_TEST(test_roundtrip_base64_with_spaces); 
+    ADD_TEST(test_roundtrip_base64_with_garbage);
+    ADD_TEST(test_doomed_truncated_base64_roundtrip);
     ADD_TEST(test_bad_padding_base64);
 
     ADD_TEST(test_readme_test);
     ADD_TEST(test_data_after_padding);
-    // ADD_TEST(test_lots_of_data_after_padding);
-    // ADD_TEST(test_random_padding_and_spaces);
+    ADD_TEST(test_lots_of_data_after_padding);
+    ADD_TEST(test_random_padding_and_spaces);
 
     // Maybe revisit these tests later:
-    // ADD_TEST(test_streaming_base64_roundtrip);
+    ADD_TEST(test_streaming_base64_roundtrip);
 
     // // TODOS:
-    // ADD_TEST(test_random_padding_insertion);
-    // ADD_TEST(test_doomed_partial_buffer_utf8);
+    ADD_TEST(test_random_padding_insertion);
+    ADD_TEST(test_doomed_partial_buffer_utf8);
 
 
     // Return 1 to indicate successful test setup.
