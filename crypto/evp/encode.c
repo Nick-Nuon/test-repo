@@ -987,10 +987,7 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
           }
         }
 
-
-        // int true_input_count = r.input_count  + max_internal_padding;
         int true_input_count = r.input_count - whitespaces_up_to_input + max_internal_padding;
-        // if ((r.input_count + max_internal_padding) % 64 ==  0 && (r.input_count + max_internal_padding) >  64)
         if (true_input_count % 64 ==  0)        
         {        
         // we cap possible padding to 2 because OpenSSL only removes 2 padding from *outlen
@@ -1319,7 +1316,32 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
           // for (int i = 0; i < consumed_length; i++) {
           //     DEBUG_PRINT("%02x ", (unsigned char)srcinit[i]);
           // }
-          DEBUG_PRINT("\n");
+          // DEBUG_PRINT("\n");
+
+
+          if (idx == 2) {
+            DEBUG_PRINT("idx == 2\n");
+            uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) +
+                              ((uint32_t)(buffer[1]) << (2 * 6));
+            // For little-endian system: swap and shift.
+            triple = swap_bytes(triple);
+            triple >>= 8;
+            memcpy(dst, &triple, 1);
+            // dst += 1;
+          } else if (idx == 3) {
+            DEBUG_PRINT("idx == 3\n");
+            uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) +
+                              ((uint32_t)(buffer[1]) << (2 * 6)) +
+                              ((uint32_t)(buffer[2]) << (1 * 6));
+            triple = swap_bytes(triple);
+            triple >>= 8;
+            memcpy(dst, &triple, 2);
+            // dst += 2;
+          } else if (idx == 1) {
+            DEBUG_PRINT("idx == 1\n");
+          }
+
+    // DEBUG_PRINT("idx == 4 remaining\n");
 
           return (full_result){EXTRA_PADDING, (size_t)(src - srcinit),
             (size_t)((dst - dstinit)),  whitespaces, equalsigns, internal_padding};
@@ -1348,31 +1370,30 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
 
       if (idx == 2) {
         DEBUG_PRINT("idx == 2\n");
-        if (equalsigns != 2){
-          DEBUG_PRINT("equalsigns != 2\n");
-          DEBUG_PRINT("dst - dstinit: %zu\n", (size_t)(dst - dstinit));
-          return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit), whitespaces};
-        }
-
         uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) +
                           ((uint32_t)(buffer[1]) << (2 * 6));
         // For little-endian system: swap and shift.
         triple = swap_bytes(triple);
         triple >>= 8;
         memcpy(dst, &triple, 1);
+        if (equalsigns != 2){
+          DEBUG_PRINT("equalsigns != 2\n");
+          DEBUG_PRINT("dst - dstinit: %zu\n", (size_t)(dst - dstinit));
+          return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit), whitespaces};
+        }
         dst += 1;
       } else if (idx == 3) {
         DEBUG_PRINT("idx == 3\n");
-        if (equalsigns != 1){
-              DEBUG_PRINT("equalsigns != 1\n");
-              return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit), whitespaces};
-        }
         uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) +
                           ((uint32_t)(buffer[1]) << (2 * 6)) +
                           ((uint32_t)(buffer[2]) << (1 * 6));
         triple = swap_bytes(triple);
         triple >>= 8;
         memcpy(dst, &triple, 2);
+        if (equalsigns != 1){
+          DEBUG_PRINT("equalsigns != 1\n");
+          return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit), whitespaces};
+        }
         dst += 2;
       } else if (idx == 1) {
         DEBUG_PRINT("idx == 1\n");
