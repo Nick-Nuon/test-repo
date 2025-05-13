@@ -295,7 +295,7 @@ static int test_bio_base64_run(test_case *t, int llen, int wscnt)
     } else if (ret != 0
              || n != (int) t->bytes
              || (n > 0 && memcmp(raw, out, n) != 0)) {
-        TEST_error("Failed to decode expected data");
+        TEST_error("Failed to decode expected data: ret=%d, n=%d, expected_bytes=%d", ret, n, (int)t->bytes);
         ret = -1;
     }
 

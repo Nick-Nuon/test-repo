@@ -26,7 +26,7 @@ char *input, size_t length);
 
 
 #define DEBUG 0 // Set to 1 to enable debug prints, 0 to disable
-#define TEST_SIMDUTF_BIO 1
+#define TEST_SIMDUTF_BIO 0
 #define RED_TEXT(str) "\033[31m" str "\033[0m"
 #define GREEN_TEXT(str) "\033[32m" str "\033[0m"
 
@@ -312,6 +312,15 @@ void EVP_DecodeInit(EVP_ENCODE_CTX *ctx) {
   ctx->flags = 0;
 }
 
+int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
+           const unsigned char *in, int inl) {
+#if TEST_SIMDUTF_BIO
+  return EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
+#else
+  return EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl);
+#endif
+}
+
 /*-
  * -1 for error
  *  0 for last line
@@ -332,7 +341,7 @@ void EVP_DecodeInit(EVP_ENCODE_CTX *ctx) {
  *   - There is extra trailing padding, or data after padding.
  *   - B64_EOF is detected after an incomplete base64 block.
  */
-int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
+int EVP_DecodeUpdate_OpenSSL(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                      const unsigned char *in, int inl) {
   DEBUG_PRINT(GREEN_TEXT("********************* DEBUG: Entered EVP_DecodeUpdate\n"));
   int seof = 0, eof = 0, rv = -1, ret = 0, i, v, tmp, n, decoded_len;
@@ -362,7 +371,6 @@ int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
   else
     table = data_ascii2bin;
 
-  // check for errors first, we can axe that 
   for (i = 0; i < inl; i++) {
     // DEBUG_PRINT(GREEN_TEXT("DEBUG: EVP_DecodeUpdate: inl: %d, i: %d, tmp: %02x\n"), inl, i, *(in + i));
     tmp = *(in++);
@@ -374,7 +382,6 @@ int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
       goto end;
     }
 
-    // // check padding related errors , we can axe that
     if (tmp == '=') {
       DEBUG_PRINT(RED_TEXT("DEBUG: Found EOF at position %d, tmp: %02x\n"), i, tmp);
       eof++;
@@ -469,7 +476,6 @@ end:
 int EVP_DecodeUpdate_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                const unsigned char *in, int inl) {
   DEBUG_PRINT(GREEN_TEXT("********************* DEBUG: Entered EVP_DecodeUpdate_simdutf\n"));
-  // printf("DEBUG: EVP_DecodeUpdate_simdutf: inl: %d\n", inl);
   int ret;
   
   /* Legacy behaviour: an empty input chunk signals end of input. */
@@ -940,23 +946,23 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length) {
     full_result r = base64_tail_decode_trim_end(ctx, output, outl, input, length);
 
-    DEBUG_PRINT(RED_TEXT("DEBUG: r.error Simdutf: %d\n"),
-                r.error);
+    // DEBUG_PRINT(RED_TEXT("DEBUG: r.error Simdutf: %d\n"),
+    //             r.error);
 
-    DEBUG_PRINT(RED_TEXT("DEBUG: r.input_count Simdutf: %zu\n"),
-                r.input_count);
-    DEBUG_PRINT(RED_TEXT("DEBUG: r.output_count Simdutf: %zu\n"),
-                r.output_count);
-    DEBUG_PRINT(RED_TEXT("DEBUG: r.whitespaces Simdutf: %d\n"),
-                r.whitespaces);
-    DEBUG_PRINT(RED_TEXT("DEBUG: r.equalsigns Simdutf: %d\n"),
-                r.padding);
-    DEBUG_PRINT(RED_TEXT("DEBUG: r.internal_padding Simdutf: %zu\n"),
-                r.internal_padding);
+    // DEBUG_PRINT(RED_TEXT("DEBUG: r.input_count Simdutf: %zu\n"),
+    //             r.input_count);
+    // DEBUG_PRINT(RED_TEXT("DEBUG: r.output_count Simdutf: %zu\n"),
+    //             r.output_count);
+    // DEBUG_PRINT(RED_TEXT("DEBUG: r.whitespaces Simdutf: %d\n"),
+    //             r.whitespaces);
+    // DEBUG_PRINT(RED_TEXT("DEBUG: r.equalsigns Simdutf: %d\n"),
+    //             r.padding);
+    // DEBUG_PRINT(RED_TEXT("DEBUG: r.internal_padding Simdutf: %zu\n"),
+    //             r.internal_padding);
 
 
-    DEBUG_PRINT(RED_TEXT("DEBUG: r.input_count - r.whitespaces + r.padding: %zu\n"),
-                r.input_count - r.whitespaces + r.padding);
+    // DEBUG_PRINT(RED_TEXT("DEBUG: r.input_count - r.whitespaces + r.padding: %zu\n"),
+    //             r.input_count - r.whitespaces + r.padding);
 
 
     //TODO: There is probably a way to Simplify/unify this!!!!
@@ -964,11 +970,11 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     int len_wo_ws = length - r.whitespaces;
     int len_wo_ws_ext_pad = length - r.whitespaces - r.padding;
     int in_cnt_wo_ws_ext_pad = r.input_count - r.whitespaces + r.padding;
-    DEBUG_PRINT(RED_TEXT("DEBUG: length - length mod 64: %d\n"), length - length % 64);
-    DEBUG_PRINT(RED_TEXT("DEBUG: len_wo_ws: %d\n"), len_wo_ws);
-    DEBUG_PRINT(RED_TEXT("DEBUG: len_wo_ws_ext_pad: %d\n"), len_wo_ws_ext_pad);
-    DEBUG_PRINT(RED_TEXT("DEBUG: in_cnt_wo_ws_ext_pad: %d\n"), in_cnt_wo_ws_ext_pad);
-    DEBUG_PRINT(RED_TEXT("DEBUG: length - r.whitespaces: %d\n"), length - r.whitespaces);
+    // DEBUG_PRINT(RED_TEXT("DEBUG: length - length mod 64: %d\n"), length - length % 64);
+    // DEBUG_PRINT(RED_TEXT("DEBUG: len_wo_ws: %d\n"), len_wo_ws);
+    // DEBUG_PRINT(RED_TEXT("DEBUG: len_wo_ws_ext_pad: %d\n"), len_wo_ws_ext_pad);
+    // DEBUG_PRINT(RED_TEXT("DEBUG: in_cnt_wo_ws_ext_pad: %d\n"), in_cnt_wo_ws_ext_pad);
+    // DEBUG_PRINT(RED_TEXT("DEBUG: length - r.whitespaces: %d\n"), length - r.whitespaces);
     // DEBUG_PRINT(RED_TEXT("DEBUG: in_cnt_wo_ws_ext_pad mod 4: %d\n"), (in_cnt_wo_ws_ext_pad) % 4);
     // DEBUG_PRINT(RED_TEXT("DEBUG: in_cnt_wo_ws_ext_pad mod 64: %d\n"), (in_cnt_wo_ws_ext_pad) % 64);
 
@@ -976,11 +982,11 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   if (r.error == EXTRA_PADDING){
       DEBUG_PRINT(RED_TEXT("DEBUG: Simdutf Extra padding found in core kernel\n"));
       // Calculate the number of bytes that constitute the valid part.
-      DEBUG_PRINT(RED_TEXT("DEBUG: r.padding: %d\n"), r.padding);
+      // DEBUG_PRINT(RED_TEXT("DEBUG: r.padding: %d\n"), r.padding);
 
       // if padding is in the middle of the string, there is extra data after it
       if (r.padding == 0){
-        DEBUG_PRINT(RED_TEXT("DEBUG: padding == 0\n"));
+        // DEBUG_PRINT(RED_TEXT("DEBUG: padding == 0\n"));
 
         // Count internal padding after r.input_count, capped at 2
         size_t max_internal_padding = 0;
@@ -1010,9 +1016,7 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         if (true_input_count % 64 ==  0)        
         {        
         // we cap possible padding to 2 because OpenSSL only removes 2 padding from *outlen
-        // int surplus_paddings = r.padding + r.internal_padding > 2 ? 2 : r.padding + r.internal_padding;
-        // int valid = in_cnt_wo_ws_ext_pad/4 *3 - surplus_paddings;
-        DEBUG_PRINT(RED_TEXT("DEBUG: Zeroth option\n"));
+        // DEBUG_PRINT(RED_TEXT("DEBUG: Zeroth option\n"));
                 
         int valid = true_input_count/4*3 - max_internal_padding;
         valid = valid > 0 ? valid : 0;
@@ -1024,13 +1028,7 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         } else 
         if (true_input_count <=  64)
         {
-          // we cap possible padding to 2 because OpenSSL only removes 2 padding from *outlen
-          // int surplus_paddings = r.padding + r.internal_padding > 2 ? 2 : r.padding + r.internal_padding;
-          // int valid = in_cnt_wo_ws_ext_pad/4 *3 - surplus_paddings;
-          DEBUG_PRINT(RED_TEXT("r.input_count + max_internal_padding) <  64\n"));
-                
-          // int valid = (r.input_count + max_internal_padding)/4*3 - max_internal_padding;
-          // valid = valid > 0 ? valid : 0;
+          // DEBUG_PRINT(RED_TEXT("r.input_count + max_internal_padding) <  64\n"));
           int valid = 0;
   
           *outl = (int) valid;
@@ -1038,7 +1036,7 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         } 
         else if (true_input_count % 64 != 0)
         {
-          DEBUG_PRINT(RED_TEXT("DEBUG: r.input_count + max_internal_padding) % 64 != 0\n"));
+          // DEBUG_PRINT(RED_TEXT("DEBUG: r.input_count + max_internal_padding) % 64 != 0\n"));
           int valid = true_input_count/4*3 - (true_input_count/4*3) % 48;
   
           *outl = (int) valid;
@@ -1052,7 +1050,7 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         }
       }
       if (r.input_count > 64 && len_wo_ws_ext_pad % 64 == 0){
-        DEBUG_PRINT(RED_TEXT("DEBUG: First option\n"));
+        // DEBUG_PRINT(RED_TEXT("DEBUG: First option\n"));
         // we cap possible padding to 2 because OpenSSL only removes 2 padding from *outlen
         int surplus_paddings = r.padding + r.internal_padding > 2 ? 2 : r.padding + r.internal_padding;
         int valid = len_wo_ws_ext_pad/4 *3 - surplus_paddings;
@@ -1067,7 +1065,7 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         return -1;
       }
       if (in_cnt_wo_ws_ext_pad % 64 == 0) {
-        DEBUG_PRINT(RED_TEXT("DEBUG: Second option\n"));
+        // DEBUG_PRINT(RED_TEXT("DEBUG: Second option\n"));
 
         // we cap possible padding to 2 because OpenSSL only removes 2 padding from *outlen
         int surplus_paddings = r.padding + r.internal_padding > 2 ? 2 : r.padding + r.internal_padding;
@@ -1086,12 +1084,11 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
       }
       // XX,=|== where ‘X’ denotes a valid character, ‘=’ denotes padding and ‘|’ denotes the point where the 64 buffer ends
       else if (in_cnt_wo_ws_ext_pad % 64 == 63) {
-        DEBUG_PRINT(RED_TEXT("DEBUG: Third option\n"));
+        // DEBUG_PRINT(RED_TEXT("DEBUG: Third option\n"));
 
         // we cap possible padding to 2 because OpenSSL only removes 2 padding from *outlen
         int surplus_paddings = r.padding + r.internal_padding > 2 ? 2 : r.padding + r.internal_padding;
-        // surplus_paddings = 2;
-        DEBUG_PRINT(RED_TEXT("DEBUG: surplus_paddings: %d\n"), surplus_paddings);  
+        // DEBUG_PRINT(RED_TEXT("DEBUG: surplus_paddings: %d\n"), surplus_paddings);  
 
         // The + 1 is because we need to go up to the next multiple of 64
         int valid = (in_cnt_wo_ws_ext_pad +1)/4 *3 - surplus_paddings;
@@ -1121,14 +1118,13 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         DEBUG_PRINT(RED_TEXT("DEBUG: Simdutf decode failed, invalid base64 character with padding at seems\n"));
         // Calculate the number of bytes that constitute the valid part.
        
-        // int valid = (in_cnt_wo_ws_ext_pad)/4 * 3 - (((in_cnt_wo_ws_ext_pad)/4 * 3) % 48) -1;
         int valid = r.output_count + r.padding;
-        // int valid = r.output_count - (r.output_count % 48) -1;
         valid = valid > 0 ? valid : 0;
         *outl = (int) valid;
+        // TODO: do something about the cleansing
         // Cleanse (erase) the remaining incomplete portion.
         int to_cleanse = r.output_count % 48 -1;
-        OPENSSL_cleanse(output + valid, to_cleanse);
+        // OPENSSL_cleanse(output + valid, to_cleanse);
         return -1;
 
   } else {
@@ -1202,7 +1198,7 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
 
     while (length > 0 && is_ascii_white_space(input[length - 1])) {
       length--;
-      DEBUG_PRINT("Found trailing whitespace: %d", length);
+      // DEBUG_PRINT("Found trailing whitespace: %d", length);
     }
     if (length > 0 && input[length - 1] == '=') {
       equallocation = length - 1;
@@ -1219,17 +1215,15 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
   }
   full_result r = base64_tail_decode(ctx, output, input, length, equalsigns);
   
-  DEBUG_PRINT(" Base64_tail Input count after removing padding and white spaces: %d, Output count: %d,  \n",
-              r.input_count, r.output_count);
+  // DEBUG_PRINT(" Base64_tail Input count after removing padding and white spaces: %d, Output count: %d,  \n",
+  //             r.input_count, r.output_count);
 
   // DEBUG_PRINT(GREEN_TEXT("DEBUG: r.whitespaces: %d\n"), r.whitespaces);
   
   // Here , the internal function was successful
   if (r.error == BASE64_SUCCESS && equalsigns > 0) {
     // additional checks
-    DEBUG_PRINT(
-        GREEN_TEXT("DEBUG: Additional checks: equalsigns: %d, r.output_count: %zu\n"), equalsigns,
-        r.output_count);
+    // DEBUG_PRINT( GREEN_TEXT("DEBUG: Additional checks: equalsigns: %d, r.output_count: %zu\n"), equalsigns,r.output_count);
 
     if ((r.output_count % 3 == 0) ||
         ((r.output_count % 3) + 1 + equalsigns != 4)) {
@@ -1251,8 +1245,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
   DEBUG_PRINT("\n");
   DEBUG_PRINT(RED_TEXT("DEBUG: Starting base64_tail_decode\n"));
                               
-  DEBUG_PRINT(
-      BRIGHT_YELLOW_TEXT("DEBUG: length = %d, equalsigns = %d\n"), length, equalsigns);
+  // DEBUG_PRINT(BRIGHT_YELLOW_TEXT("DEBUG: length = %d, equalsigns = %d\n"), length, equalsigns);
 
   if (length == 0) {
     return (full_result){BASE64_SUCCESS, 0, 0,0};
@@ -1321,8 +1314,8 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
             internal_padding++;
             temp_src--;
             }
-          DEBUG_PRINT("Internal padding count inside core: %d\n", internal_padding);
-          DEBUG_PRINT("src - srcinit: %zu\n", (size_t)(src - srcinit));
+          // DEBUG_PRINT("Internal padding count inside core: %d\n", internal_padding);
+          // DEBUG_PRINT("src - srcinit: %zu\n", (size_t)(src - srcinit));
           
           // Add this where you want to see the consumed input
           // int consumed_length = src - srcinit;
@@ -1387,7 +1380,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
 
 
       if (idx == 2) {
-        DEBUG_PRINT("idx == 2\n");
+        // DEBUG_PRINT("idx == 2\n");
         uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) +
                           ((uint32_t)(buffer[1]) << (2 * 6));
         // For little-endian system: swap and shift.
@@ -1395,13 +1388,13 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
         triple >>= 8;
         memcpy(dst, &triple, 1);
         if (equalsigns != 2){
-          DEBUG_PRINT("equalsigns != 2\n");
-          DEBUG_PRINT("dst - dstinit: %zu\n", (size_t)(dst - dstinit));
+          // DEBUG_PRINT("equalsigns != 2\n");
+          // DEBUG_PRINT("dst - dstinit: %zu\n", (size_t)(dst - dstinit));
           return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit), whitespaces};
         }
         dst += 1;
       } else if (idx == 3) {
-        DEBUG_PRINT("idx == 3\n");
+        // DEBUG_PRINT("idx == 3\n");
         uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) +
                           ((uint32_t)(buffer[1]) << (2 * 6)) +
                           ((uint32_t)(buffer[2]) << (1 * 6));
@@ -1409,7 +1402,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
         triple >>= 8;
         memcpy(dst, &triple, 2);
         if (equalsigns != 1){
-          DEBUG_PRINT("equalsigns != 1\n");
+          // DEBUG_PRINT("equalsigns != 1\n");
           return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit), whitespaces};
         }
         dst += 2;
@@ -1521,7 +1514,15 @@ int EVP_DecodeBlock(unsigned char *t, const unsigned char *f, int n) {
   return evp_decodeblock_int(NULL, t, f, n);
 }
 
-int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
+int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl) {
+#if TEST_SIMDUTF_BIO
+  return EVP_DecodeFinal_simdutf(ctx, out, outl);
+#else
+  return EVP_DecodeFinal_OpenSSL(ctx, out, outl);
+#endif
+}
+
+int EVP_DecodeFinal_OpenSSL(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
 {
     int i;
     int j;
