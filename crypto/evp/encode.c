@@ -26,7 +26,8 @@ char *input, size_t length);
 
 
 #define DEBUG 0 // Set to 1 to enable debug prints, 0 to disable
-#define TEST_SIMDUTF_BIO 0
+#define TEST_SIMDUTF_BIO 1
+#define TEST_SIMDUTF_BIO_ONLY_FINAL 0
 #define RED_TEXT(str) "\033[31m" str "\033[0m"
 #define GREEN_TEXT(str) "\033[32m" str "\033[0m"
 
@@ -315,9 +316,9 @@ void EVP_DecodeInit(EVP_ENCODE_CTX *ctx) {
 int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
            const unsigned char *in, int inl) {
 #if TEST_SIMDUTF_BIO
-  return EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
-#else
-  return EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl);
+  // return EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
+// #else
+  return EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl); 
 #endif
 }
 
@@ -1244,6 +1245,12 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
                                int length,int equalsigns) {
   DEBUG_PRINT("\n");
   DEBUG_PRINT(RED_TEXT("DEBUG: Starting base64_tail_decode\n"));
+
+  if (dst == NULL) {
+    return (full_result){INVALID_BASE64_CHARACTER, 0, 0, 0};
+  }
+
+
                               
   // DEBUG_PRINT(BRIGHT_YELLOW_TEXT("DEBUG: length = %d, equalsigns = %d\n"), length, equalsigns);
 
