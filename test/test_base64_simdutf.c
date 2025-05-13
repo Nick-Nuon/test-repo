@@ -411,9 +411,10 @@ int OpenSSL_decode(EVP_ENCODE_CTX *dummy,char *dst,int *outl, const char *src, i
     int taillen = 0;
 
     EVP_DecodeInit(ctx);
-    if (EVP_DecodeUpdate(ctx, (unsigned char *)dst, &outlen,
-                         (const unsigned char *)src, srclen) < 0 ||
-        EVP_DecodeFinal(ctx, (unsigned char *)&dst[outlen], &taillen) < 0) {
+    if (EVP_DecodeUpdate_simdutf(ctx, (unsigned char *)dst, &outlen,
+                         (const unsigned char *)src, srclen) < 0 
+                         || EVP_DecodeFinal_simdutf(ctx, (unsigned char *)&dst[outlen], &taillen) < 0
+    ) {
         // fprintf(stderr, "Invalid input for openssl base64 decode.\n");
         EVP_ENCODE_CTX_free(ctx);
         *outl = outlen;
@@ -1055,7 +1056,6 @@ static int test_roundtrip_base64_with_lots_of_spaces(void) {
     DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered test_roundtrip_base64_with_lots_of_spaces\n"));
 
     for (len = 0; len < 2048; len++) {
-        printf("Processing length = %zu\n", len);
         DEBUG_PRINT("DEBUG: Processing length = %zu\n", len);
 
         /* Allocate source binary data */

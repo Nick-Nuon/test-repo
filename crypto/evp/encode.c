@@ -26,6 +26,7 @@ char *input, size_t length);
 
 
 #define DEBUG 0 // Set to 1 to enable debug prints, 0 to disable
+#define TEST_SIMDUTF_BIO 1
 #define RED_TEXT(str) "\033[31m" str "\033[0m"
 #define GREEN_TEXT(str) "\033[32m" str "\033[0m"
 
@@ -463,6 +464,24 @@ end:
   DEBUG_PRINT(GREEN_TEXT("DEBUG: EVP_DecodeUpdate: outl: %d, ret: %d, n: %d, eof: %d, rv: %d, temp_total: %d\n"), *outl, ret, n, eof, rv, temp_total);
   ctx->num = n;
   return rv;
+}
+
+int EVP_DecodeUpdate_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
+               const unsigned char *in, int inl) {
+  DEBUG_PRINT(GREEN_TEXT("********************* DEBUG: Entered EVP_DecodeUpdate_simdutf\n"));
+  // printf("DEBUG: EVP_DecodeUpdate_simdutf: inl: %d\n", inl);
+  int ret;
+  
+  /* Legacy behaviour: an empty input chunk signals end of input. */
+  if (inl == 0) {
+    *outl = 0;
+    return 0;
+  }
+
+  ret = simdutf_decode(ctx, out, outl, (const char *)in, inl);
+
+  DEBUG_PRINT(GREEN_TEXT("DEBUG: EVP_DecodeUpdate_simdutf returning %d, outl = %d\n"), ret, *outl);
+  return ret;
 }
 
 const uint8_t to_base64_value[] = {
@@ -1287,7 +1306,6 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
         // INVALID_BASE64_CHARACTER
         if (c == 0x2D & (idx % 4) == 0 ) { // '-' sign/ SEOF. TODO: change the tables
           DEBUG_PRINT("SEOF detected\n");
-          printf("SEOF detected\n");
           // idx++;
           break;
         }
@@ -1508,11 +1526,12 @@ int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
     int i;
     int j;
 
-    DEBUG_CHECK_NULL(out);
+    // DEBUG_CHECK_NULL(out);
 
     *outl = 0;
     if (ctx->num != 0) {
         i = evp_decodeblock_int(ctx, out, ctx->enc_data, ctx->num);
+        
         if (i < 0)
             return -1;
         ctx->num = 0;
@@ -1520,4 +1539,13 @@ int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
         return 1;
     } else
         return 1;
+}
+
+int EVP_DecodeFinal_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
+{
+  *outl = 0;
+  if (ctx->num != 0) {
+    return simdutf_decode(ctx, out, outl, (const char *)ctx->enc_data, ctx->num);
+  }
+  return 1;
 }
