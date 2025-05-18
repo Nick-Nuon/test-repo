@@ -759,6 +759,7 @@ __owur int EVP_Cipher(EVP_CIPHER_CTX *c,
               size_t whitespaces;
               size_t padding; // padding removed by base64_tail_decode_trim_end
               size_t internal_padding; // padding removed by the scalar kernel
+              int has_seof;
           } full_result;
           
 
