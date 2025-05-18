@@ -313,13 +313,66 @@ void EVP_DecodeInit(EVP_ENCODE_CTX *ctx) {
   ctx->flags = 0;
 }
 
+// TODO: don't forget to delete this function when you're done
+size_t maximal_binary_length_from_base64_lazy_duplicate(const char *input, size_t length) {
+  size_t padding = 0;
+  if(length > 0) {
+    if(input[length - 1] == '=') {
+      padding++;
+      if(length > 1 && input[length - 2] == '=') {
+        padding++;
+      }
+    }
+  }
+  size_t actual_length = length - padding;
+  if(actual_length % 4 <= 1) {
+    return (actual_length / 4) * 3;
+  }
+  // When valid, remainder is 2 or 3, so subtract 1.
+  return (actual_length / 4) * 3 + (actual_length % 4) - 1;
+}
+
+
 int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
            const unsigned char *in, int inl) {
-#if TEST_SIMDUTF_BIO
+    // if (out == NULL || outl == NULL) {
+    //     return -1;
+    // }
+// #if TEST_SIMDUTF_BIO
+//   // TODO: Simplify this.  This is a bit confusing, but the outlen is deferenced once in the inner fucniton
   // return EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
 // #else
-  return EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl); 
-#endif
+  // return EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl); 
+// #endif
+
+// size_t max = maximal_binary_length_from_base64_lazy_duplicate(in,inl);
+// unsigned char *out_openssl = OPENSSL_malloc(max + 30);
+// int outl_openssl = 0;
+
+// //  int ret_simdutf = EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
+ int ret_openssl = EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl);
+
+// memcpy(out_openssl, out, max + 30); 
+
+int outl_openssl = -2;
+int outl_simdutf = -2;
+
+if (outl != NULL) {
+ outl_openssl = *outl;}
+
+//  int ret_simdutf = simdutf_decode(ctx, out, outl, in, inl);
+int ret_simdutf = EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
+
+if (outl != NULL) {
+  outl_simdutf = *outl;}
+
+if (outl_openssl != outl_simdutf || ret_openssl != ret_simdutf) {
+  DEBUG_PRINT(RED_TEXT("DEBUG: MISMATCH: simdutf outl = %d, OpenSSL outl = %d "), outl_simdutf, outl_openssl);
+  DEBUG_PRINT(RED_TEXT(" simdutf ret = %d, OpenSSL ret = %d\n"), ret_simdutf, ret_openssl);
+
+}
+
+ return ret_simdutf;
 }
 
 /*-
@@ -945,6 +998,7 @@ static inline int is_ascii_white_space(char c) {
 
 int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length) {
+    
     full_result r = base64_tail_decode_trim_end(ctx, output, outl, input, length);
 
     // DEBUG_PRINT(RED_TEXT("DEBUG: r.error Simdutf: %d\n"),
@@ -1001,7 +1055,7 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
             p++;
         }
 
-        DEBUG_PRINT(RED_TEXT("DEBUG: max_internal_padding: %zu\n"), max_internal_padding);
+        // DEBUG_PRINT(RED_TEXT("DEBUG: max_internal_padding: %zu\n"), max_internal_padding);
 
         // (r.input_count + max_internal_padding) ==  64 messes up , Outlen is 0 in certain circumnstacnes and non vero in others but where ?
         // sol'n : I wasn't taking white spaces into account!
@@ -1045,7 +1099,6 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         }
         else 
         {
-          // TODO : fix this
           DEBUG_PRINT(RED_TEXT("DEBUG: You forget an edge case here\n"));
           return -1;
         }
@@ -1153,23 +1206,23 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
       DEBUG_CHECK_NULL(output);
 
 
-  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (hex): \n"));
-  for (size_t i = 0; i < (size_t)length; i++) {
-    DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)input[i]);
-    if ((i + 1) % 8 == 0) {
-      DEBUG_PRINT("\n");
-    }
-  }
-  DEBUG_PRINT("\n\n");
+  // DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (hex): \n"));
+  // for (size_t i = 0; i < (size_t)length; i++) {
+  //   DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)input[i]);
+  //   if ((i + 1) % 8 == 0) {
+  //     DEBUG_PRINT("\n");
+  //   }
+  // }
+  // DEBUG_PRINT("\n\n");
 
-  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (char): \n")); 
-  for (size_t i = 0; i < (size_t)length; i++) {
-    DEBUG_PRINT(GREEN_TEXT("%c "), (unsigned char)input[i]);
-    if ((i + 1) % 8 == 0) {
-      DEBUG_PRINT("\n");
-    }
-  }
-  DEBUG_PRINT("\n");
+  // DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (char): \n")); 
+  // for (size_t i = 0; i < (size_t)length; i++) {
+  //   DEBUG_PRINT(GREEN_TEXT("%c "), (unsigned char)input[i]);
+  //   if ((i + 1) % 8 == 0) {
+  //     DEBUG_PRINT("\n");
+  //   }
+  // }
+  // DEBUG_PRINT("\n");
   DEBUG_PRINT(GREEN_TEXT("DEBUG: Length: %zu\n"), length);
 
   // TODO: there is probably a far more performant way to calculate whitespaces
@@ -1274,11 +1327,11 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
   uint8_t buffer[4];
 
 #if DEBUG
-  DEBUG_PRINT("DEBUG: Input (hex): ");
-  for (int i = 0; i < length; i++) {
-    DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)src[i]);
-  }
-  DEBUG_PRINT("\n\n");
+  // DEBUG_PRINT("DEBUG: Input (hex): ");
+  // for (int i = 0; i < length; i++) {
+  //   DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)src[i]);
+  // }
+  // DEBUG_PRINT("\n\n");
 #endif
 
   while (1) {
@@ -1306,8 +1359,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
         // INVALID_BASE64_CHARACTER
         if (c == 0x2D & (idx % 4) == 0 ) { // '-' sign/ SEOF. TODO: change the tables
           DEBUG_PRINT("SEOF detected\n");
-          // idx++;
-          break;
+          break; // out of the while (idx < 4 && src < srcend)  loop
         }
         if (c == 0x3D) {
           // all padding have already been removed by the caller
@@ -1419,14 +1471,14 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
         return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit), whitespaces};
       }
 #if DEBUG
-      {
-        int final_bytes = (int)(dst - dstinit);
-        DEBUG_PRINT("DEBUG: Final output (hex): ");
-        for (int j = 0; j < final_bytes; j++) {
-          DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)dstinit[j]);
-        }
-        DEBUG_PRINT("\n\n");
-      }
+      // {
+      //   int final_bytes = (int)(dst - dstinit);
+      //   DEBUG_PRINT("DEBUG: Final output (hex): ");
+      //   for (int j = 0; j < final_bytes; j++) {
+      //     DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)dstinit[j]);
+      //   }
+      //   DEBUG_PRINT("\n\n");
+      // }
 #endif
       return (full_result){BASE64_SUCCESS, (size_t)(src - srcinit),
                            (size_t)(dst - dstinit),whitespaces};

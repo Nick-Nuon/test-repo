@@ -198,7 +198,7 @@ static int b64_read(BIO *b, char *out, int outl)
          * We need to scan, a line at a time until we have a valid line if we
          * are starting.
          */
-        if (ctx->start && (BIO_get_flags(b) & BIO_FLAGS_BASE64_NO_NL) != 0) {
+        if (ctx->start && (BIO_get_flags(b) & BIO_FLAGS_BASE64_NO_NL) != 0) { // No newlines! What we have now.
             ctx->tmp_len = 0;
         } else if (ctx->start) {
             q = p = ctx->tmp;
@@ -212,6 +212,10 @@ static int b64_read(BIO *b, char *out, int outl)
                  * scanning for a '\n' before we even start looking for
                  * base64 encoded stuff.
                  */
+                // In this case , a long line is one that is longer than the buffer
+                // size, so we need to scan the whole buffer
+                // e.g. if the buffer is 1024 bytes, and the line is 1025 bytes
+                // then we need to scan the whole buffer
                 if (ctx->tmp_nl) {
                     p = q;
                     ctx->tmp_nl = 0;
@@ -220,12 +224,13 @@ static int b64_read(BIO *b, char *out, int outl)
 
                 k = EVP_DecodeUpdate(ctx->base64, ctx->buf, &num, p, q - p);
                 EVP_DecodeInit(ctx->base64);
+                // skip that line and go to the next one
                 if (k <= 0 && num == 0) {
                     p = q;
                     continue;
                 }
 
-                ctx->start = 0;
+                ctx->start = 0; // we're starting to decode now after skipping whitespaces and long lines
                 if (p != ctx->tmp) {
                     i -= p - ctx->tmp;
                     for (x = 0; x < i; x++)
@@ -235,7 +240,7 @@ static int b64_read(BIO *b, char *out, int outl)
             }
 
             /* we fell off the end without starting */
-            if (ctx->start) {
+            if (ctx->start) { // Confusing! ctx -> start = 1 means we haven't started decoding yet!!!
                 /*
                  * Is this is one long chunk?, if so, keep on reading until a
                  * new line.

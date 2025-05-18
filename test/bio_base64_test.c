@@ -307,6 +307,22 @@ static int test_bio_base64_run(test_case *t, int llen, int wscnt)
     return ret;
 }
 
+
+/*
+ * Performs generic test cases for base64 encoding/decoding with various line lengths and whitespace counts
+ *
+ * @param t         Pointer to test_case structure containing test parameters
+ * @param verbose   Flag to enable verbose output of test details to stderr
+ *
+ * The function:
+ * - Iterates through different line lengths and whitespace counts
+ * - Adds extra length for NO_NL tests
+ * - Runs base64 encoding/decoding tests with each combination
+ * - Prints detailed test information if verbose mode is enabled
+ * - Handles special cases for verbatim input and line length optimization
+ *
+ * @return Returns 1 if all tests pass, 0 if any test fails
+ */
 static int generic_case(test_case *t, int verbose)
 {
     unsigned *llen;
@@ -315,7 +331,7 @@ static int generic_case(test_case *t, int verbose)
 
     for (llen = linelengths; *llen > 0; ++llen) {
         for (wscnt = wscnts; *wscnt * 2 < *llen; ++wscnt) {
-            int extra = t->no_nl ? 64 : 0;
+            int extra = t->no_nl ? 64 : 0; // extra length for NO_NL tests
 
             /*
              * Use a longer line for NO_NL tests, in particular, eventually
@@ -359,6 +375,7 @@ static int generic_case(test_case *t, int verbose)
     return ok;
 }
 
+// returns the remainder of i divided by m, and sets q to the quotient
 static int quotrem(int i, unsigned int m, int *q)
 {
     *q = i / m;
@@ -388,6 +405,14 @@ static int test_bio_base64_generated(int idx)
     t.encoded = NULL;
     t.bytes  = lengths[lencase];
     t.trunc = 0;
+    /**
+     * Adjusts the bytes and truncation based on padding case:
+     * - If padding exists (1-2 chars): adds padding to total bytes
+     * - If padding >= 3 chars: sets truncation to (padding - 2)
+     *
+     * @param padcase Number of padding characters
+     * @param t Structure containing bytes and truncation fields
+     */
     if (padcase && padcase < 3)
         t.bytes  += padcase;
     else if (padcase >= 3)
@@ -399,7 +424,7 @@ static int test_bio_base64_generated(int idx)
         return 0;
     }
 
-    return generic_case(&t, 0);
+    return generic_case(&t, 1);
 }
 
 static int test_bio_base64_corner_case_bug(int idx)
@@ -426,7 +451,7 @@ static int test_bio_base64_corner_case_bug(int idx)
     t.bytes = 6;
     t.trunc = 0;    /* ignored */
 
-    return generic_case(&t, 0);
+    return generic_case(&t, 1);
 }
 
 int setup_tests(void)
