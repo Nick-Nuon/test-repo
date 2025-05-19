@@ -123,7 +123,7 @@
         return 0;                                                                      \
     }                                                                                  \
     int outlen_simdutf = 0;                                                            \
-    int simdutf_result = simdutf_decode(NULL, (char *)buffer_simd, &outlen_simdutf, input, len); \
+    int simdutf_result = simdutf_decode_complete(NULL, (char *)buffer_simd, &outlen_simdutf, input, len); \
                                                                                        \
     unsigned char *buffer_openssl = OPENSSL_malloc(max_len);                           \
     if (buffer_openssl == NULL) {                                                      \
@@ -411,9 +411,10 @@ int OpenSSL_decode(EVP_ENCODE_CTX *dummy,char *dst,int *outl, const char *src, i
     int taillen = 0;
 
     EVP_DecodeInit(ctx);
-    if (EVP_DecodeUpdate(ctx, (unsigned char *)dst, &outlen,
-                         (const unsigned char *)src, srclen) < 0 
-                         || EVP_DecodeFinal(ctx, (unsigned char *)&dst[outlen], &taillen) < 0
+    int update_result = EVP_DecodeUpdate(ctx, (unsigned char *)dst, &outlen,
+                         (const unsigned char *)src, srclen);
+    int final_result = EVP_DecodeFinal(ctx, (unsigned char *)&dst[outlen], &taillen);
+    if (update_result < 0 || final_result < 0
     ) {
         // fprintf(stderr, "Invalid input for openssl base64 decode.\n");
         EVP_ENCODE_CTX_free(ctx);
@@ -427,6 +428,8 @@ int OpenSSL_decode(EVP_ENCODE_CTX *dummy,char *dst,int *outl, const char *src, i
     EVP_ENCODE_CTX_free(ctx);
     outlen += taillen;
     *outl = outlen;
+
+    // return 
     return outlen;
     // return (result){BASE64_SUCCESS, (size_t)outlen};
 }
@@ -458,7 +461,7 @@ static int test_decode_base64_cases(void)
             return 0;
         }
         int simdutf_outlen = 0;
-        int simdutf_result = simdutf_decode(NULL, (char *)buffer, &simdutf_outlen, cases[i], len);
+        int simdutf_result = simdutf_decode_complete(NULL, (char *)buffer, &simdutf_outlen, cases[i], len);
 
         // *** OpenSSL part ***
 
@@ -529,7 +532,7 @@ static int test_complete_decode_base64_cases(void)
             return 0;
         }
         int outlen_simdutf = 0;
-        int simdutf_result = simdutf_decode(NULL, (char *)buffer, &outlen_simdutf, cases[i].encoded, enc_len);
+        int simdutf_result = simdutf_decode_complete(NULL, (char *)buffer, &outlen_simdutf, cases[i].encoded, enc_len);
 
         for(size_t j = 0; j < simdutf_result; j++) {
             if(buffer[j] != cases[i].decoded[j]) {
@@ -639,7 +642,7 @@ static int inline check_cases(case_pair *cases, size_t num_cases)
             return 0;
         }
         int outlen_simdutf = 0;
-        int simdutf_result = simdutf_decode(NULL, (char *)buffer, &outlen_simdutf, cases[i].encoded, enc_len);
+        int simdutf_result = simdutf_decode_complete(NULL, (char *)buffer, &outlen_simdutf, cases[i].encoded, enc_len);
 
         for(size_t j = 0; j < simdutf_result; j++) {
             if(buffer[j] != cases[i].decoded[j]) {
@@ -716,7 +719,7 @@ static int inline check_seof(case_pair *cases, size_t num_cases)
             return 0;
         }
         int outlen_simdutf = 0;
-        int simdutf_result = simdutf_decode(NULL, (char *)buffer, &outlen_simdutf, cases[i].encoded, enc_len);
+        int simdutf_result = simdutf_decode_complete(NULL, (char *)buffer, &outlen_simdutf, cases[i].encoded, enc_len);
         DEBUG_PRINT(GREEN_TEXT("DEBUG: simdutf_result = %d\n"), simdutf_result);
 
 
@@ -820,7 +823,7 @@ static int inline check_cases_no_padding(case_pair *cases, size_t num_cases)
             return 0;
         }
         int outlen_simdutf = 0;
-        int simdutf_result = simdutf_decode(NULL, (char *)buffer, &outlen_simdutf, cases[i].encoded, enc_len);
+        int simdutf_result = simdutf_decode_complete(NULL, (char *)buffer, &outlen_simdutf, cases[i].encoded, enc_len);
         // ASSERT_EQUAL_INT(simdutf_result, -1);
 
         // Error is intentional
@@ -1116,7 +1119,7 @@ static int test_roundtrip_base64_with_lots_of_spaces(void) {
 
         /* Decode the Base64 string (with extra spaces) */
         int outlen_simdutf = 0;
-        int result_simdutf = simdutf_decode(NULL, back,  &outlen_simdutf, buffer_with_spaces, buffer_with_spaces_len);
+        int result_simdutf = simdutf_decode_complete(NULL, back,  &outlen_simdutf, buffer_with_spaces, buffer_with_spaces_len);
         DEBUG_PRINT("DEBUG: Decoded binary length simdutf= %zu\n", result_simdutf);
         if (source == NULL) {
             ASSERT_EQUAL_INT(result_simdutf, 0);
@@ -1228,7 +1231,7 @@ static int test_roundtrip_base64_with_spaces(void) {
             return 0;
         }
         int outlen_simdutf = 0;
-        int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, buffer, cur_b64_len);
+        int result_simdutf = simdutf_decode_complete(NULL, (char *)back_simd, &outlen_simdutf, buffer, cur_b64_len);
         DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
         if (len == 0) {
             ASSERT_EQUAL_INT(result_simdutf, 0);
@@ -1364,7 +1367,7 @@ const static uint8_t to_base64_value[] = {
                 return 0;
             }
             int outlen_simdutf = 0;
-            int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, buffer, cur_b64_len);
+            int result_simdutf = simdutf_decode_complete(NULL, (char *)back_simd, &outlen_simdutf, buffer, cur_b64_len);
             DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
             DEBUG_PRINT("DEBUG: Source and decoded data match for simdutf for length %zu\n", len);
 
@@ -1437,7 +1440,7 @@ const static uint8_t to_base64_value[] = {
                 return 0;
             }
             int out_simd = 0;
-            int err_simd = simdutf_decode(NULL, (char *)back_simd,
+            int err_simd = simdutf_decode_complete(NULL, (char *)back_simd,
                                           &out_simd, buffer, inlen);
             ASSERT_EQUAL_INT(err_simd, want_err);
             // if (err_simd >= 0)
@@ -1520,7 +1523,7 @@ static int test_multiple_of_4_good(void) {
         }
 
         int outlen_simdutf = 0;
-        int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, buffer, s);
+        int result_simdutf = simdutf_decode_complete(NULL, (char *)back_simd, &outlen_simdutf, buffer, s);
         DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
         DEBUG_PRINT("DEBUG: Source and decoded data match for simdutf for length %zu\n", len);
 
@@ -1592,7 +1595,7 @@ static int test_multiple_of_4_bad(void) {
         }
 
         int outlen_simdutf = 0;
-        int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, buffer, s);
+        int result_simdutf = simdutf_decode_complete(NULL, (char *)back_simd, &outlen_simdutf, buffer, s);
         DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
         DEBUG_PRINT("DEBUG: Source and decoded data match for simdutf for length %zu\n", len);
 
@@ -1673,7 +1676,7 @@ static int test_seof_good_cases(void) {
         }
 
         int outlen_simdutf = 0;
-        int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, buffer, s);
+        int result_simdutf = simdutf_decode_complete(NULL, (char *)back_simd, &outlen_simdutf, buffer, s);
         DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
 
         DEBUG_PRINT("DEBUG: Source and decoded data match for simdutf for length %zu\n", len);
@@ -1761,7 +1764,7 @@ static int test_seof_bad_cases(void) {
 
         int outlen_simdutf = 0;
         DEBUG_PRINT("DEBUG: back_simd = %p\n", back_simd);
-        int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, buffer, s);
+        int result_simdutf = simdutf_decode_complete(NULL, (char *)back_simd, &outlen_simdutf, buffer, s);
         DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
         DEBUG_PRINT("DEBUG: Source and decoded data match for simdutf for length %zu\n", len);
 
@@ -1849,7 +1852,7 @@ static int test_roundtrip_base64(void) {
         }
 
         int outlen_simdutf = 0;
-        int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, buffer, s);
+        int result_simdutf = simdutf_decode_complete(NULL, (char *)back_simd, &outlen_simdutf, buffer, s);
         DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
         for (int j = 0; j < len; j++) {
             ASSERT_EQUAL_HEX(j, back_simd[j], (unsigned char)source[j]);
@@ -1939,14 +1942,14 @@ static int test_issue_520(void) {
     }
     int outlen_simd = 0;
     /* Call the decoder: we expect it to return -1 on this invalid input */
-    int result_simd = simdutf_decode(
+    int result_simd = simdutf_decode_complete(
         NULL,
         (char *)back_simd,
         &outlen_simd,
         buffer,
         len
     );
-    DEBUG_PRINT("DEBUG: simdutf_decode returned %d, outlen=%d\n",
+    DEBUG_PRINT("DEBUG: simdutf_decode_complete returned %d, outlen=%d\n",
                 result_simd, outlen_simd);
     ASSERT_EQUAL_INT(result_simd, -1);
 
@@ -1995,7 +1998,7 @@ static int test_issue_509(void)
     unsigned char out_ssl[1];
     int outlen_simd = 0, outlen_ssl = 0;
 
-    int rc_simd = simdutf_decode(NULL,
+    int rc_simd = simdutf_decode_complete(NULL,
                                  (char *)out_simd,
                                  &outlen_simd,
                                  buffer,
@@ -2043,12 +2046,12 @@ static int test_issue_502_alt(void)
             return 0;
         }
         int outlen_simd = 0;
-        int rc_simd = simdutf_decode(NULL,
+        int rc_simd = simdutf_decode_complete(NULL,
                                      (char *)back_simd,
                                      &outlen_simd,
                                      buffer,
                                      buf_len);
-        DEBUG_PRINT("DEBUG: simdutf_decode(no.=%zu) → rc=%d, outlen=%d\n",
+        DEBUG_PRINT("DEBUG: simdutf_decode_complete(no.=%zu) → rc=%d, outlen=%d\n",
                     nof_equals, rc_simd, outlen_simd);
         /* A string of only padding signs is invalid */
         ASSERT_EQUAL_INT(rc_simd,    -1);
@@ -2102,7 +2105,7 @@ static int test_issue_504_8bit(void)
         return 0;
     }
     int outlen_simd = 0;
-    int rc_simd = simdutf_decode(NULL,
+    int rc_simd = simdutf_decode_complete(NULL,
                                  (char *)back_simd,
                                  &outlen_simd,
                                  buffer,
@@ -2244,7 +2247,7 @@ static int test_bad_padding_base64(void) {
                 return 0;
             }
             int outlen_simdutf = 0;
-            int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, copy, copy_len);
+            int result_simdutf = simdutf_decode_complete(NULL, (char *)back_simd, &outlen_simdutf, copy, copy_len);
             DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
             ASSERT_EQUAL_INT(result_simdutf, -1);
 
@@ -2322,7 +2325,7 @@ static int test_bad_padding_base64(void) {
             }
             int outlen_simdutf2 = 0;
             int result_simdutf2 =
-                simdutf_decode(NULL, (char *)back_simd2, &outlen_simdutf2,
+                simdutf_decode_complete(NULL, (char *)back_simd2, &outlen_simdutf2,
                                copy2, copy2_len);
             DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf2);
             ASSERT_EQUAL_INT(result_simdutf2, -1);
@@ -2385,7 +2388,7 @@ static int test_bad_padding_base64(void) {
                 return 0;
             }
             int outlen_simdutf = 0;
-            int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, copy, copy_len);
+            int result_simdutf = simdutf_decode_complete(NULL, (char *)back_simd, &outlen_simdutf, copy, copy_len);
             DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
             ASSERT_EQUAL_INT(result_simdutf, -1);
 
@@ -2456,7 +2459,7 @@ static int test_bad_padding_base64(void) {
                 return 0;
             }
             int outlen_simdutf = 0;
-            int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, copy, copy_len);
+            int result_simdutf = simdutf_decode_complete(NULL, (char *)back_simd, &outlen_simdutf, copy, copy_len);
             DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
             ASSERT_EQUAL_INT(result_simdutf, -1);
 
@@ -2560,7 +2563,7 @@ static int test_doomed_truncated_base64_roundtrip(void)
             }
             
             int outlen_simdutf = 0;
-            int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, buffer, truncated);
+            int result_simdutf = simdutf_decode_complete(NULL, (char *)back_simd, &outlen_simdutf, buffer, truncated);
             DEBUG_PRINT("DEBUG: Decoded binary length simdutf = %d\n", result_simdutf);
 
             /* **** OpenSSL decoding **** */
@@ -2656,7 +2659,7 @@ static int test_streaming_base64_roundtrip(void)
         for (pos = 0; pos < size; pos += window) {
             size_t count = (window < (size - pos)) ? window : (size - pos);
             
-            int result_simd = simdutf_decode(NULL, 
+            int result_simd = simdutf_decode_complete(NULL, 
                                            (char *)back_simd,
                                            &outlen_simd,
                                            buffer + pos, 
@@ -2760,7 +2763,7 @@ static int test_data_after_padding(void) {
 
             /* Decode with simdutf */
             int outlen_simd = 0;
-            int err_simd = simdutf_decode(NULL, (char *)back_simd, &outlen_simd,
+            int err_simd = simdutf_decode_complete(NULL, (char *)back_simd, &outlen_simd,
                                           buffer, total_len);
             ASSERT_EQUAL_INT(err_simd,   -1);
             // ASSERT_EQUAL_INT(outlen_simd,  0);
@@ -2862,7 +2865,7 @@ static int test_lots_of_data_after_padding(void) {
             int outlen_simdutf = 0;
             int outlen_openssl = 0;
             
-            int result_simdutf = simdutf_decode(NULL, (char *)back_simd, 
+            int result_simdutf = simdutf_decode_complete(NULL, (char *)back_simd, 
                                                &outlen_simdutf, buffer, total_len);
             int result_openssl = OpenSSL_decode(NULL, (char *)back_openssl, 
                                               &outlen_openssl, buffer, total_len);
@@ -2931,7 +2934,7 @@ static int test_random_padding_insertion(void) {
         int outlen_simdutf = 0;
         int outlen_openssl = 0;
         
-        int result_simdutf = simdutf_decode(NULL, (char *)back_simd, 
+        int result_simdutf = simdutf_decode_complete(NULL, (char *)back_simd, 
                                            &outlen_simdutf, buffer, actual_len);
         int result_openssl = OpenSSL_decode(NULL, (char *)back_openssl, 
                                           &outlen_openssl, buffer, actual_len);
@@ -3012,7 +3015,7 @@ static int test_random_padding_and_spaces(void) {
         int outlen_simdutf = 0;
         int outlen_openssl = 0;
         
-        int result_simdutf = simdutf_decode(NULL, (char *)back_simd, 
+        int result_simdutf = simdutf_decode_complete(NULL, (char *)back_simd, 
                                            &outlen_simdutf, buffer, actual_len);
         int result_openssl = OpenSSL_decode(NULL, (char *)back_openssl, 
                                           &outlen_openssl, buffer, actual_len);
@@ -3074,7 +3077,7 @@ static int test_readme_test(void)
 
         /* Decode using both decoders */
         int outlen_simdutf = 0;
-        int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, 
+        int result_simdutf = simdutf_decode_complete(NULL, (char *)back_simd, &outlen_simdutf, 
                                           buffer + pos, count);
 
         int outlen_openssl = 0;
@@ -3190,7 +3193,7 @@ static int test_doomed_partial_buffer_utf8(void)
                 return 0;
             }
             int outlen_simdutf = 0;
-            int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, base64, effective_b64_len);
+            int result_simdutf = simdutf_decode_complete(NULL, (char *)back_simd, &outlen_simdutf, base64, effective_b64_len);
 
             /* OpenSSL decode */
             unsigned char *back_openssl = OPENSSL_malloc(back_bufsize + 2);

@@ -759,7 +759,6 @@ __owur int EVP_Cipher(EVP_CIPHER_CTX *c,
               size_t whitespaces;
               size_t padding; // padding removed by base64_tail_decode_trim_end
               size_t internal_padding; // padding removed by the scalar kernel
-              int has_seof;
           } full_result;
           
 
@@ -968,7 +967,7 @@ int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned
                     char *out, int *outl);
 int EVP_DecodeBlock(unsigned char *t, const unsigned char *f, int n);
 full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src, int length, int equalsigns);
-full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char* output, int* outlen, char * input, size_t length);
+full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char* output, int* outlen, char * input, size_t length, int *has_seof);
 int tail_encode_base64(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen); 
 int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     const char *input, int length);
