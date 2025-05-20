@@ -745,6 +745,12 @@ __owur int EVP_Cipher(EVP_CIPHER_CTX *c,
         OTHER,                     // Not related to validation/transcoding.
         EXTRA_PADDING, // There is extra padding in the input string that shouldn't be here.
         } error_code;
+
+        typedef enum has_seof {
+            NO_SEOF = 0,
+            HAS_SEOF, 
+            } has_seof;
+    
         
           typedef struct result {
               error_code error;
@@ -756,6 +762,7 @@ __owur int EVP_Cipher(EVP_CIPHER_CTX *c,
               error_code error;
               size_t input_count;
               size_t output_count;
+              has_seof has_seof;
               size_t whitespaces;
               size_t padding; // padding removed by base64_tail_decode_trim_end
               size_t internal_padding; // padding removed by the scalar kernel

@@ -24,6 +24,9 @@ static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
 full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *outl,
 char *input, size_t length);
 
+full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
+  const char *input, int length);
+
 
 #define DEBUG 0 // Set to 1 to enable debug prints, 0 to disable
 #define TEST_SIMDUTF_BIO 1
@@ -349,30 +352,24 @@ int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
 // unsigned char *out_openssl = OPENSSL_malloc(max + 30);
 // int outl_openssl = 0;
 
-// //  int ret_simdutf = EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
  int ret_openssl = EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl);
 
-// memcpy(out_openssl, out, max + 30); 
-
 int outl_openssl = -2;
-int outl_simdutf = -2;
 
 if (outl != NULL) {
  outl_openssl = *outl;}
 
-//  int ret_simdutf = simdutf_decode(ctx, out, outl, in, inl);
-int ret_simdutf = EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
-
+  int ret_simdutf = EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
+int outl_simdutf = -2;
 if (outl != NULL) {
   outl_simdutf = *outl;}
 
 if (outl_openssl != outl_simdutf || ret_openssl != ret_simdutf) {
   DEBUG_PRINT(RED_TEXT("DEBUG: MISMATCH: simdutf outl = %d, OpenSSL outl = %d "), outl_simdutf, outl_openssl);
   DEBUG_PRINT(RED_TEXT(" simdutf ret = %d, OpenSSL ret = %d\n"), ret_simdutf, ret_openssl);
-
 }
 
- return ret_simdutf;
+ return ret_openssl;
 }
 
 /*-
@@ -530,7 +527,6 @@ end:
 int EVP_DecodeUpdate_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                const unsigned char *in, int inl) {
   DEBUG_PRINT(GREEN_TEXT("********************* DEBUG: Entered EVP_DecodeUpdate_simdutf\n"));
-  int ret;
   
   /* Legacy behaviour: an empty input chunk signals end of input. */
   if (inl == 0) {
@@ -538,10 +534,18 @@ int EVP_DecodeUpdate_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     return 0;
   }
 
-  ret = simdutf_decode(ctx, out, outl, (const char *)in, inl);
+  full_result ret = adjust_outlen(ctx, out, outl, (const char *)in, inl);
 
-  DEBUG_PRINT(GREEN_TEXT("DEBUG: EVP_DecodeUpdate_simdutf returning %d, outl = %d\n"), ret, *outl);
-  return ret;
+  if (ret.error == BASE64_SUCCESS && ret.has_seof == 1){
+    return 0;
+  }
+  else if (ret.error == BASE64_SUCCESS){
+    return 1;
+  }else {
+    return -1;
+  }
+
+  // DEBUG_PRINT(GREEN_TEXT("DEBUG: EVP_DecodeUpdate_simdutf returning %d, outl = %d\n"), ret, *outl);
 }
 
 const uint8_t to_base64_value[] = {
@@ -996,7 +1000,7 @@ static inline int is_ascii_white_space(char c) {
   return c == ' ' || c == '\t' || c == '\n' || c == '\r';
 }
 
-int adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
+full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length) {
 
     //TODO: trim_end is not using outl...? I can probably simplify this
@@ -1048,7 +1052,7 @@ int adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         valid = valid > 0 ? valid : 0;
   
         *outl = (int) valid;
-        return -1;
+        return r;
         // Cleanse (erase) the remaining incomplete portion.
 
         } else 
@@ -1058,7 +1062,7 @@ int adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
           int valid = 0;
   
           *outl = (int) valid;
-          return -1;
+          return r;
         } 
         else if (true_input_count % 64 != 0)
         {
@@ -1066,12 +1070,12 @@ int adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
           int valid = true_input_count/4*3 - (true_input_count/4*3) % 48;
   
           *outl = (int) valid;
-          return -1;
+          return r;
         }
         else 
         {
           DEBUG_PRINT(RED_TEXT("DEBUG: You forget an edge case here\n"));
-          return -1;
+          return r;
         }
       }
       if (r.input_count > 64 && len_wo_ws_ext_pad % 64 == 0){
@@ -1087,7 +1091,7 @@ int adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         // TODO: because OpenSSL does buffering, we need to cleanse what simdutf decoded but openssl didn't
         // size_t to_cleanse = r.output_count % 48;
         // OPENSSL_cleanse(output + valid, to_cleanse);
-        return -1;
+        return r;
       }
       if (in_cnt_wo_ws_ext_pad % 64 == 0) {
         // DEBUG_PRINT(RED_TEXT("DEBUG: Second option\n"));
@@ -1105,7 +1109,7 @@ int adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         // TODO: because OpenSSL does buffering, we need to cleanse what simdutf decoded but openssl didn't
         // size_t to_cleanse = r.output_count % 48;
         // OPENSSL_cleanse(output + valid, to_cleanse);
-        return -1;
+        return r;
       }
       // XX,=|== where ‘X’ denotes a valid character, ‘=’ denotes padding and ‘|’ denotes the point where the 64 buffer ends
       else if (in_cnt_wo_ws_ext_pad % 64 == 63) {
@@ -1124,7 +1128,7 @@ int adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         // TODO: because OpenSSL does buffering, we need to cleanse what simdutf decoded but openssl didn't
         // size_t to_cleanse = r.output_count % 48;
         // OPENSSL_cleanse(output + valid, to_cleanse);
-        return -1;
+        return r;
       }
       DEBUG_PRINT(RED_TEXT("DEBUG: length: %d\n"), length);
       DEBUG_PRINT(RED_TEXT("DEBUG: length - length mod 64: %d\n"), length - length % 64);
@@ -1135,7 +1139,7 @@ int adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     // DEBUG_PRINT(RED_TEXT("DEBUG: Simdutf decode successful, output count: %d\n"),
     //             r.output_count);
     *outl = (int)r.output_count;
-    return (int)r.output_count;
+    return r;
     // if (has_seof == 1){
     //     return 0;
     // } else 
@@ -1156,7 +1160,7 @@ int adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         // Cleanse (erase) the remaining incomplete portion.
         int to_cleanse = r.output_count % 48 -1;
         // OPENSSL_cleanse(output + valid, to_cleanse);
-        return -1;
+        return r;
 
   } else {
     // Calculate the number of bytes that constitute the valid part.
@@ -1168,7 +1172,7 @@ int adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     // Cleanse (erase) the remaining incomplete portion.
     size_t to_cleanse = r.output_count % 48;
     OPENSSL_cleanse(output + valid, to_cleanse);
-    return -1;
+    return r;
   }
 }
 
@@ -1178,12 +1182,12 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length) {
     int has_seof = 0;
     
-    int ret = adjust_outlen(ctx, output, outl, input, length);
-    if (has_seof != 0){
-      printf("simdutf_decode has_seof: %d\n", has_seof);
-    }
+    full_result ret = adjust_outlen(ctx, output, outl, input, length);
+    // if (has_seof != 0){
+    //   printf("simdutf_decode has_seof: %d\n", has_seof);
+    // }
 
-    if (ret == -1) {
+    if (ret.error != BASE64_SUCCESS) {
       return -1;
     } else {
       return *outl;
@@ -1256,9 +1260,9 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
   }
   if (length == 0) {
     if (equalsigns > 0) {
-      return (full_result){EXTRA_PADDING, equallocation, 0, easy_whitespaces, equalsigns};
+      return (full_result){EXTRA_PADDING, equallocation, 0, NO_SEOF, easy_whitespaces, equalsigns};
     }
-    return (full_result){BASE64_SUCCESS, 0,0, easy_whitespaces, equalsigns};
+    return (full_result){BASE64_SUCCESS, 0,0, NO_SEOF, easy_whitespaces, equalsigns};
   }
   full_result r = base64_tail_decode(ctx, output, input, length, equalsigns);
   
@@ -1274,14 +1278,14 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
 
     if ((r.output_count % 3 == 0) ||
         ((r.output_count % 3) + 1 + equalsigns != 4)) {
-      return (full_result){INVALID_BASE64_CHARACTER, equallocation, (size_t)r.output_count, easy_whitespaces, equalsigns};
+      return (full_result){INVALID_BASE64_CHARACTER, equallocation, (size_t)r.output_count, r.has_seof, easy_whitespaces, equalsigns};
     }
   }
   // DEBUG_PRINT(GREEN_TEXT("DEBUG: Final r.count:%d\n"), r.input_count);
   if (r.error == BASE64_SUCCESS | r.error == BASE64_INPUT_REMAINDER) {
-    return (full_result){r.error, r.input_count, (size_t)r.output_count, easy_whitespaces, equalsigns};
+    return (full_result){r.error, r.input_count, (size_t)r.output_count, r.has_seof, easy_whitespaces, equalsigns};
   } else {
-    return (full_result){r.error, r.input_count,(size_t)r.output_count, easy_whitespaces, equalsigns, r.internal_padding};
+    return (full_result){r.error, r.input_count,(size_t)r.output_count, r.has_seof, easy_whitespaces, equalsigns, r.internal_padding};
   }
 }
 
