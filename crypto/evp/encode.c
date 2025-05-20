@@ -1176,8 +1176,12 @@ int simdutf_decode_complete(EVP_ENCODE_CTX *ctx, unsigned char *output, int *out
 // for testing purposes
 int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length) {
-    int *has_seof = 0;
+    int has_seof = 0;
     int ret = simdutf_decode_complete(ctx, output, outl, input, length, &has_seof);
+    if (has_seof != 0){
+      printf("has_seof: %d\n", has_seof);
+    }
+
     if (ret == -1) {
       return -1;
     } else {
@@ -1258,7 +1262,14 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
     }
     return (full_result){BASE64_SUCCESS, 0,0, easy_whitespaces, equalsigns};
   }
-  full_result r = base64_tail_decode(ctx, output, input, length, equalsigns, &has_seof);
+  full_result r = base64_tail_decode(ctx, output, input, length, equalsigns, has_seof);
+
+  // if (*has_seof != 0) {
+  //   // DEBUG_PRINT("SEOF detected\n");
+  //   // printf("SEOF detected\n");
+  //   printf("Trim_end has_seof: %d\n", *has_seof);
+ 
+  // }
   
   // DEBUG_PRINT(" Base64_tail Input count after removing padding and white spaces: %d, Output count: %d,  \n",
   //             r.input_count, r.output_count);
@@ -1351,6 +1362,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
         // INVALID_BASE64_CHARACTER
         if (c == 0x2D & (idx % 4) == 0 ) { // '-' sign/ SEOF. TODO: change the tables
           DEBUG_PRINT("SEOF detected\n");
+          // printf("SEOF detected\n");
           *has_seof = 1;
           break; // out of the while (idx < 4 && src < srcend)  loop
         }
