@@ -22,7 +22,7 @@ static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n);
 
 full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *outl,
-char *input, size_t length, int *has_seof);
+char *input, size_t length);
 
 
 #define DEBUG 0 // Set to 1 to enable debug prints, 0 to disable
@@ -996,11 +996,11 @@ static inline int is_ascii_white_space(char c) {
   return c == ' ' || c == '\t' || c == '\n' || c == '\r';
 }
 
-int simdutf_decode_complete(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
-  const char *input, int length, int *has_seof) {
-    
+int adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
+  const char *input, int length) {
+
     //TODO: trim_end is not using outl...? I can probably simplify this
-    full_result r = base64_tail_decode_trim_end(ctx, output, outl, input, length, &has_seof);
+    full_result r = base64_tail_decode_trim_end(ctx, output, outl, input, length);
 
     //TODO: There is probably a way to Simplify/unify this!!!!
 
@@ -1135,8 +1135,8 @@ int simdutf_decode_complete(EVP_ENCODE_CTX *ctx, unsigned char *output, int *out
     // DEBUG_PRINT(RED_TEXT("DEBUG: Simdutf decode successful, output count: %d\n"),
     //             r.output_count);
     *outl = (int)r.output_count;
-        return (int)r.output_count;
-    // if (r.has_seof){
+    return (int)r.output_count;
+    // if (has_seof == 1){
     //     return 0;
     // } else 
     // {
@@ -1177,9 +1177,10 @@ int simdutf_decode_complete(EVP_ENCODE_CTX *ctx, unsigned char *output, int *out
 int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length) {
     int has_seof = 0;
-    int ret = simdutf_decode_complete(ctx, output, outl, input, length, &has_seof);
+    
+    int ret = adjust_outlen(ctx, output, outl, input, length);
     if (has_seof != 0){
-      printf("has_seof: %d\n", has_seof);
+      printf("simdutf_decode has_seof: %d\n", has_seof);
     }
 
     if (ret == -1) {
@@ -1193,13 +1194,10 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
 
 // removes padding and white spaces at the end
 full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *outl,
-                                   char *input, size_t length, int *has_seof) {
+                                   char *input, size_t length) {
   DEBUG_PRINT(
       BRIGHT_YELLOW_TEXT("DEBUG: Entered base64_tail_decode_trim_end\n"));
       DEBUG_CHECK_NULL(output);
-
-    *has_seof = 0;
-
 
   // DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (hex): \n"));
   // for (size_t i = 0; i < (size_t)length; i++) {
@@ -1262,14 +1260,7 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
     }
     return (full_result){BASE64_SUCCESS, 0,0, easy_whitespaces, equalsigns};
   }
-  full_result r = base64_tail_decode(ctx, output, input, length, equalsigns, has_seof);
-
-  // if (*has_seof != 0) {
-  //   // DEBUG_PRINT("SEOF detected\n");
-  //   // printf("SEOF detected\n");
-  //   printf("Trim_end has_seof: %d\n", *has_seof);
- 
-  // }
+  full_result r = base64_tail_decode(ctx, output, input, length, equalsigns);
   
   // DEBUG_PRINT(" Base64_tail Input count after removing padding and white spaces: %d, Output count: %d,  \n",
   //             r.input_count, r.output_count);
@@ -1297,16 +1288,14 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
 // Returns 1 upon BASE64_SUCCESS. -1 upon error. The destination buffer must be
 // large enough. This function assumes that the padding (=) has been removed.
 full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
-                               int length,int equalsigns,int *has_seof) {
+                               int length,int equalsigns) {
   DEBUG_PRINT("\n");
   DEBUG_PRINT(RED_TEXT("DEBUG: Starting base64_tail_decode\n"));
+  // printf("***********************");
 
   if (dst == NULL) {
     return (full_result){INVALID_BASE64_CHARACTER, 0, 0, 0};
-  }
-
-
-                              
+  }                   
   // DEBUG_PRINT(BRIGHT_YELLOW_TEXT("DEBUG: length = %d, equalsigns = %d\n"), length, equalsigns);
 
   if (length == 0) {
@@ -1327,7 +1316,6 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
   uint32_t x;
   size_t idx;
   uint8_t buffer[4];
-  *has_seof = 0;
 
 #if DEBUG
   // DEBUG_PRINT("DEBUG: Input (hex): ");
@@ -1355,15 +1343,12 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
       uint8_t code = to_base64[(uint8_t)(c)];
       buffer[idx] = code;
       if (code <= 63) {
-        // DEBUG_PRINT("Valid base64 character\n");
         idx++;
       } else if (code > 64) {
         DEBUG_PRINT("INVALID_BASE64_CHARACTER: code > 64 \n");
         // INVALID_BASE64_CHARACTER
         if (c == 0x2D & (idx % 4) == 0 ) { // '-' sign/ SEOF. TODO: change the tables
           DEBUG_PRINT("SEOF detected\n");
-          // printf("SEOF detected\n");
-          *has_seof = 1;
           break; // out of the while (idx < 4 && src < srcend)  loop
         }
         if (c == 0x3D) {
@@ -1378,21 +1363,6 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
             internal_padding++;
             temp_src--;
             }
-          // DEBUG_PRINT("Internal padding count inside core: %d\n", internal_padding);
-          // DEBUG_PRINT("src - srcinit: %zu\n", (size_t)(src - srcinit));
-          
-          // Add this where you want to see the consumed input
-          // int consumed_length = src - srcinit;
-          // DEBUG_PRINT("DEBUG: Consumed input (length %d): ", consumed_length);
-          // for (int i = 0; i < consumed_length; i++) {
-          //     DEBUG_PRINT("%c", srcinit[i]);
-          // }
-          // DEBUG_PRINT("\nConsumed input (hex): ");
-          // for (int i = 0; i < consumed_length; i++) {
-          //     DEBUG_PRINT("%02x ", (unsigned char)srcinit[i]);
-          // }
-          // DEBUG_PRINT("\n");
-
 
           if (idx == 2) {
             DEBUG_PRINT("idx == 2\n");
