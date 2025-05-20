@@ -999,7 +999,9 @@ static inline int is_ascii_white_space(char c) {
 int simdutf_decode_complete(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length, int *has_seof) {
     
-    full_result r = base64_tail_decode_trim_end(ctx, output, outl, input, length, has_seof);
+    //TODO: trim_end is not using outl...? I can probably simplify this
+    full_result r = base64_tail_decode_trim_end(ctx, output, outl, input, length, &has_seof);
+
     //TODO: There is probably a way to Simplify/unify this!!!!
 
     int len_wo_ws = length - r.whitespaces;
@@ -1174,7 +1176,7 @@ int simdutf_decode_complete(EVP_ENCODE_CTX *ctx, unsigned char *output, int *out
 // for testing purposes
 int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length) {
-    int has_seof = 0;
+    int *has_seof = 0;
     int ret = simdutf_decode_complete(ctx, output, outl, input, length, &has_seof);
     if (ret == -1) {
       return -1;
@@ -1191,6 +1193,8 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
   DEBUG_PRINT(
       BRIGHT_YELLOW_TEXT("DEBUG: Entered base64_tail_decode_trim_end\n"));
       DEBUG_CHECK_NULL(output);
+
+    *has_seof = 0;
 
 
   // DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (hex): \n"));
@@ -1254,7 +1258,7 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
     }
     return (full_result){BASE64_SUCCESS, 0,0, easy_whitespaces, equalsigns};
   }
-  full_result r = base64_tail_decode(ctx, output, input, length, equalsigns);
+  full_result r = base64_tail_decode(ctx, output, input, length, equalsigns, &has_seof);
   
   // DEBUG_PRINT(" Base64_tail Input count after removing padding and white spaces: %d, Output count: %d,  \n",
   //             r.input_count, r.output_count);
@@ -1282,7 +1286,7 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
 // Returns 1 upon BASE64_SUCCESS. -1 upon error. The destination buffer must be
 // large enough. This function assumes that the padding (=) has been removed.
 full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
-                               int length,int equalsigns) {
+                               int length,int equalsigns,int *has_seof) {
   DEBUG_PRINT("\n");
   DEBUG_PRINT(RED_TEXT("DEBUG: Starting base64_tail_decode\n"));
 
@@ -1312,7 +1316,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
   uint32_t x;
   size_t idx;
   uint8_t buffer[4];
-  int has_seof = 0;
+  *has_seof = 0;
 
 #if DEBUG
   // DEBUG_PRINT("DEBUG: Input (hex): ");
@@ -1347,7 +1351,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
         // INVALID_BASE64_CHARACTER
         if (c == 0x2D & (idx % 4) == 0 ) { // '-' sign/ SEOF. TODO: change the tables
           DEBUG_PRINT("SEOF detected\n");
-          has_seof = 1;
+          *has_seof = 1;
           break; // out of the while (idx < 4 && src < srcend)  loop
         }
         if (c == 0x3D) {
