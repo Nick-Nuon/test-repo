@@ -374,6 +374,7 @@ size_t add_seof(char **v, size_t *v_len, unsigned int *seed, int at_multiple_of_
 }
 
 
+// TODO: The dummy will be used later to pass more complex context
 int OpenSSL_decode(EVP_ENCODE_CTX *dummy,char *dst,int *outl, const char *src, int srclen) {
     EVP_ENCODE_CTX *ctx = EVP_ENCODE_CTX_new();
     if (ctx == NULL) {
@@ -406,6 +407,56 @@ int OpenSSL_decode(EVP_ENCODE_CTX *dummy,char *dst,int *outl, const char *src, i
     // return 
     return outlen;
     // return (result){BASE64_SUCCESS, (size_t)outlen};
+}
+
+int EVP_DecodeUpdate_test(EVP_ENCODE_CTX *dummy,
+    //  unsigned char *out, int *outl, 
+    const unsigned char *in, int inl, int expected_outl) {
+
+    /* First create two contexts */
+    EVP_ENCODE_CTX *simdutf_ctx = EVP_ENCODE_CTX_new();
+    EVP_ENCODE_CTX *openssl_ctx = EVP_ENCODE_CTX_new();
+    if (!simdutf_ctx || !openssl_ctx) {
+        EVP_ENCODE_CTX_free(simdutf_ctx);
+        EVP_ENCODE_CTX_free(openssl_ctx);
+        return -1;
+    }
+    // Allocate separate buffers for each decoder
+    unsigned char *decodeUpdate_openssl = OPENSSL_malloc(inl + 2);
+    unsigned char *decodeUpdate_simdutf = OPENSSL_malloc(inl + 2);
+    if (!decodeUpdate_openssl || !decodeUpdate_simdutf) {
+        OPENSSL_free(decodeUpdate_openssl);
+        OPENSSL_free(decodeUpdate_simdutf);
+        return -1;
+    }
+
+    int decodeUpdate_outl_openssl = 0;
+    int decodeUpdate_outl_simdutf = 0;
+
+    // Run both decoders
+    int decodeUpdate_ret_openssl = EVP_DecodeUpdate_OpenSSL(openssl_ctx, decodeUpdate_openssl, &decodeUpdate_outl_openssl, in, inl);
+    int decodeUpdate_ret_simdutf = EVP_DecodeUpdate_simdutf(simdutf_ctx, decodeUpdate_simdutf, &decodeUpdate_outl_simdutf, in, inl);
+
+    // Compare results
+    ASSERT_EQUAL_INT(decodeUpdate_outl_openssl, decodeUpdate_outl_simdutf);
+    ASSERT_EQUAL_INT(decodeUpdate_ret_openssl, decodeUpdate_ret_simdutf);
+    ASSERT_MEM_EQUAL(decodeUpdate_openssl, decodeUpdate_simdutf, decodeUpdate_outl_openssl);
+
+    // Copy result to caller's buffer if provided
+    // if (out && outl) {
+    //     memcpy(out, decodeUpdate_openssl, decodeUpdate_outl_openssl);
+    //     *outl = decodeUpdate_outl_openssl;
+    // }
+
+    // Clean up
+    OPENSSL_free(decodeUpdate_openssl);
+    OPENSSL_free(decodeUpdate_simdutf);
+
+    EVP_ENCODE_CTX_free(simdutf_ctx);
+    EVP_ENCODE_CTX_free(openssl_ctx);
+
+
+    return 1;
 }
 
 
@@ -465,8 +516,6 @@ static int test_decode_base64_cases(void)
         }
         OPENSSL_free(buffer_openssl);
 
-
-        
         ASSERT_EQUAL_INT(simdutf_result, -1);
 
         if (openssl_outlen != expected_counts[i]) {
@@ -474,7 +523,12 @@ static int test_decode_base64_cases(void)
             OPENSSL_free(buffer);
             return 0;
         }
+
+        int e = EVP_DecodeUpdate_test(NULL,cases[i], len, NULL);
         OPENSSL_free(buffer);
+        if (e != 1) {
+            return 0;
+        }
     }
     return 1;
 }
@@ -553,6 +607,11 @@ static int test_complete_decode_base64_cases(void)
         
         OPENSSL_free(buffer);
         OPENSSL_free(buffer_openssl);
+
+        int e = EVP_DecodeUpdate_test(NULL,cases[i].encoded, enc_len,NULL);
+        if (e != 1) {
+            return 0;
+        }
     }
     return 1;
 }
@@ -647,11 +706,11 @@ static int inline check_cases(case_pair *cases, size_t num_cases)
             }
         }
 
-        printf("max_len: %zu\n", max_len);
-        printf("simdutf_result: %d\n", simdutf_result);
-        printf("simdutf_outlen: %d\n", outlen_simdutf);
-        printf("result_openssl: %d\n", result_openssl);
-        printf("openssl_outlen: %d\n", openssl_outlen);
+        // printf("max_len: %zu\n", max_len);
+        // printf("simdutf_result: %d\n", simdutf_result);
+        // printf("simdutf_outlen: %d\n", outlen_simdutf);
+        // printf("result_openssl: %d\n", result_openssl);
+        // printf("openssl_outlen: %d\n", openssl_outlen);
 
         ASSERT_EQUAL_INT(simdutf_result, result_openssl);
         ASSERT_EQUAL_INT(outlen_simdutf, openssl_outlen);
@@ -663,6 +722,12 @@ static int inline check_cases(case_pair *cases, size_t num_cases)
         
         OPENSSL_free(buffer);
         OPENSSL_free(buffer_openssl);
+
+        int e = EVP_DecodeUpdate_test(NULL,cases[i].encoded, enc_len,NULL);
+        if (e != 1) {
+            return 0;
+        }
+
     }
 
     return 1;
@@ -696,18 +761,6 @@ static int inline check_seof(case_pair *cases, size_t num_cases)
         int simdutf_result = simdutf_decode(NULL, (char *)buffer, &outlen_simdutf, cases[i].encoded, enc_len);
         DEBUG_PRINT(GREEN_TEXT("DEBUG: simdutf_result = %d\n"), simdutf_result);
 
-
-        // for(size_t j = 0; j < simdutf_result; j++) {
-        //     if(buffer[j] != cases[i].decoded[j]) {
-        //         TEST_error(RED_TEXT("Decoded:Mismatch at index %zu in test case %zu for simdutf: got %02x, expected %02x"), 
-        //                    j, i, (unsigned int)buffer[j], (unsigned int)cases[i].decoded[j]);
-        //         OPENSSL_free(buffer);
-        //         return 0;
-        //     }
-        // }
-
-        // buffer[simdutf_result] = '\0'; // Null-terminate the string
-
         // *** OpenSSL part ***
 
         unsigned char *buffer_openssl = OPENSSL_malloc(max_len + 4);
@@ -719,22 +772,13 @@ static int inline check_seof(case_pair *cases, size_t num_cases)
         int openssl_outlen = 0;
         int result_openssl = OpenSSL_decode(NULL, (char *)buffer_openssl, &openssl_outlen, cases[i].encoded, enc_len);
 
-        // for(size_t j = 0; j < result_openssl; j++) {
-        //     if(buffer_openssl[j] != cases[i].decoded[j]) {
-        //         TEST_error(RED_TEXT("Decoded:Mismatch at index %zu in test case %zu for OpenSSL: got %02x, expected %02x"), 
-        //                    j, i, (unsigned int)buffer_openssl[j], (unsigned int)cases[i].decoded[j]);
-        //         OPENSSL_free(buffer_openssl);
-        //         return 0;
-        //     }
-        // }
 
-        // buffer_openssl[openssl_outlen] = '\0'; // Null-terminate the string
 
-        printf("max_len: %zu\n", max_len);
-        printf("simdutf_result: %d\n", simdutf_result);
-        printf("simdutf_outlen: %d\n", outlen_simdutf);
-        printf("result_openssl: %d\n", result_openssl);
-        printf("openssl_outlen: %d\n", openssl_outlen);
+        // printf("max_len: %zu\n", max_len);
+        // printf("simdutf_result: %d\n", simdutf_result);
+        // printf("simdutf_outlen: %d\n", outlen_simdutf);
+        // printf("result_openssl: %d\n", result_openssl);
+        // printf("openssl_outlen: %d\n", openssl_outlen);
 
         ASSERT_EQUAL_INT(simdutf_result, result_openssl);
         ASSERT_EQUAL_INT(outlen_simdutf, openssl_outlen);
@@ -742,13 +786,14 @@ static int inline check_seof(case_pair *cases, size_t num_cases)
 
         ASSERT_MEM_EQUAL(buffer_openssl, buffer, outlen_simdutf);
         // PRINT_STRINGS(buffer_openssl, buffer, outlen_simdutf);
-
-        // ASSERT_EQUAL_INT(openssl_outlen, strlen(cases[i].decoded));
-        // ASSERT_EQUAL_INT(outlen_simdutf, strlen(cases[i].decoded));
-
         
         OPENSSL_free(buffer);
         OPENSSL_free(buffer_openssl);
+
+        int e = EVP_DecodeUpdate_test(NULL,cases[i].encoded, enc_len,NULL);
+        if (e != 1) {
+            return 0;
+        }
     }
     return 1;
 }
@@ -798,17 +843,6 @@ static int inline check_cases_no_padding(case_pair *cases, size_t num_cases)
         }
         int outlen_simdutf = 0;
         int simdutf_result = simdutf_decode(NULL, (char *)buffer, &outlen_simdutf, cases[i].encoded, enc_len);
-        // ASSERT_EQUAL_INT(simdutf_result, -1);
-
-        // Error is intentional
-        // for(size_t j = 0; j < simdutf_result; j++) {
-        //     if(buffer[j] != cases[i].decoded[j]) {
-        //         // TEST_error(RED_TEXT("Decoded:Mismatch at index %zu in test case %zu for simdutf: got %02x, expected %02x"), 
-        //         //            j, i, (unsigned int)buffer[j], (unsigned int)cases[i].decoded[j]);
-        //         // OPENSSL_free(buffer);
-        //         // return 0;
-        //     }
-        // }
 
         // *** OpenSSL part ***
 
@@ -831,11 +865,11 @@ static int inline check_cases_no_padding(case_pair *cases, size_t num_cases)
         //     }
         // }
 
-        printf("max_len: %zu\n", max_len);
-        printf("simdutf_result: %d\n", simdutf_result);
-        printf("simdutf_outlen: %d\n", outlen_simdutf);
-        printf("result_openssl: %d\n", result_openssl);
-        printf("openssl_outlen: %d\n", openssl_outlen);
+        // printf("max_len: %zu\n", max_len);
+        // printf("simdutf_result: %d\n", simdutf_result);
+        // printf("simdutf_outlen: %d\n", outlen_simdutf);
+        // printf("result_openssl: %d\n", result_openssl);
+        // printf("openssl_outlen: %d\n", openssl_outlen);
 
         ASSERT_EQUAL_INT(simdutf_result, result_openssl);
         ASSERT_EQUAL_INT(outlen_simdutf, openssl_outlen);
@@ -848,6 +882,11 @@ static int inline check_cases_no_padding(case_pair *cases, size_t num_cases)
         
         OPENSSL_free(buffer);
         OPENSSL_free(buffer_openssl);
+
+        int e = EVP_DecodeUpdate_test(NULL,cases[i].encoded, enc_len,NULL);
+        if (e != 1) {
+            return 0;
+        }
     }
 
     return 1;
@@ -1141,9 +1180,15 @@ static int test_roundtrip_base64_with_lots_of_spaces(void) {
         ASSERT_MEM_EQUAL(back_openssl, back, outlen_openssl);
 
         OPENSSL_free(source);
-        OPENSSL_free(buffer_with_spaces);
         OPENSSL_free(back);
         OPENSSL_free(back_openssl);
+
+        int e = EVP_DecodeUpdate_test(NULL, buffer_with_spaces, buffer_with_spaces_len, NULL);
+        OPENSSL_free(buffer_with_spaces);
+        if (e != 1) {
+            return 0;
+        }
+
     }
     return 1;
 }
@@ -1247,9 +1292,14 @@ static int test_roundtrip_base64_with_spaces(void) {
         ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
 
         OPENSSL_free(source);
-        OPENSSL_free(buffer);
         OPENSSL_free(back_simd);
         OPENSSL_free(back_openssl);
+
+        int e = EVP_DecodeUpdate_test(NULL, buffer, cur_b64_len, NULL);
+        OPENSSL_free(buffer);
+        if (e != 1) {
+            return 0;
+        }
     }
     return 1;
 }
@@ -1367,10 +1417,14 @@ const static uint8_t to_base64_value[] = {
             ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
 
             OPENSSL_free(source);
-            OPENSSL_free(buffer);
             OPENSSL_free(back_simd);
             OPENSSL_free(back_openssl);
 
+            int e = EVP_DecodeUpdate_test(NULL, buffer, cur_b64_len, NULL);
+            OPENSSL_free(buffer);
+            if (e != 1) {
+                return 0;
+            }
         }
         return 1;
     }
@@ -1442,9 +1496,14 @@ const static uint8_t to_base64_value[] = {
             
     
             /* 6) Clean up only what we malloc’d */
-            OPENSSL_free(buffer);
             OPENSSL_free(back_simd);
             OPENSSL_free(back_ssl);
+
+            int e = EVP_DecodeUpdate_test(NULL, buffer, inlen, NULL);
+            OPENSSL_free(buffer);
+            if (e != 1) {
+                return 0;
+            }
         }
     
         return 1;
@@ -1521,9 +1580,14 @@ static int test_multiple_of_4_good(void) {
         ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
         ASSERT_EQUAL_INT(result_openssl, len*3);
 
-        OPENSSL_free(buffer);
         OPENSSL_free(back_simd);
         OPENSSL_free(back_openssl);
+
+        int e = EVP_DecodeUpdate_test(NULL, buffer, s, NULL);
+        OPENSSL_free(buffer);
+        if (e != 1) {
+            return 0;
+        }
     }
     return 1;
 }
@@ -1600,9 +1664,15 @@ static int test_multiple_of_4_bad(void) {
             ASSERT_EQUAL_INT(outlen_openssl, s/4*3 - ((s/4*3) % (48)));
         }
         
-        OPENSSL_free(buffer);
         OPENSSL_free(back_simd);
         OPENSSL_free(back_openssl);
+
+        int e = EVP_DecodeUpdate_test(NULL, buffer, s, NULL);
+        OPENSSL_free(buffer);
+        if (e != 1) {
+            return 0;
+        }
+
     }
     return 1;
 }
@@ -1677,9 +1747,15 @@ static int test_seof_good_cases(void) {
         ASSERT_EQUAL_INT(result_openssl, index/4 * 3);
         ASSERT_EQUAL_INT(outlen_openssl, index/4 * 3);
 
-        OPENSSL_free(buffer);
         OPENSSL_free(back_simd);
         OPENSSL_free(back_openssl);
+
+        int e = EVP_DecodeUpdate_test(NULL, buffer, s, NULL);
+        OPENSSL_free(buffer);
+        if (e != 1) {
+            return 0;
+        }        
+
     }
     return 1;
 }
@@ -1764,9 +1840,14 @@ static int test_seof_bad_cases(void) {
         ASSERT_EQUAL_INT(result_openssl, -1);
         ASSERT_EQUAL_INT(outlen_openssl, index/4 * 3 - (index/4 * 3) % 48);
 
-        OPENSSL_free(buffer);
         OPENSSL_free(back_simd);
         OPENSSL_free(back_openssl);
+
+        int e = EVP_DecodeUpdate_test(NULL, buffer, s, NULL);
+        OPENSSL_free(buffer);
+        if (e != 1) {
+            return 0;
+        }
     }
     return 1;
 }
@@ -1864,10 +1945,14 @@ static int test_roundtrip_base64(void) {
         ASSERT_EQUAL_INT(result_openssl, len);
 
         OPENSSL_free(source);
-        OPENSSL_free(buffer);
         OPENSSL_free(back_simd);
         OPENSSL_free(back_openssl);
 
+        int e = EVP_DecodeUpdate_test(NULL, buffer, s, NULL);
+        OPENSSL_free(buffer);
+        if (e != 1) {
+            return 0;
+        }
     }
     return 1;
 }
@@ -1954,9 +2039,15 @@ static int test_issue_520(void) {
     ASSERT_MEM_EQUAL(back_ssl, back_simd, outlen_ssl);
 
     /* 7) Clean up only what we allocated on the heap */
-    OPENSSL_free(buffer);
     OPENSSL_free(back_simd);
     OPENSSL_free(back_ssl);
+
+    int e = EVP_DecodeUpdate_test(NULL, buffer, len, NULL);
+    OPENSSL_free(buffer);
+    if (e != 1) {
+        return 0;
+    }
+
 
     return 1;
 }
@@ -1992,6 +2083,11 @@ static int test_issue_509(void)
     ASSERT_EQUAL_INT(rc_ssl, rc_simd);
     ASSERT_EQUAL_INT(outlen_ssl, outlen_simd);
     ASSERT_MEM_EQUAL(out_ssl, out_simd, outlen_ssl);
+
+    int e = EVP_DecodeUpdate_test(NULL, buffer, in_len, NULL);
+    if (e != 1) {
+        return 0;
+    }
 
     return 1;
 }
@@ -2055,9 +2151,14 @@ static int test_issue_502_alt(void)
         ASSERT_EQUAL_SIZE(outlen_ssl, outlen_simd);
         ASSERT_MEM_EQUAL(back_ssl, back_simd, outlen_ssl);
 
-        OPENSSL_free(buffer);
         OPENSSL_free(back_simd);
         OPENSSL_free(back_ssl);
+
+        int e = EVP_DecodeUpdate_test(NULL, buffer, buf_len, NULL);
+        OPENSSL_free(buffer);
+        if (e != 1) {
+            return 0;
+        }
     }
 
     return 1;
@@ -2113,6 +2214,12 @@ static int test_issue_504_8bit(void)
 
     OPENSSL_free(back_simd);
     OPENSSL_free(back_ssl);
+
+    int e = EVP_DecodeUpdate_test(NULL, buffer, buf_len, NULL);
+    if (e != 1) {
+        return 0;
+    }
+
     return 1;
 }
 
@@ -2254,7 +2361,12 @@ static int test_bad_padding_base64(void) {
 
             OPENSSL_free(back_simd);
             OPENSSL_free(back_openssl);
+
+            int e = EVP_DecodeUpdate_test(NULL, copy, copy_len, NULL);
             OPENSSL_free(copy);
+            if (e != 1) {
+                return 0;
+            }
         }
 
         else
@@ -2562,9 +2674,16 @@ static int test_doomed_truncated_base64_roundtrip(void)
             ASSERT_EQUAL_INT(result_openssl, -1);
             ASSERT_EQUAL_INT(outlen_openssl, (truncated/4)*3 - ((truncated/4)*3) % 48);
 
-            OPENSSL_free(buffer);
+
             OPENSSL_free(back_simd);
             OPENSSL_free(back_openssl);
+
+            int e = EVP_DecodeUpdate_test(NULL, buffer, truncated, NULL);
+            OPENSSL_free(buffer);
+            if (e != 1) {
+                OPENSSL_free(source);
+                return 0;
+            }
         }
         OPENSSL_free(source);
     }
@@ -2660,6 +2779,13 @@ static int test_streaming_base64_roundtrip(void)
                 // ASSERT_NOT_EQUAL_INT(result_openssl, -1);
                 // ASSERT_EQUAL_INT(outlen_openssl, len);
             // }
+
+            int e = EVP_DecodeUpdate_test(NULL, buffer + pos, count, NULL);
+            if (e != 1) {
+                OPENSSL_free(source);
+                OPENSSL_free(buffer);
+                return 0;
+            }
         }
 
         /* Final validation */
@@ -2759,6 +2885,12 @@ static int test_data_after_padding(void) {
 
             OPENSSL_free(back_simd);
             OPENSSL_free(back_openssl);
+
+            int e = EVP_DecodeUpdate_test(NULL, buffer, total_len, NULL);
+            if (e != 1) {
+                OPENSSL_free(buffer);
+                return 0;
+            }
         }
 
         OPENSSL_free(buffer);
@@ -2858,6 +2990,12 @@ static int test_lots_of_data_after_padding(void) {
 
             OPENSSL_free(back_simd);
             OPENSSL_free(back_openssl);
+
+            int e = EVP_DecodeUpdate_test(NULL, buffer, total_len, NULL);
+            if (e != 1) {
+                OPENSSL_free(buffer);
+                return 0;
+            }
         }
         
         OPENSSL_free(buffer);
@@ -2929,7 +3067,12 @@ static int test_random_padding_insertion(void) {
 
         OPENSSL_free(back_simd);
         OPENSSL_free(back_openssl);
+
+        int e = EVP_DecodeUpdate_test(NULL, buffer, actual_len, NULL);
         OPENSSL_free(buffer);
+        if (e != 1) {
+            return 0;
+        }
     }
     return 1;
 }
@@ -3004,7 +3147,12 @@ static int test_random_padding_and_spaces(void) {
 
         OPENSSL_free(back_simd);
         OPENSSL_free(back_openssl);
+
+        int e = EVP_DecodeUpdate_test(NULL, buffer, actual_len, NULL);
         OPENSSL_free(buffer);
+        if (e != 1) {
+            return 0;
+        }
     }
     return 1;
 }
@@ -3073,6 +3221,12 @@ static int test_readme_test(void)
 
         OPENSSL_free(back_simd);
         OPENSSL_free(back_openssl);
+
+        int e = EVP_DecodeUpdate_test(NULL, buffer + pos, count, NULL);
+        if (e != 1) {
+            OPENSSL_free(buffer);
+            return 0;
+        }
     }
     
     OPENSSL_free(buffer);
@@ -3204,7 +3358,12 @@ static int test_doomed_partial_buffer_utf8(void)
 
             OPENSSL_free(back_simd);
             OPENSSL_free(back_openssl);
+
+            int e = EVP_DecodeUpdate_test(NULL, base64, effective_b64_len, NULL);
             OPENSSL_free(base64);
+            if (e != 1) {
+                return 0;
+            }
         }
         if (source) OPENSSL_free(source);
     }
@@ -3217,11 +3376,14 @@ int setup_tests(void)
     // // Register our sample test. The macro ADD_TEST() takes our test function.
     ADD_TEST(test_decode_base64_cases); 
     ADD_TEST(test_complete_decode_base64_cases); 
+
     ADD_TEST(test_encode_base64_no_padding_cases); 
     ADD_TEST(test_seof_good_basic_cases); 
     ADD_TEST(test_multiple_of_4_good);
     ADD_TEST(test_multiple_of_4_bad);
     ADD_TEST(test_seof_good_cases);
+    ADD_TEST(test_roundtrip_base64_with_spaces); 
+
     ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); 
     ADD_TEST(test_roundtrip_base64);
     ADD_TEST(test_base64_decode_just_one_padding_loose);
@@ -3232,20 +3394,14 @@ int setup_tests(void)
     ADD_TEST(test_encode_base64_basic_cases); 
     ADD_TEST(test_seof_bad_basic_cases); 
     ADD_TEST(test_seof_bad_cases);
-    ADD_TEST(test_roundtrip_base64_with_spaces); 
     ADD_TEST(test_roundtrip_base64_with_garbage);
     ADD_TEST(test_doomed_truncated_base64_roundtrip);
     ADD_TEST(test_bad_padding_base64);
-
     ADD_TEST(test_readme_test);
     ADD_TEST(test_data_after_padding);
     ADD_TEST(test_lots_of_data_after_padding);
     ADD_TEST(test_random_padding_and_spaces);
-
-    // Maybe revisit these tests later:
     ADD_TEST(test_streaming_base64_roundtrip);
-
-    // // TODOS:
     ADD_TEST(test_random_padding_insertion);
     ADD_TEST(test_doomed_partial_buffer_utf8);
 
