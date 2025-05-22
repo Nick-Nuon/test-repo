@@ -1490,7 +1490,7 @@ const static uint8_t to_base64_value[] = {
                                          &out_ssl, buffer, inlen);
             ASSERT_EQUAL_INT(err_ssl, want_err);
             // if (err_ssl >= 0)
-                ASSERT_EQUAL_INT(out_ssl, want_len);
+            ASSERT_EQUAL_INT(out_ssl, want_len);
     
             /* 5) Compare */
             ASSERT_EQUAL_INT(err_ssl, err_simd);
@@ -3390,7 +3390,6 @@ int setup_tests(void)
 
     ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); 
     ADD_TEST(test_roundtrip_base64);
-    ADD_TEST(test_base64_decode_just_one_padding_loose);
     ADD_TEST(test_issue_520);
     ADD_TEST(test_issue_509);
     ADD_TEST(test_issue_504_8bit); 
@@ -3403,11 +3402,13 @@ int setup_tests(void)
     ADD_TEST(test_bad_padding_base64);
     ADD_TEST(test_readme_test);
     ADD_TEST(test_data_after_padding);
-    ADD_TEST(test_lots_of_data_after_padding);
+
     ADD_TEST(test_random_padding_and_spaces);
     ADD_TEST(test_streaming_base64_roundtrip);
     ADD_TEST(test_random_padding_insertion);
     ADD_TEST(test_doomed_partial_buffer_utf8);
+    ADD_TEST(test_lots_of_data_after_padding);
+    ADD_TEST(test_base64_decode_just_one_padding_loose);
 
 
     // Return 1 to indicate successful test setup.

@@ -744,6 +744,7 @@ __owur int EVP_Cipher(EVP_CIPHER_CTX *c,
                                 // removing padding and removing white spaces at beginning.
         OTHER,                     // Not related to validation/transcoding.
         EXTRA_PADDING, // There is extra padding in the input string that shouldn't be here.
+        ADDITIONAL_PADDING_CHECK_FAILED, // The additional padding check failed.
         } error_code;
 
         typedef enum has_seof {

@@ -359,15 +359,15 @@ int outl_openssl = -2;
 if (outl != NULL) {
  outl_openssl = *outl;}
 
-  int ret_simdutf = EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
-int outl_simdutf = -2;
-if (outl != NULL) {
-  outl_simdutf = *outl;}
+//   int ret_simdutf = EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
+// int outl_simdutf = -2;
+// if (outl != NULL) {
+//   outl_simdutf = *outl;}
 
-if (outl_openssl != outl_simdutf || ret_openssl != ret_simdutf) {
-  DEBUG_PRINT(RED_TEXT("DEBUG: MISMATCH: simdutf outl = %d, OpenSSL outl = %d "), outl_simdutf, outl_openssl);
-  DEBUG_PRINT(RED_TEXT(" simdutf ret = %d, OpenSSL ret = %d\n"), ret_simdutf, ret_openssl);
-}
+// if (outl_openssl != outl_simdutf || ret_openssl != ret_simdutf) {
+//   DEBUG_PRINT(RED_TEXT("DEBUG: MISMATCH: simdutf outl = %d, OpenSSL outl = %d "), outl_simdutf, outl_openssl);
+//   DEBUG_PRINT(RED_TEXT(" simdutf ret = %d, OpenSSL ret = %d\n"), ret_simdutf, ret_openssl);
+// }
 
  return ret_openssl;
 }
@@ -540,7 +540,8 @@ int EVP_DecodeUpdate_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
 
 
   if (ret.error == BASE64_SUCCESS && ret.has_seof == 0 
-  || ret.error == NOT_MULTIPLE_OF_FOUR && ret.has_seof == 0) {
+  || ret.error == NOT_MULTIPLE_OF_FOUR && ret.has_seof == 0
+  || ret.error == ADDITIONAL_PADDING_CHECK_FAILED ) {
     return 1;
   }
   if (ret.error == BASE64_SUCCESS && ret.has_seof == 1){
@@ -1281,9 +1282,15 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
     // additional checks
     // DEBUG_PRINT( GREEN_TEXT("DEBUG: Additional checks: equalsigns: %d, r.output_count: %zu\n"), equalsigns,r.output_count);
 
-    if ((r.output_count % 3 == 0) ||
-        ((r.output_count % 3) + 1 + equalsigns != 4)) {
-      return (full_result){INVALID_BASE64_CHARACTER, equallocation, (size_t)r.output_count, r.has_seof, easy_whitespaces, equalsigns};
+    // Recall: base64 decodes 4 bytes into 3 bytes
+    // if there is less than 4 bytes to decode, we have:
+    // 1 extra byte =<
+
+    if ((r.output_count % 3 == 0) || // A base64 string with padding does not decode to a neat multiple of 3!
+        ((r.output_count % 3) + 1 + equalsigns != 4)) { 
+          DEBUG_PRINT(RED_TEXT("DEBUG: r.output_count % 3 == 0 + 1 + equalsigns != 4: %zu + 1 + %d != 4\n"), r.output_count, equalsigns);
+          DEBUG_PRINT(RED_TEXT("DEBUG: Invalid base64 character in additional checks\n"));
+      return (full_result){ADDITIONAL_PADDING_CHECK_FAILED, equallocation, (size_t)r.output_count, r.has_seof, easy_whitespaces, equalsigns};
     }
   }
   // DEBUG_PRINT(GREEN_TEXT("DEBUG: Final r.count:%d\n"), r.input_count);
@@ -1309,6 +1316,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
   // DEBUG_PRINT(BRIGHT_YELLOW_TEXT("DEBUG: length = %d, equalsigns = %d\n"), length, equalsigns);
 
   if (length == 0) {
+    DEBUG_PRINT(RED_TEXT("DEBUG: Length is 0\n"));
     return (full_result){BASE64_SUCCESS, 0, 0,0};
   }
   int whitespaces = 0;
@@ -1580,6 +1588,7 @@ int EVP_DecodeFinal_OpenSSL(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
         i = evp_decodeblock_int(ctx, out, ctx->enc_data, ctx->num);
         
         if (i < 0)
+            DEBUG_PRINT(RED_TEXT("DEBUG OpenSSL: Error in evp_decodeblock_int\n"));
             return -1;
         ctx->num = 0;
         *outl = i;
