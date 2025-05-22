@@ -28,7 +28,7 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length);
 
 
-#define DEBUG 1 // Set to 1 to enable debug prints, 0 to disable
+#define DEBUG 0 // Set to 1 to enable debug prints, 0 to disable
 #define TEST_SIMDUTF_BIO 1
 #define TEST_SIMDUTF_BIO_ONLY_FINAL 0
 #define RED_TEXT(str) "\033[31m" str "\033[0m"
@@ -536,13 +536,17 @@ int EVP_DecodeUpdate_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
 
   full_result ret = adjust_outlen(ctx, out, outl, (const char *)in, inl);
 
+  DEBUG_PRINT(RED_TEXT("DEBUG: adjust_outlen: ret.error = %d, has_seof = %d\n"), ret.error, ret.has_seof);
 
+
+  if (ret.error == BASE64_SUCCESS && ret.has_seof == 0 
+  || ret.error == NOT_MULTIPLE_OF_FOUR && ret.has_seof == 0) {
+    return 1;
+  }
   if (ret.error == BASE64_SUCCESS && ret.has_seof == 1){
     return 0;
   }
-  if (ret.error == BASE64_SUCCESS || ret.error == NOT_MULTIPLE_OF_FOUR && ret.has_seof == 0){
-    return 1;
-  }{
+ {
     return -1;
   }
 
@@ -1297,6 +1301,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
   DEBUG_PRINT("\n");
   DEBUG_PRINT(RED_TEXT("DEBUG: Starting base64_tail_decode\n"));
   // printf("***********************");
+  int has_seof = 0;
 
   if (dst == NULL) {
     return (full_result){INVALID_BASE64_CHARACTER, 0, 0, 0};
@@ -1354,7 +1359,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
         // INVALID_BASE64_CHARACTER
         if (c == 0x2D & (idx % 4) == 0 ) { // '-' sign/ SEOF. TODO: change the tables
           DEBUG_PRINT("SEOF detected\n");
-          // idx--;
+          has_seof = 1;
           break; // out of the while (idx < 4 && src < srcend)  loop
         }
         if (c == 0x3D) {
@@ -1395,18 +1400,18 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
     // DEBUG_PRINT("idx == 4 remaining\n");
 
           return (full_result){EXTRA_PADDING, (size_t)(src - srcinit),
-            (size_t)((dst - dstinit)),  whitespaces, equalsigns, internal_padding};
+            (size_t)((dst - dstinit)),has_seof,  whitespaces, equalsigns, internal_padding};
         }
         else {
             return (full_result){INVALID_BASE64_CHARACTER, (size_t)(src - srcinit),
-                             (size_t)((dst - dstinit)),  whitespaces};
+                             (size_t)((dst - dstinit)),has_seof,  whitespaces};
         }
       } else {
         // TODO: change the tables
         if (c == '\f') {
           DEBUG_PRINT("Simdutf:Form feed detected!!!!Not a valid b64 char by OpenSSL standards!\n");
           return (full_result){INVALID_BASE64_CHARACTER, (size_t)(src - srcinit),
-            (size_t)(dst - dstinit), whitespaces};
+            (size_t)(dst - dstinit), has_seof, whitespaces};
         }
         // DEBUG_PRINT("WS detected!!!!\n");
         whitespaces++;
@@ -1430,7 +1435,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
         if (equalsigns != 2){
           // DEBUG_PRINT("equalsigns != 2\n");
           // DEBUG_PRINT("dst - dstinit: %zu\n", (size_t)(dst - dstinit));
-          return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit), whitespaces};
+          return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit),has_seof, whitespaces};
         }
         dst += 1;
       } else if (idx == 3) {
@@ -1443,14 +1448,15 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
         memcpy(dst, &triple, 2);
         if (equalsigns != 1){
           // DEBUG_PRINT("equalsigns != 1\n");
-          return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit), whitespaces};
+          return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit),has_seof, whitespaces};
         }
         dst += 2;
       } else if (idx == 1) {
         DEBUG_PRINT("idx == 1\n");
 
-        return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit), whitespaces};
+        return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit),has_seof, whitespaces};
       }
+      DEBUG_PRINT("idx == 0\n");
 #if DEBUG
       // {
       //   int final_bytes = (int)(dst - dstinit);
@@ -1462,7 +1468,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
       // }
 #endif
       return (full_result){BASE64_SUCCESS, (size_t)(src - srcinit),
-                           (size_t)(dst - dstinit),whitespaces};
+                           (size_t)(dst - dstinit),has_seof,whitespaces};
 
     }
     // DEBUG_PRINT("idx == 4 remaining\n");
