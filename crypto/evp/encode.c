@@ -28,7 +28,7 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length);
 
 
-#define DEBUG 0 // Set to 1 to enable debug prints, 0 to disable
+#define DEBUG 1 // Set to 1 to enable debug prints, 0 to disable
 #define TEST_SIMDUTF_BIO 1
 #define TEST_SIMDUTF_BIO_ONLY_FINAL 0
 #define RED_TEXT(str) "\033[31m" str "\033[0m"
@@ -536,12 +536,13 @@ int EVP_DecodeUpdate_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
 
   full_result ret = adjust_outlen(ctx, out, outl, (const char *)in, inl);
 
+
   if (ret.error == BASE64_SUCCESS && ret.has_seof == 1){
     return 0;
   }
-  else if (ret.error == BASE64_SUCCESS){
+  if (ret.error == BASE64_SUCCESS || ret.error == NOT_MULTIPLE_OF_FOUR && ret.has_seof == 0){
     return 1;
-  }else {
+  }{
     return -1;
   }
 
@@ -1353,6 +1354,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
         // INVALID_BASE64_CHARACTER
         if (c == 0x2D & (idx % 4) == 0 ) { // '-' sign/ SEOF. TODO: change the tables
           DEBUG_PRINT("SEOF detected\n");
+          // idx--;
           break; // out of the while (idx < 4 && src < srcend)  loop
         }
         if (c == 0x3D) {
