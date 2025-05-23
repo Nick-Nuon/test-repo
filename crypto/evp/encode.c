@@ -539,15 +539,15 @@ int EVP_DecodeUpdate_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
 
   DEBUG_PRINT(RED_TEXT("DEBUG: adjust_outlen: ret.error = %d, has_seof = %d\n"), ret.error, ret.has_seof);
 
-
+  if (ret.error == BASE64_SUCCESS && ret.padding + ret.internal_padding > 0
+  || ret.error == BASE64_SUCCESS && ret.has_seof == 1){
+    return 0;
+  }
   if (ret.error == BASE64_SUCCESS && ret.has_seof == 0 
   || ret.error == NOT_MULTIPLE_OF_FOUR && ret.has_seof == 0
   || ret.error == ADDITIONAL_PADDING_CHECK_FAILED 
   || ret.error == EXTRA_PADDING_EMPTY) {
     return 1;
-  }
-  if (ret.error == BASE64_SUCCESS && ret.has_seof == 1){
-    return 0;
   }
  {
     return -1;
