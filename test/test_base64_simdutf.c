@@ -2055,6 +2055,68 @@ static int test_issue_520(void) {
     return 1;
 }
 
+// unsigned char test_input[] = {
+//     0x61, 0x47, 0x56, 0x73, 0x62, 0x47, 0x38, 0x3d, // "aGVsbG8="
+//     0x0a,                                           // '\n'
+//     0x00                                            // '\0'
+// };
+
+static int test_issue_evp_b_overflow(void)
+{
+    /* Test vector: "aGVsbG8=\n\0" which is Base64 for "hello" with newline and NUL */
+    unsigned char test_input[] = {
+        0x61, 0x47, 0x56, 0x73, 0x62, 0x47, 0x38, 0x3d, // "aGVsbG8="
+        0x0a,                                           // '\n'
+        0x00                                            // '\0'
+    };
+    size_t input_len = sizeof(test_input) - 1;  /* exclude NUL */
+
+    /* Allocate decode buffers */
+    size_t back_bufsize = maximal_binary_length_from_base64((char *)test_input, input_len);
+    unsigned char *back_simd = OPENSSL_malloc(back_bufsize + 1);
+    unsigned char *back_openssl = OPENSSL_malloc(back_bufsize + 1);
+    
+    if (!back_simd || !back_openssl) {
+        TEST_error("Out of memory for back buffers");
+        if (back_simd) OPENSSL_free(back_simd);
+        if (back_openssl) OPENSSL_free(back_openssl);
+        return 0;
+    }
+
+    /* Test both decoders */
+    int outlen_simd = 0;
+    int outlen_openssl = 0;
+
+    int result_simd = simdutf_decode(NULL, (char *)back_simd, 
+                                    &outlen_simd, (char *)test_input, input_len);
+    int result_openssl = OpenSSL_decode(NULL, (char *)back_openssl,
+                                      &outlen_openssl, (char *)test_input, input_len);
+
+    /* Both decoders should succeed */
+    ASSERT_EQUAL_INT(result_simd, 5);  /* "hello" is 5 bytes */
+    ASSERT_EQUAL_INT(result_openssl, 5);
+
+    /* Output lengths should match */
+    ASSERT_EQUAL_INT(outlen_simd, outlen_openssl);
+
+    /* Decoded content should match */
+    ASSERT_MEM_EQUAL(back_simd, back_openssl, outlen_openssl);
+
+    /* Verify output is "hello" */
+    const unsigned char expected[] = "hello";
+    ASSERT_MEM_EQUAL(back_simd, expected, 5);
+
+    OPENSSL_free(back_simd);
+    OPENSSL_free(back_openssl);
+
+    int e = EVP_DecodeUpdate_test(NULL, (char *)test_input, input_len, NULL);
+    if (e != 1) {
+        return 0;
+    }
+
+    return 1;
+}
+
 static int test_issue_509(void)
 {
     /* here ‘input’ really is a string, so strlen() is safe */
@@ -3409,6 +3471,7 @@ int setup_tests(void)
     ADD_TEST(test_doomed_partial_buffer_utf8);
     ADD_TEST(test_lots_of_data_after_padding);
     ADD_TEST(test_base64_decode_just_one_padding_loose);
+    ADD_TEST(test_issue_evp_b_overflow);
 
 
     // Return 1 to indicate successful test setup.

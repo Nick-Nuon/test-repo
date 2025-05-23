@@ -28,7 +28,7 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length);
 
 
-#define DEBUG 0 // Set to 1 to enable debug prints, 0 to disable
+#define DEBUG 0// Set to 1 to enable debug prints, 0 to disable
 #define TEST_SIMDUTF_BIO 1
 #define TEST_SIMDUTF_BIO_ONLY_FINAL 0
 #define RED_TEXT(str) "\033[31m" str "\033[0m"
@@ -60,6 +60,56 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
 #define BOLD_TEXT(str) "\033[1m" str "\033[0m"
 #define UNDERLINE_TEXT(str) "\033[4m" str "\033[0m"
 #define BLINK_TEXT(str) "\033[5m" str "\033[0m" // May not work on all terminals
+
+#define NO_COLORS 0 // Set to 1 to disable colors
+
+#ifdef NO_COLORS
+  #undef RED_TEXT
+  #undef GREEN_TEXT
+  #undef BLACK_TEXT
+  #undef WHITE_TEXT
+  #undef BRIGHT_RED_TEXT
+  #undef BRIGHT_GREEN_TEXT
+  #undef BRIGHT_YELLOW_TEXT
+  #undef BRIGHT_BLUE_TEXT
+  #undef BRIGHT_MAGENTA_TEXT
+  #undef BRIGHT_CYAN_TEXT
+  #undef BRIGHT_WHITE_TEXT
+  #undef BRIGHT_BLACK_BG
+  #undef BRIGHT_RED_BG
+  #undef BRIGHT_GREEN_BG
+  #undef BRIGHT_YELLOW_BG
+  #undef BRIGHT_BLUE_BG
+  #undef BRIGHT_MAGENTA_BG
+  #undef BRIGHT_CYAN_BG
+  #undef BRIGHT_WHITE_BG
+  #undef BOLD_TEXT
+  #undef UNDERLINE_TEXT
+  #undef BLINK_TEXT
+
+  #define RED_TEXT(str) str
+  #define GREEN_TEXT(str) str
+  #define BLACK_TEXT(str) str
+  #define WHITE_TEXT(str) str
+  #define BRIGHT_RED_TEXT(str) str
+  #define BRIGHT_GREEN_TEXT(str) str
+  #define BRIGHT_YELLOW_TEXT(str) str
+  #define BRIGHT_BLUE_TEXT(str) str
+  #define BRIGHT_MAGENTA_TEXT(str) str
+  #define BRIGHT_CYAN_TEXT(str) str
+  #define BRIGHT_WHITE_TEXT(str) str
+  #define BRIGHT_BLACK_BG(str) str
+  #define BRIGHT_RED_BG(str) str
+  #define BRIGHT_GREEN_BG(str) str
+  #define BRIGHT_YELLOW_BG(str) str
+  #define BRIGHT_BLUE_BG(str) str
+  #define BRIGHT_MAGENTA_BG(str) str
+  #define BRIGHT_CYAN_BG(str) str
+  #define BRIGHT_WHITE_BG(str) str
+  #define BOLD_TEXT(str) str
+  #define UNDERLINE_TEXT(str) str
+  #define BLINK_TEXT(str) str
+#endif
 
 #define DEBUG_CHECK_NULL(ptr)                                         \
     do {                                                              \
@@ -528,6 +578,20 @@ end:
 int EVP_DecodeUpdate_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                const unsigned char *in, int inl) {
   DEBUG_PRINT(GREEN_TEXT("********************* DEBUG: Entered EVP_DecodeUpdate_simdutf\n"));
+
+  // Print input data in hex and char format
+  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input (hex): "));
+  for (int i = 0; i < inl; i++) {
+    DEBUG_PRINT(GREEN_TEXT("%02x "), in[i]);
+    if ((i + 1) % 8 == 0) DEBUG_PRINT("\n");
+  }
+  DEBUG_PRINT("\n\n");
+  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input (char): "));
+  for (int i = 0; i < inl; i++) { 
+    DEBUG_PRINT(GREEN_TEXT("%c "), in[i]);
+    if ((i + 1) % 8 == 0) DEBUG_PRINT("\n");
+  }
+  DEBUG_PRINT("\n");
   
   /* Legacy behaviour: an empty input chunk signals end of input. */
   if (inl == 0) {
@@ -1379,7 +1443,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
           DEBUG_PRINT("Extraneous Padding detected inside core kernel\n");
           int internal_padding = 0;
           DEBUG_PRINT("equalsigns: %d\n", equalsigns);
-          const char* temp_src = srcend ;  // Start from the end
+          const char* temp_src = srcend -1;  // Start from the end
           
           while (temp_src > src && (*temp_src == '=')) {
             DEBUG_PRINT("Found padding character: %c\n", *temp_src);
