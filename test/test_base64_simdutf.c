@@ -386,9 +386,9 @@ int OpenSSL_decode(EVP_ENCODE_CTX *dummy,char *dst,int *outl, const char *src, i
     int taillen = 0;
 
     EVP_DecodeInit(ctx);
-    int update_result = EVP_DecodeUpdate(ctx, (unsigned char *)dst, &outlen,
+    int update_result = EVP_DecodeUpdate_OpenSSL(ctx, (unsigned char *)dst, &outlen,
                          (const unsigned char *)src, srclen);
-    int final_result = EVP_DecodeFinal(ctx, (unsigned char *)&dst[outlen], &taillen);
+    int final_result = EVP_DecodeFinal_OpenSSL(ctx, (unsigned char *)&dst[outlen], &taillen);
     if (update_result < 0 || final_result < 0
     ) {
         // fprintf(stderr, "Invalid input for openssl base64 decode.\n");
@@ -404,7 +404,7 @@ int OpenSSL_decode(EVP_ENCODE_CTX *dummy,char *dst,int *outl, const char *src, i
     outlen += taillen;
     *outl = outlen;
 
-    // return 
+    DEBUG_PRINT(GREEN_TEXT("DEBUG: OpenSSL decode: outlen = %d, taillen = %d\n"), outlen, taillen);
     return outlen;
     // return (result){BASE64_SUCCESS, (size_t)outlen};
 }

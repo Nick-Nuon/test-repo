@@ -341,23 +341,23 @@ int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     // if (out == NULL || outl == NULL) {
     //     return -1;
     // }
-// #if TEST_SIMDUTF_BIO
-//   // TODO: Simplify this.  This is a bit confusing, but the outlen is deferenced once in the inner fucniton
-  // return EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
-// #else
-  // return EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl); 
-// #endif
+#if TEST_SIMDUTF_BIO
+  // TODO: Simplify this.  This is a bit confusing, but the outlen is deferenced once in the inner fucniton
+  return EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
+#else
+  return EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl); 
+#endif
 
 // size_t max = maximal_binary_length_from_base64_lazy_duplicate(in,inl);
 // unsigned char *out_openssl = OPENSSL_malloc(max + 30);
 // int outl_openssl = 0;
 
- int ret_openssl = EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl);
+//  int ret_openssl = EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl);
 
-int outl_openssl = -2;
+// int outl_openssl = -2;
 
-if (outl != NULL) {
- outl_openssl = *outl;}
+// if (outl != NULL) {
+//  outl_openssl = *outl;}
 
 //   int ret_simdutf = EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
 // int outl_simdutf = -2;
@@ -369,7 +369,8 @@ if (outl != NULL) {
 //   DEBUG_PRINT(RED_TEXT(" simdutf ret = %d, OpenSSL ret = %d\n"), ret_simdutf, ret_openssl);
 // }
 
- return ret_openssl;
+//  return ret_openssl;
+// return ret_simdutf;
 }
 
 /*-
@@ -541,7 +542,8 @@ int EVP_DecodeUpdate_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
 
   if (ret.error == BASE64_SUCCESS && ret.has_seof == 0 
   || ret.error == NOT_MULTIPLE_OF_FOUR && ret.has_seof == 0
-  || ret.error == ADDITIONAL_PADDING_CHECK_FAILED ) {
+  || ret.error == ADDITIONAL_PADDING_CHECK_FAILED 
+  || ret.error == EXTRA_PADDING_EMPTY) {
     return 1;
   }
   if (ret.error == BASE64_SUCCESS && ret.has_seof == 1){
@@ -1018,7 +1020,7 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     int len_wo_ws_ext_pad = length - r.whitespaces - r.padding;
     int in_cnt_wo_ws_ext_pad = r.input_count - r.whitespaces + r.padding;
 
-  if (r.error == EXTRA_PADDING){
+  if (r.error == EXTRA_PADDING_CORE || r.error == EXTRA_PADDING_EMPTY) {
       DEBUG_PRINT(RED_TEXT("DEBUG: Simdutf Extra padding found in core kernel\n"));
       // Calculate the number of bytes that constitute the valid part.
       // if padding is in the middle of the string, there is extra data after it
@@ -1264,9 +1266,11 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
       length -= 1;
     }
   }
+
+  DEBUG_PRINT(GREEN_TEXT("DEBUG: Length after removing padding and white spaces: %zu\n"), length);
   if (length == 0) {
     if (equalsigns > 0) {
-      return (full_result){EXTRA_PADDING, equallocation, 0, NO_SEOF, easy_whitespaces, equalsigns};
+      return (full_result){EXTRA_PADDING_EMPTY, equallocation, 0, NO_SEOF, easy_whitespaces, equalsigns};
     }
     return (full_result){BASE64_SUCCESS, 0,0, NO_SEOF, easy_whitespaces, equalsigns};
   }
@@ -1407,7 +1411,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
 
     // DEBUG_PRINT("idx == 4 remaining\n");
 
-          return (full_result){EXTRA_PADDING, (size_t)(src - srcinit),
+          return (full_result){EXTRA_PADDING_CORE, (size_t)(src - srcinit),
             (size_t)((dst - dstinit)),has_seof,  whitespaces, equalsigns, internal_padding};
         }
         else {
@@ -1568,12 +1572,13 @@ int EVP_DecodeBlock(unsigned char *t, const unsigned char *f, int n) {
   return evp_decodeblock_int(NULL, t, f, n);
 }
 
-int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl) {
-// #if TEST_SIMDUTF_BIO
-//   return EVP_DecodeFinal_simdutf(ctx, out, outl);
-// #else
-  return EVP_DecodeFinal_OpenSSL(ctx, out, outl);
-// #endif
+int EVP_DecodeFinal_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
+{
+  *outl = 0;
+  if (ctx->num != 0) {
+    return simdutf_decode(ctx, out, outl, (const char *)ctx->enc_data, ctx->num);
+  }
+  return 1;
 }
 
 int EVP_DecodeFinal_OpenSSL(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
@@ -1597,11 +1602,13 @@ int EVP_DecodeFinal_OpenSSL(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
         return 1;
 }
 
-int EVP_DecodeFinal_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
-{
-  *outl = 0;
-  if (ctx->num != 0) {
-    return simdutf_decode(ctx, out, outl, (const char *)ctx->enc_data, ctx->num);
-  }
-  return 1;
+
+
+int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl) {
+// #if TEST_SIMDUTF_BIO
+  return EVP_DecodeFinal_simdutf(ctx, out, outl);
+// #else
+  // return EVP_DecodeFinal_OpenSSL(ctx, out, outl);
+// #endif
 }
+

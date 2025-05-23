@@ -743,8 +743,9 @@ __owur int EVP_Cipher(EVP_CIPHER_CTX *c,
         NOT_MULTIPLE_OF_FOUR, // The base64 input is not a multiple of four after 
                                 // removing padding and removing white spaces at beginning.
         OTHER,                     // Not related to validation/transcoding.
-        EXTRA_PADDING, // There is extra padding in the input string that shouldn't be here.
+        EXTRA_PADDING_CORE, // There is extra padding is found in the core kernel
         ADDITIONAL_PADDING_CHECK_FAILED, // The additional padding check failed.
+        EXTRA_PADDING_EMPTY, // There shouldn't be extra padding if nothing to decode  there is no e.g.  "     ="
         } error_code;
 
         typedef enum has_seof {
