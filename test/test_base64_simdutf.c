@@ -460,6 +460,7 @@ int EVP_DecodeUpdate_test(EVP_ENCODE_CTX *dummy,
     OPENSSL_free(decodeUpdate_openssl);
     OPENSSL_free(decodeUpdate_simdutf);
 
+
     EVP_ENCODE_CTX_free(simdutf_ctx);
     EVP_ENCODE_CTX_free(openssl_ctx);
 
@@ -645,11 +646,11 @@ static int test_complete_decode_base64_cases(void)
             }
         }
 
-        printf("max_len: %zu\n", max_len);
-        printf("simdutf_result: %d\n", simdutf_result);
-        printf("simdutf_outlen: %d\n", outlen_simdutf);
-        printf("result_openssl: %d\n", result_openssl);
-        printf("openssl_outlen: %d\n", openssl_outlen);
+        // printf("max_len: %zu\n", max_len);
+        // printf("simdutf_result: %d\n", simdutf_result);
+        // printf("simdutf_outlen: %d\n", outlen_simdutf);
+        // printf("result_openssl: %d\n", result_openssl);
+        // printf("openssl_outlen: %d\n", openssl_outlen);
 
         ASSERT_EQUAL_INT(simdutf_result, result_openssl);
         ASSERT_EQUAL_INT(outlen_simdutf, openssl_outlen);
@@ -673,8 +674,6 @@ static int test_complete_decode_base64_cases(void)
 static int inline check_cases(case_pair *cases, size_t num_cases)
 {
     DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered encode_base64_cases Test\n"));
-    printf(GREEN_TEXT("DEBUG: Number of cases: %zu\n"), num_cases);
-
     /* Define test cases as an array of case_pair.
        These mirror your C++ test cases.
     */
@@ -3601,39 +3600,39 @@ static int test_doomed_partial_buffer_utf8(void)
 int setup_tests(void)
 {
     // // Register our sample test. The macro ADD_TEST() takes our test function.
-    // ADD_TEST(test_decode_base64_cases); 
-    // ADD_TEST(test_seof_good_basic_cases); 
+    ADD_TEST(test_decode_base64_cases); 
+    ADD_TEST(test_seof_good_basic_cases); 
 
-    // ADD_TEST(test_complete_decode_base64_cases); 
+    ADD_TEST(test_complete_decode_base64_cases); 
 
-    // ADD_TEST(test_encode_base64_no_padding_cases); 
-    // ADD_TEST(test_multiple_of_4_good);
-    // ADD_TEST(test_multiple_of_4_bad);
-    // ADD_TEST(test_seof_good_cases);
-    // ADD_TEST(test_roundtrip_base64_with_spaces); 
+    ADD_TEST(test_encode_base64_no_padding_cases); 
+    ADD_TEST(test_multiple_of_4_good);
+    ADD_TEST(test_multiple_of_4_bad);
+    ADD_TEST(test_seof_good_cases);
+    ADD_TEST(test_roundtrip_base64_with_spaces); 
 
-    // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); 
-    // ADD_TEST(test_roundtrip_base64);
-    // ADD_TEST(test_issue_520);
-    // ADD_TEST(test_issue_509);
-    // ADD_TEST(test_issue_504_8bit); 
-    // ADD_TEST(test_issue_502_alt);
-    // ADD_TEST(test_encode_base64_basic_cases); 
-    // ADD_TEST(test_seof_bad_basic_cases); 
-    // ADD_TEST(test_seof_bad_cases);
-    // ADD_TEST(test_roundtrip_base64_with_garbage);
-    // ADD_TEST(test_doomed_truncated_base64_roundtrip);
-    // ADD_TEST(test_bad_padding_base64);
-    // ADD_TEST(test_readme_test);
-    // ADD_TEST(test_data_after_padding);
+    ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); 
+    ADD_TEST(test_roundtrip_base64);
+    ADD_TEST(test_issue_520);
+    ADD_TEST(test_issue_509);
+    ADD_TEST(test_issue_504_8bit); 
+    ADD_TEST(test_issue_502_alt);
+    ADD_TEST(test_encode_base64_basic_cases); 
+    ADD_TEST(test_seof_bad_basic_cases); 
+    ADD_TEST(test_seof_bad_cases);
+    ADD_TEST(test_roundtrip_base64_with_garbage);
+    ADD_TEST(test_doomed_truncated_base64_roundtrip);
+    ADD_TEST(test_bad_padding_base64);
+    ADD_TEST(test_readme_test);
+    ADD_TEST(test_data_after_padding);
 
-    // ADD_TEST(test_random_padding_and_spaces);
-    // ADD_TEST(test_streaming_base64_roundtrip);
-    // ADD_TEST(test_random_padding_insertion);
-    // ADD_TEST(test_doomed_partial_buffer_utf8);
-    // ADD_TEST(test_lots_of_data_after_padding);
-    // ADD_TEST(test_base64_decode_just_one_padding_loose);
-    // ADD_TEST(test_issue_evp_b_overflow);
+    ADD_TEST(test_random_padding_and_spaces);
+    ADD_TEST(test_streaming_base64_roundtrip);
+    ADD_TEST(test_random_padding_insertion);
+    ADD_TEST(test_doomed_partial_buffer_utf8);
+    ADD_TEST(test_lots_of_data_after_padding);
+    ADD_TEST(test_base64_decode_just_one_padding_loose);
+    ADD_TEST(test_issue_evp_b_overflow);
     ADD_TEST(test_encode_base64_invalid_cases);
 
 

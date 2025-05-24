@@ -509,8 +509,7 @@ int EVP_DecodeUpdate_OpenSSL(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
   const unsigned char *table;
   int temp_total  = 0; // for debugging purposes
 
-  n = ctx->num;  // for partial decode/encode. As I understand it, 
-  // it starts high and diminishes as the buffer gets processed
+  n = ctx->num; // this is the number of bytes in the ctx buffer
   d = ctx->enc_data;
 
   // detects padding inside the ctx's buffer
@@ -577,7 +576,7 @@ int EVP_DecodeUpdate_OpenSSL(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
         goto end;
       }
       OPENSSL_assert(n < (int)sizeof(ctx->enc_data)); // can only get 80 bytes at a time , hardcoded
-      d[n++] = tmp; // write to the ctx. 
+      d[n++] = tmp; // write input character to the ctx. 
     }
 
     if (n == 64) {
@@ -658,6 +657,9 @@ int EVP_DecodeUpdate_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
   }
 
   full_result ret = adjust_outlen(ctx, out, outl, (const char *)in, inl);
+
+  ctx->num = ret.input_count % 64;
+  memcpy(ctx->enc_data, in + ret.input_count - ctx->num, ctx->num);
 
   DEBUG_PRINT(RED_TEXT("DEBUG: adjust_outlen: ret.error = %d, has_seof = %d\n"), ret.error, ret.has_seof);
 
