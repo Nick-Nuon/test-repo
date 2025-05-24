@@ -28,7 +28,7 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length);
 
 
-#define DEBUG 0// Set to 1 to enable debug prints, 0 to disable
+#define DEBUG 1// Set to 1 to enable debug prints, 0 to disable
 #define TEST_SIMDUTF_BIO 1
 #define TEST_SIMDUTF_BIO_ONLY_FINAL 0
 #define RED_TEXT(str) "\033[31m" str "\033[0m"
@@ -251,6 +251,64 @@ void EVP_EncodeInit(EVP_ENCODE_CTX *ctx) {
   ctx->flags = 0;
 }
 
+
+// TODO: Maybe delete when all is said and done?
+// Returns 1 if the contexts are equal, 0 otherwise
+int EVP_ENCODE_CTX_cmp(const EVP_ENCODE_CTX *ctx1, const EVP_ENCODE_CTX *ctx2) {
+  int is_equal = 1;
+  
+  if (ctx1 == NULL || ctx2 == NULL) {
+    DEBUG_PRINT(RED_TEXT("DEBUG: One or both contexts are NULL\n"));
+    return 0;
+  }
+    
+  // Compare all fields and track equality
+  if (ctx1->num != ctx2->num) {
+    DEBUG_PRINT(RED_TEXT("DEBUG: num mismatch: ctx1=%d, ctx2=%d\n"), 
+                ctx1->num, ctx2->num);
+    is_equal = 0;
+  }
+    
+  if (ctx1->length != ctx2->length) {
+    DEBUG_PRINT(RED_TEXT("DEBUG: length mismatch: ctx1=%d, ctx2=%d\n"),
+                ctx1->length, ctx2->length);
+    is_equal = 0;
+  }
+    
+  if (ctx1->line_num != ctx2->line_num) {
+    DEBUG_PRINT(RED_TEXT("DEBUG: line_num mismatch: ctx1=%d, ctx2=%d\n"),
+                ctx1->line_num, ctx2->line_num);
+    is_equal = 0;
+  }
+    
+  if (ctx1->flags != ctx2->flags) {
+    DEBUG_PRINT(RED_TEXT("DEBUG: flags mismatch: ctx1=%u, ctx2=%u\n"),
+                ctx1->flags, ctx2->flags);
+    is_equal = 0;
+  }
+    
+  // Compare enc_data buffer
+  if (memcmp(ctx1->enc_data, ctx2->enc_data, sizeof(ctx1->enc_data)) != 0) {
+    DEBUG_PRINT(RED_TEXT("DEBUG: enc_data mismatch\n"));
+    // Print the differing bytes
+    for (size_t i = 0; i < sizeof(ctx1->enc_data); i++) {
+      if (ctx1->enc_data[i] != ctx2->enc_data[i]) {
+        DEBUG_PRINT(RED_TEXT("DEBUG: enc_data differs at position %zu: ctx1=0x%02x, ctx2=0x%02x\n"),
+                    i, ctx1->enc_data[i], ctx2->enc_data[i]);
+      }
+    }
+    is_equal = 0;
+  }
+
+  if (is_equal) {
+    DEBUG_PRINT(GREEN_TEXT("DEBUG: Contexts are equal\n"));
+  } else {
+    DEBUG_PRINT(RED_TEXT("DEBUG: Contexts are NOT equal\n"));
+  }
+  
+  return is_equal;
+}
+
 int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                      const unsigned char *in, int inl) {
   int i, j;
@@ -391,36 +449,36 @@ int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     // if (out == NULL || outl == NULL) {
     //     return -1;
     // }
-#if TEST_SIMDUTF_BIO
-  // TODO: Simplify this.  This is a bit confusing, but the outlen is deferenced once in the inner fucniton
-  return EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
-#else
-  return EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl); 
-#endif
+// #if TEST_SIMDUTF_BIO
+//   // TODO: Simplify this.  This is a bit confusing, but the outlen is deferenced once in the inner fucniton
+  // return EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
+// #else
+  // return EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl); 
+// #endif
 
-// size_t max = maximal_binary_length_from_base64_lazy_duplicate(in,inl);
-// unsigned char *out_openssl = OPENSSL_malloc(max + 30);
-// int outl_openssl = 0;
+size_t max = maximal_binary_length_from_base64_lazy_duplicate(in,inl);
+unsigned char *out_openssl = OPENSSL_malloc(max + 30);
 
-//  int ret_openssl = EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl);
+ int ret_openssl = EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl);
 
-// int outl_openssl = -2;
+int outl_openssl = -2;
 
-// if (outl != NULL) {
-//  outl_openssl = *outl;}
+if (outl != NULL) {
+ outl_openssl = *outl;}
 
-//   int ret_simdutf = EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
-// int outl_simdutf = -2;
-// if (outl != NULL) {
-//   outl_simdutf = *outl;}
+  int ret_simdutf = EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
+int outl_simdutf = -2;
+if (outl != NULL) {
+  outl_simdutf = *outl;}
 
-// if (outl_openssl != outl_simdutf || ret_openssl != ret_simdutf) {
-//   DEBUG_PRINT(RED_TEXT("DEBUG: MISMATCH: simdutf outl = %d, OpenSSL outl = %d "), outl_simdutf, outl_openssl);
-//   DEBUG_PRINT(RED_TEXT(" simdutf ret = %d, OpenSSL ret = %d\n"), ret_simdutf, ret_openssl);
-// }
+if (outl_openssl != outl_simdutf || ret_openssl != ret_simdutf) {
+  DEBUG_PRINT(RED_TEXT("DEBUG: MISMATCH: simdutf outl = %d, OpenSSL outl = %d "), outl_simdutf, outl_openssl);
+  DEBUG_PRINT(RED_TEXT(" simdutf ret = %d, OpenSSL ret = %d\n"), ret_simdutf, ret_openssl);
+}
 
-//  return ret_openssl;
-// return ret_simdutf;
+OPENSSL_free(out_openssl);
+
+return ret_simdutf;
 }
 
 /*-
@@ -1235,9 +1293,7 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         return r;
 
   } else {
-    // Calculate the number of bytes that constitute the valid part.
-    DEBUG_PRINT(RED_TEXT("DEBUG: Simdutf decode failed, invalid base64 character\n"));
-    // DEBUG_PRINT(RED_TEXT("DEBUG: THes should not be possible\n"));
+    DEBUG_PRINT(RED_TEXT("DEBUG: Simdutf decode failed, invalid base64 character(catchall category)\n"));
 
     size_t valid = r.output_count - (r.output_count % 48);
     *outl = (int) valid;
@@ -1670,9 +1726,9 @@ int EVP_DecodeFinal_OpenSSL(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
 
 int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl) {
 // #if TEST_SIMDUTF_BIO
-  return EVP_DecodeFinal_simdutf(ctx, out, outl);
+  // return EVP_DecodeFinal_simdutf(ctx, out, outl);
 // #else
-  // return EVP_DecodeFinal_OpenSSL(ctx, out, outl);
+  return EVP_DecodeFinal_OpenSSL(ctx, out, outl);
 // #endif
 }
 

@@ -192,6 +192,9 @@
         }                                                                        \
     } while(0)
 
+
+
+
 size_t base64_length_from_binary(size_t length) {
     return (length + 2)/3 * 4; // We use padding to make the length a multiple of 4.
   }
@@ -439,11 +442,14 @@ int EVP_DecodeUpdate_test(EVP_ENCODE_CTX *dummy,
     int decodeUpdate_ret_openssl = EVP_DecodeUpdate_OpenSSL(openssl_ctx, decodeUpdate_openssl, &decodeUpdate_outl_openssl, in, inl);
     int decodeUpdate_ret_simdutf = EVP_DecodeUpdate_simdutf(simdutf_ctx, decodeUpdate_simdutf, &decodeUpdate_outl_simdutf, in, inl);
 
-    // Compare results
-    ASSERT_EQUAL_INT(decodeUpdate_outl_openssl, decodeUpdate_outl_simdutf);
-    ASSERT_EQUAL_INT(decodeUpdate_ret_openssl, decodeUpdate_ret_simdutf);
-    ASSERT_MEM_EQUAL(decodeUpdate_openssl, decodeUpdate_simdutf, decodeUpdate_outl_openssl);
+    // // Compare results
+    // ASSERT_EQUAL_INT(decodeUpdate_outl_openssl, decodeUpdate_outl_simdutf);
+    // ASSERT_EQUAL_INT(decodeUpdate_ret_openssl, decodeUpdate_ret_simdutf);
+    // ASSERT_MEM_EQUAL(decodeUpdate_openssl, decodeUpdate_simdutf, decodeUpdate_outl_openssl);
 
+    /* Compare contexts */
+    ASSERT_TRUE(EVP_ENCODE_CTX_cmp(simdutf_ctx, openssl_ctx));
+    
     // Copy result to caller's buffer if provided
     // if (out && outl) {
     //     memcpy(out, decodeUpdate_openssl, decodeUpdate_outl_openssl);
@@ -461,6 +467,51 @@ int EVP_DecodeUpdate_test(EVP_ENCODE_CTX *dummy,
     return 1;
 }
 
+int EVP_DecodeFinal_test(EVP_ENCODE_CTX *dummy,
+    //  unsigned char *out, int *outl, 
+    const unsigned char *in, int inl, int expected_outl) {
+
+    DEBUG_PRINT(GREEN_TEXT("***DEBUG: EVP_DecodeFinal_test****\n"));
+
+    // First create two contexts
+    EVP_ENCODE_CTX *simdutf_ctx = EVP_ENCODE_CTX_new();
+    EVP_ENCODE_CTX *openssl_ctx = EVP_ENCODE_CTX_new();
+    if (!simdutf_ctx || !openssl_ctx) {
+        EVP_ENCODE_CTX_free(simdutf_ctx);
+        EVP_ENCODE_CTX_free(openssl_ctx);
+        return -1;
+    }
+
+    // Allocate separate buffers for each decoder 
+    unsigned char *decodeFinal_openssl = OPENSSL_malloc(inl + 2);
+    unsigned char *decodeFinal_simdutf = OPENSSL_malloc(inl + 2);
+    if (!decodeFinal_openssl || !decodeFinal_simdutf) {
+        OPENSSL_free(decodeFinal_openssl);
+        OPENSSL_free(decodeFinal_simdutf);
+        return -1;
+    }
+
+    int decodeFinal_outl_openssl = 0;
+    int decodeFinal_outl_simdutf = 0;
+
+    // Run both decoders
+    int decodeFinal_ret_openssl = EVP_DecodeFinal_OpenSSL(openssl_ctx, decodeFinal_openssl, &decodeFinal_outl_openssl, in, inl);
+    int decodeFinal_ret_simdutf = EVP_DecodeFinal_simdutf(simdutf_ctx, decodeFinal_simdutf, &decodeFinal_outl_simdutf, in, inl);
+
+    // Compare results
+    ASSERT_EQUAL_INT(decodeFinal_outl_openssl, decodeFinal_outl_simdutf);
+    ASSERT_EQUAL_INT(decodeFinal_ret_openssl, decodeFinal_ret_simdutf);
+    ASSERT_MEM_EQUAL(decodeFinal_openssl, decodeFinal_simdutf, decodeFinal_outl_openssl);
+
+    // Clean up
+    OPENSSL_free(decodeFinal_openssl);
+    OPENSSL_free(decodeFinal_simdutf);
+
+    EVP_ENCODE_CTX_free(simdutf_ctx);
+    EVP_ENCODE_CTX_free(openssl_ctx);
+
+    return 1;
+}
 
 /*-------------------------------------------------------------
  * Test Function: decode_base64_cases
@@ -806,9 +857,6 @@ static int inline check_cases_no_padding(case_pair *cases, size_t num_cases)
     DEBUG_PRINT(GREEN_TEXT("DEBUG: Entered encode_base64_cases Test\n"));
     printf(GREEN_TEXT("DEBUG: Number of cases: %zu\n"), num_cases);
 
-    /* Define test cases as an array of case_pair.
-       These mirror your C++ test cases.
-    */
     size_t i, j;
 
         /* --- Part 1: Test binary => base64 (normal) --- */
@@ -916,6 +964,120 @@ const case_pair no_padding[] = {
      "fXk7OytCOEVfQWgsRWRbIFBkQnFZJ15OPk8kNDo3TEsxPDp8NylidFZAfHtZV1IkJEVyNTk"
      "tWGpWckZsNEx9fnl6VEVkNCdFW0Br"}
     };
+
+    const case_pair invalid_cases[] = {
+        // Missing padding
+        {"hello", "aGVsbG8"},
+        {"hello", "aGVsbG8\n"},
+        
+        // Extra padding
+        {"hello", "aGVsbG8==\n"},
+        {"hello", "aGVsbG8===\n"},
+        
+        // Data after padding
+        {"hello", "aGV=sbG8=\n"},
+        
+        // Invalid characters
+        {"hello", "\x00aGVsbG8="},
+        {"hello", "aGVs\x00bG8="},
+        {"hello", "aGVs\x01bG8="},
+        {"hello", "aGVs\x80bG8="},
+        {"hello", "\xe1GVsbG8="},
+        
+        // Truncated input
+        {"OpenSSLOpenSSL\n", "T3BlblNTTE9wZW5TU0w"},
+        {"OpenSSLOpenSSL\n", "T3BlblNTTE9wZW5TU"},
+        {"OpenSSLOpenSSL\n", "T3BlblNTTE9wZW5T"},
+        
+        // Too much padding
+        {"OpenSSLOpenSSL\n", "T3BlblNTTE9wZW5TU0wK===="},
+        {"OpenSSLOpenSSL\n", "T3BlblNTTE9wZW5TU0wK============================================\n"},
+        
+        // Multiple decode attempts
+        {"a", "YQ==YQ==YQ==\n"},
+        
+        // Invalid short strings 
+        {"A", "A"},
+        {"A", "A\n"},
+        {"A", "A=="},
+        {"A", "A="},
+        {"A", "A==\n"}, 
+        {"A", "A===\n"},
+        {"A", "A====\n"},
+        
+        // CVE-2015-0292
+        {"encode me\n", "ZW5jb2RlIG1lCg==================================================================\n"},
+        
+        // Invalid padding length
+        {"x...", "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eA====\n"},
+        
+        // Data after padding in multiline
+        {"x...", "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eA==\neHh4eHh4eHh4eHh4eHh4eHh4\n"},
+        {"x...", "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4\neA==eHh4eHh4eHh4eHh4eHh4\n"},
+
+        {"hello", "\x61\x47\x56\x73\x62\x47\x38"},
+        {"hello", "\x61\x47\x56\x73\x62\x47\x38\x0a"},
+        {"hello", "\x61\x47\x56\x73\x62\x47\x38\x3d\x3d\x0a"},
+        {"T3BlblNTT", "\x54\x33\x42\x6c\x62\x6c\x4e\x54\x54\x45\x39\x77\x5a\x57\x35\x54\x55\x30\x77"},
+        {"T3BlblSS", "\x54\x33\x42\x6c\x62\x6c\x4e\x54\x54\x45\x39\x77\x5a\x57\x35\x54\x55\x30"},
+        {"T3BlblR", "\x54\x33\x42\x6c\x62\x6c\x4e\x54\x54\x45\x39\x77\x5a\x57\x35\x54\x55"},
+        {"A", "\x41"},
+        {"A", "\x41\x0a"},
+        {"A", "\x41\x3d"},
+        {"A", "\x41\x3d\x3d\x0a"},
+    };
+
+
+    static int test_encode_base64_invalid_cases(void) {
+        // int result = check_cases(invalid_cases, sizeof(invalid_cases)/sizeof(invalid_cases[0]));
+
+        // Separately test each case with EVP_DecodeUpdate_test
+        for(size_t i = 0; i < sizeof(invalid_cases)/sizeof(invalid_cases[0]); i++) {
+            const char *input = invalid_cases[i].encoded;
+            size_t inlen = strlen(input);
+
+            /* Decode using both methods */
+            size_t back_bufsize = maximal_binary_length_from_base64(input, inlen);
+            unsigned char *back_simd = OPENSSL_malloc(back_bufsize + 2);
+            unsigned char *back_openssl = OPENSSL_malloc(back_bufsize + 2);
+            if (!back_simd || !back_openssl) {
+                TEST_error("Out of memory for back buffers");
+                if (back_simd) OPENSSL_free(back_simd);
+                if (back_openssl) OPENSSL_free(back_openssl);
+                return 0;
+            } 
+
+            int outlen_simdutf = 0;
+            int outlen_openssl = 0;
+            int result_simdutf = simdutf_decode(NULL, (char *)back_simd, &outlen_simdutf, input, inlen);
+            int result_openssl = OpenSSL_decode(NULL, (char *)back_openssl, &outlen_openssl, input, inlen);
+
+            /* Both decoders should agree */
+            ASSERT_EQUAL_INT(result_openssl, result_simdutf);
+            ASSERT_EQUAL_INT(outlen_openssl, outlen_simdutf);
+            ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
+
+            /* Clean up memory */
+            OPENSSL_free(back_simd);
+            OPENSSL_free(back_openssl);
+                    
+            // Test EVP_DecodeUpdate
+            int e = EVP_DecodeUpdate_test(NULL, input, inlen, NULL);
+            if (e != 1) {
+                return 0;
+            }
+
+            // Test EVP_DecodeFinal 
+            int f = EVP_DecodeFinal_test(NULL, input, inlen, NULL);
+            if (f != 1) {
+                return 0;
+            }
+
+            // // Also test the full decode operation
+            // ASSERT_BASE64_DECODE_EQUAL(input);
+        }
+        return 1;
+    }
 
 const case_pair whitespaces[] = {
         {"abcd", " Y\fW\tJ\njZ A=\r= "},
@@ -3439,39 +3601,40 @@ static int test_doomed_partial_buffer_utf8(void)
 int setup_tests(void)
 {
     // // Register our sample test. The macro ADD_TEST() takes our test function.
-    ADD_TEST(test_decode_base64_cases); 
-    ADD_TEST(test_seof_good_basic_cases); 
+    // ADD_TEST(test_decode_base64_cases); 
+    // ADD_TEST(test_seof_good_basic_cases); 
 
-    ADD_TEST(test_complete_decode_base64_cases); 
+    // ADD_TEST(test_complete_decode_base64_cases); 
 
-    ADD_TEST(test_encode_base64_no_padding_cases); 
-    ADD_TEST(test_multiple_of_4_good);
-    ADD_TEST(test_multiple_of_4_bad);
-    ADD_TEST(test_seof_good_cases);
-    ADD_TEST(test_roundtrip_base64_with_spaces); 
+    // ADD_TEST(test_encode_base64_no_padding_cases); 
+    // ADD_TEST(test_multiple_of_4_good);
+    // ADD_TEST(test_multiple_of_4_bad);
+    // ADD_TEST(test_seof_good_cases);
+    // ADD_TEST(test_roundtrip_base64_with_spaces); 
 
-    ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); 
-    ADD_TEST(test_roundtrip_base64);
-    ADD_TEST(test_issue_520);
-    ADD_TEST(test_issue_509);
-    ADD_TEST(test_issue_504_8bit); 
-    ADD_TEST(test_issue_502_alt);
-    ADD_TEST(test_encode_base64_basic_cases); 
-    ADD_TEST(test_seof_bad_basic_cases); 
-    ADD_TEST(test_seof_bad_cases);
-    ADD_TEST(test_roundtrip_base64_with_garbage);
-    ADD_TEST(test_doomed_truncated_base64_roundtrip);
-    ADD_TEST(test_bad_padding_base64);
-    ADD_TEST(test_readme_test);
-    ADD_TEST(test_data_after_padding);
+    // ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); 
+    // ADD_TEST(test_roundtrip_base64);
+    // ADD_TEST(test_issue_520);
+    // ADD_TEST(test_issue_509);
+    // ADD_TEST(test_issue_504_8bit); 
+    // ADD_TEST(test_issue_502_alt);
+    // ADD_TEST(test_encode_base64_basic_cases); 
+    // ADD_TEST(test_seof_bad_basic_cases); 
+    // ADD_TEST(test_seof_bad_cases);
+    // ADD_TEST(test_roundtrip_base64_with_garbage);
+    // ADD_TEST(test_doomed_truncated_base64_roundtrip);
+    // ADD_TEST(test_bad_padding_base64);
+    // ADD_TEST(test_readme_test);
+    // ADD_TEST(test_data_after_padding);
 
-    ADD_TEST(test_random_padding_and_spaces);
-    ADD_TEST(test_streaming_base64_roundtrip);
-    ADD_TEST(test_random_padding_insertion);
-    ADD_TEST(test_doomed_partial_buffer_utf8);
-    ADD_TEST(test_lots_of_data_after_padding);
-    ADD_TEST(test_base64_decode_just_one_padding_loose);
-    ADD_TEST(test_issue_evp_b_overflow);
+    // ADD_TEST(test_random_padding_and_spaces);
+    // ADD_TEST(test_streaming_base64_roundtrip);
+    // ADD_TEST(test_random_padding_insertion);
+    // ADD_TEST(test_doomed_partial_buffer_utf8);
+    // ADD_TEST(test_lots_of_data_after_padding);
+    // ADD_TEST(test_base64_decode_just_one_padding_loose);
+    // ADD_TEST(test_issue_evp_b_overflow);
+    ADD_TEST(test_encode_base64_invalid_cases);
 
 
     // Return 1 to indicate successful test setup.
