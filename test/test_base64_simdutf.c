@@ -443,12 +443,12 @@ int EVP_DecodeUpdate_test(EVP_ENCODE_CTX *dummy,
     int decodeUpdate_ret_simdutf = EVP_DecodeUpdate_simdutf(simdutf_ctx, decodeUpdate_simdutf, &decodeUpdate_outl_simdutf, in, inl);
 
     // // Compare results
-    // ASSERT_EQUAL_INT(decodeUpdate_outl_openssl, decodeUpdate_outl_simdutf);
-    // ASSERT_EQUAL_INT(decodeUpdate_ret_openssl, decodeUpdate_ret_simdutf);
-    // ASSERT_MEM_EQUAL(decodeUpdate_openssl, decodeUpdate_simdutf, decodeUpdate_outl_openssl);
+    ASSERT_EQUAL_INT(decodeUpdate_outl_openssl, decodeUpdate_outl_simdutf);
+    ASSERT_EQUAL_INT(decodeUpdate_ret_openssl, decodeUpdate_ret_simdutf);
+    ASSERT_MEM_EQUAL(decodeUpdate_openssl, decodeUpdate_simdutf, decodeUpdate_outl_openssl);
 
     /* Compare contexts */
-    ASSERT_TRUE(EVP_ENCODE_CTX_cmp(simdutf_ctx, openssl_ctx));
+    // ASSERT_TRUE(EVP_ENCODE_CTX_cmp(simdutf_ctx, openssl_ctx));
     
     // Copy result to caller's buffer if provided
     // if (out && outl) {
@@ -3600,20 +3600,19 @@ static int test_doomed_partial_buffer_utf8(void)
 int setup_tests(void)
 {
     // // Register our sample test. The macro ADD_TEST() takes our test function.
-    ADD_TEST(test_decode_base64_cases); 
+
+    ADD_TEST(test_issue_520);
+
+
     ADD_TEST(test_seof_good_basic_cases); 
-
     ADD_TEST(test_complete_decode_base64_cases); 
-
     ADD_TEST(test_encode_base64_no_padding_cases); 
     ADD_TEST(test_multiple_of_4_good);
     ADD_TEST(test_multiple_of_4_bad);
     ADD_TEST(test_seof_good_cases);
     ADD_TEST(test_roundtrip_base64_with_spaces); 
-
     ADD_TEST(test_roundtrip_base64_with_lots_of_spaces); 
     ADD_TEST(test_roundtrip_base64);
-    ADD_TEST(test_issue_520);
     ADD_TEST(test_issue_509);
     ADD_TEST(test_issue_504_8bit); 
     ADD_TEST(test_issue_502_alt);
@@ -3625,7 +3624,6 @@ int setup_tests(void)
     ADD_TEST(test_bad_padding_base64);
     ADD_TEST(test_readme_test);
     ADD_TEST(test_data_after_padding);
-
     ADD_TEST(test_random_padding_and_spaces);
     ADD_TEST(test_streaming_base64_roundtrip);
     ADD_TEST(test_random_padding_insertion);

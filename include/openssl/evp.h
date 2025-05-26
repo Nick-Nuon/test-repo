@@ -764,6 +764,7 @@ __owur int EVP_Cipher(EVP_CIPHER_CTX *c,
               error_code error;
               size_t input_count;
               size_t output_count;
+              size_t last_buf_chk; // Number of bytes till the last buffer starts
               has_seof has_seof;
               size_t whitespaces;
               size_t padding; // padding removed by base64_tail_decode_trim_end
