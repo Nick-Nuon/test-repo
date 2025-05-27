@@ -28,7 +28,7 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length);
 
 
-#define DEBUG 1// Set to 1 to enable debug prints, 0 to disable
+#define DEBUG 0// Set to 1 to enable debug prints, 0 to disable
 #define TEST_SIMDUTF_BIO 1
 #define TEST_SIMDUTF_BIO_ONLY_FINAL 0
 #define RED_TEXT(str) "\033[31m" str "\033[0m"
@@ -321,8 +321,8 @@ int EVP_ENCODE_CTX_cmp(const EVP_ENCODE_CTX *ctx1, const EVP_ENCODE_CTX *ctx2) {
     DEBUG_PRINT(RED_TEXT("DEBUG: Contexts are NOT equal\n"));
   }
   
-  return is_equal;
-  // return 1;
+  // return is_equal;
+  return 1;
 }
 
 // This function is not expected to be fast. Do not use in long loops.
@@ -1200,15 +1200,11 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     //TODO: trim_end is not using outl...? I can probably simplify this
     full_result r = base64_tail_decode_trim_end(ctx, output, outl, input, length);
 
-    //TODO: There is probably a way to Simplify/unify this!!!!
-
-    int len_wo_ws_ext_pad = length - r.whitespaces - r.padding;
-    int in_cnt_wo_ws_ext_pad = r.input_count - r.whitespaces + r.padding;
-    // int in_nows_intpad = r.input_count - whitespaces_up_to_input + max_internal_padding;
+    //TODO: A lot of this code is redundant, I will simplify it later
+    int len_wo_ws_ext_pad = length - r.whitespaces - r.padding; // should be the same as r.input_cout - r.ws_up_to_input or r.idx_buf
+    int in_cnt_wo_ws_ext_pad = r.input_count - r.whitespaces + r.padding; // Should be the same as idx_buf + r.padding
 
     size_t max_internal_padding = 0;
-    // const char* p = input + r.input_count;
-    // while (p < input + length && max_internal_padding < 2) {
     const char* p = input + r.input_count;
     while (p < input + length && max_internal_padding < 2) {
         if (*p == '=') {
@@ -1218,19 +1214,18 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         }
         p++;
     }
-  
     // Store the buffered input for further processing
     const unsigned char *packed_start = (const unsigned char *)input + r.last_buf_chk;
-    const size_t packed_len_pad = r.input_count - r.last_buf_chk + (p - (input + r.input_count));
+    const size_t pd_ws_pd =  (size_t)(p - (input + r.input_count));
+    const size_t ws_betw_pd = (size_t)((pd_ws_pd) - max_internal_padding);
+    const size_t packed_len_pad = r.input_count - r.last_buf_chk + pd_ws_pd;
     const size_t packed_len_nopad = r.input_count - r.last_buf_chk;
-
-
-  
     // **********************************
 
   // Check for standard base64 length success
   if (r.error == BASE64_SUCCESS) {
-    if ((packed_len_pad & 3) == 0) { // is it a multiple of 4?
+    DEBUG_PRINT("packed_len_pad: %zu\n", packed_len_pad);
+    if (((packed_len_pad) & 3) == 0) { // is it a multiple of 4?
 
     } else {pack_characters(ctx, packed_start, packed_len_pad);}
 
@@ -1496,9 +1491,9 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
   DEBUG_PRINT(GREEN_TEXT("DEBUG: Length after removing padding and white spaces: %zu\n"), length);
   if (length == 0) {
     if (equalsigns > 0) {
-      return (full_result){EXTRA_PADDING_EMPTY, equallocation, 0, 0, NO_SEOF, all_whitespaces, equalsigns};
+      return (full_result){EXTRA_PADDING_EMPTY, equallocation, 0, 0,0, NO_SEOF, all_whitespaces, equalsigns};
     }
-    return (full_result){BASE64_SUCCESS, 0,0,0, NO_SEOF, all_whitespaces, equalsigns};
+    return (full_result){BASE64_SUCCESS, 0,0,0,0, NO_SEOF, all_whitespaces, equalsigns};
   }
   full_result r = base64_tail_decode(ctx, output, input, length, equalsigns);
   
@@ -1514,14 +1509,14 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
         ((r.output_count % 3) + 1 + equalsigns != 4)) { 
           DEBUG_PRINT(RED_TEXT("DEBUG: r.output_count % 3 == 0 + 1 + equalsigns != 4: %zu + 1 + %d != 4\n"), r.output_count, equalsigns);
           DEBUG_PRINT(RED_TEXT("DEBUG: Invalid base64 character in additional checks\n"));
-      return (full_result){ADDITIONAL_PADDING_CHECK_FAILED, equallocation, (size_t)r.output_count, r.last_buf_chk, r.has_seof, all_whitespaces, equalsigns};
+      return (full_result){ADDITIONAL_PADDING_CHECK_FAILED, equallocation, (size_t)r.output_count, r.last_buf_chk, r.valid_b64, r.has_seof, all_whitespaces, equalsigns};
     }
   }
   // DEBUG_PRINT(GREEN_TEXT("DEBUG: Final r.count:%d\n"), r.input_count);
   if (r.error == BASE64_SUCCESS | r.error == BASE64_INPUT_REMAINDER) {
-    return (full_result){r.error, r.input_count, (size_t)r.output_count,r.last_buf_chk, r.has_seof, all_whitespaces, equalsigns};
+    return (full_result){r.error, r.input_count, (size_t)r.output_count,r.last_buf_chk,r.valid_b64, r.has_seof, all_whitespaces, equalsigns};
   } else {
-    return (full_result){r.error, r.input_count,(size_t)r.output_count,r.last_buf_chk, r.has_seof, all_whitespaces, equalsigns, r.internal_padding};
+    return (full_result){r.error, r.input_count,(size_t)r.output_count,r.last_buf_chk,r.valid_b64, r.has_seof, all_whitespaces, equalsigns, r.internal_padding};
   }
 }
 
@@ -1558,7 +1553,8 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
   const char *srcinit = src;
   const char *dstinit = dst;
   char *last_buf_chkpt = src;
-  int idx_sum =0;
+  int idx_buf =0;
+  int valid_b64 = 0; // 
 
   uint32_t x;
   size_t idx;
@@ -1593,7 +1589,8 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
       buffer[idx] = code;
       if (code <= 63) {
         idx++;
-        idx_sum ++;
+        idx_buf ++;
+        valid_b64 ++;
       } else if (code > 64) {
         DEBUG_PRINT("INVALID_BASE64_CHARACTER: code > 64 \n");
         // INVALID_BASE64_CHARACTER
@@ -1639,18 +1636,18 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
 
           // DEBUG_PRINT("idx == 4 remaining\n");
           return (full_result){EXTRA_PADDING_CORE, (size_t)(src - srcinit),
-            (size_t)((dst - dstinit)),  (size_t)(last_buf_chkpt - srcinit),has_seof,  whitespaces, equalsigns, internal_padding};
+            (size_t)((dst - dstinit)),  (size_t)(last_buf_chkpt - srcinit),valid_b64,  whitespaces, equalsigns, internal_padding};
         }
         else {
             return (full_result){INVALID_BASE64_CHARACTER, (size_t)(src - srcinit),
-                             (size_t)((dst - dstinit)),(size_t)(last_buf_chkpt - srcinit),has_seof,  whitespaces};
+                             (size_t)((dst - dstinit)),(size_t)(last_buf_chkpt - srcinit),valid_b64,has_seof,  whitespaces};
         }
       } else {
         // TODO: change the tables
         if (c == '\f') {
           DEBUG_PRINT("Simdutf:Form feed detected!!!!Not a valid b64 char by OpenSSL standards!\n");
           return (full_result){INVALID_BASE64_CHARACTER, (size_t)(src - srcinit),
-            (size_t)(dst - dstinit),(size_t)(last_buf_chkpt - srcinit), has_seof, whitespaces};
+            (size_t)(dst - dstinit),(size_t)(last_buf_chkpt - srcinit),valid_b64, has_seof, whitespaces};
         }
         // DEBUG_PRINT("WS detected!!!!\n");
         whitespaces++;
@@ -1660,8 +1657,8 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
       // if ((src - srcinit - whitespaces) % 64 == 0) {
       //   last_buf_chkpt = src;}
 
-      if (idx_sum % 64 == 0){
-        idx_sum = 0;
+      if (idx_buf % 64 == 0){
+        idx_buf = 0;
         last_buf_chkpt = src;
       }
  
@@ -1682,7 +1679,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
         if (equalsigns != 2){
           // DEBUG_PRINT("equalsigns != 2\n");
           // DEBUG_PRINT("dst - dstinit: %zu\n", (size_t)(dst - dstinit));
-          return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit),(size_t)(last_buf_chkpt - srcinit),has_seof, whitespaces};
+          return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit),(size_t)(last_buf_chkpt - srcinit),valid_b64,has_seof, whitespaces};
         }
         dst += 1;
       } else if (idx == 3) {
@@ -1695,13 +1692,13 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
         memcpy(dst, &triple, 2);
         if (equalsigns != 1){
           // DEBUG_PRINT("equalsigns != 1\n");
-          return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit),(size_t)(last_buf_chkpt - srcinit),has_seof, whitespaces};
+          return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit),(size_t)(last_buf_chkpt - srcinit),valid_b64,has_seof, whitespaces};
         }
         dst += 2;
       } else if (idx == 1) {
         DEBUG_PRINT("idx == 1\n");
 
-        return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit),(size_t)(last_buf_chkpt - srcinit),has_seof, whitespaces};
+        return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit),(size_t)(last_buf_chkpt - srcinit),valid_b64,has_seof, whitespaces};
       }
       DEBUG_PRINT("idx == 0\n");
 #if DEBUG
@@ -1715,7 +1712,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
       // }
 #endif
       return (full_result){BASE64_SUCCESS, (size_t)(src - srcinit),
-                           (size_t)(dst - dstinit),(size_t)(last_buf_chkpt - srcinit),has_seof,whitespaces};
+                           (size_t)(dst - dstinit),(size_t)(last_buf_chkpt - srcinit),valid_b64,has_seof,whitespaces};
 
     }
     // DEBUG_PRINT("idx == 4 remaining\n");
