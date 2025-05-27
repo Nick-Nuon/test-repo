@@ -321,8 +321,8 @@ int EVP_ENCODE_CTX_cmp(const EVP_ENCODE_CTX *ctx1, const EVP_ENCODE_CTX *ctx2) {
     DEBUG_PRINT(RED_TEXT("DEBUG: Contexts are NOT equal\n"));
   }
   
-  // return is_equal;
-  return 1;
+  return is_equal;
+  // return 1;
 }
 
 // This function is not expected to be fast. Do not use in long loops.
@@ -1216,11 +1216,13 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     }
     // Store the buffered input for further processing
     const unsigned char *packed_start = (const unsigned char *)input + r.last_buf_chk;
-    const size_t pd_ws_pd =  (size_t)(p - (input + r.input_count));
-    const size_t ws_betw_pd = (size_t)((pd_ws_pd) - max_internal_padding);
+    const int pd_ws_pd =  (p - (input + r.input_count));
+    const int ws_betw_pd = ((pd_ws_pd) - max_internal_padding);
     const size_t packed_len_pad = r.input_count - r.last_buf_chk + pd_ws_pd;
     const size_t packed_len_nopad = r.input_count - r.last_buf_chk;
-    const size_t valid_b64 = r.input_count - r.last_buf_chk + max_internal_padding;
+    const size_t ws_up_to_input_count = r.input_count - r.valid_b64;
+    const size_t valid_b64 = r.input_count - ws_up_to_input_count + max_internal_padding;
+    const size_t valid_b64_in_buf = valid_b64 % 64;
     // **********************************
 
   // Check for standard base64 length success
@@ -1252,12 +1254,13 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
 
   // Handle empty padding error
   if (r.error == EXTRA_PADDING_EMPTY) {
-    pack_characters(ctx, packed_start, packed_len_pad);
+    pack_characters(ctx, packed_start, valid_b64_in_buf);
   }
 
   // Handle empty padding error
   if (r.error == EXTRA_PADDING_CORE) {
-    pack_characters(ctx, packed_start, packed_len_pad);
+
+    pack_characters(ctx, packed_start, valid_b64_in_buf);
   }
 
   // Handle additional padding check failure
@@ -1337,6 +1340,7 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         *outl = (int) valid;
         // Cleanse (erase) the remaining incomplete portion.
         return r;
+
       }
       if (in_cnt_wo_ws_ext_pad % 64 == 0) {
         // DEBUG_PRINT(RED_TEXT("DEBUG: Second option\n"));
@@ -1380,6 +1384,7 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     *outl = (int)r.output_count;
     return r;
   } 
+  //Not a success , not extra padding in CORE
   // e.g.  last bytes were ended with XXX=|= where ‘X’ denotes a valid character, ‘=’ denotes padding and ‘|’ denotes the point where the 64 buffer ends
   // OpenSSL's outln will take up to '|' into account but no more 
   else if (r.error == NOT_MULTIPLE_OF_FOUR && r.padding == 2 && ((in_cnt_wo_ws_ext_pad % 64) == 0 || (in_cnt_wo_ws_ext_pad % 64) == 1) ) {
@@ -1493,6 +1498,7 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
   DEBUG_PRINT(GREEN_TEXT("DEBUG: Length after removing padding and white spaces: %zu\n"), length);
   if (length == 0) {
     if (equalsigns > 0) {
+      DEBUG_PRINT(RED_TEXT("DEBUG: Empty input with padding, returning error\n"));
       return (full_result){EXTRA_PADDING_EMPTY, equallocation, 0, 0,0, NO_SEOF, all_whitespaces, equalsigns};
     }
     return (full_result){BASE64_SUCCESS, 0,0,0,0, NO_SEOF, all_whitespaces, equalsigns};
@@ -1607,12 +1613,39 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
           int internal_padding = 0;
           DEBUG_PRINT("equalsigns: %d\n", equalsigns);
           const char* temp_src = srcend -1;  // Start from the end
-          
+
+          // TODO: this is very ugly hack. Simplify it later.
           while (temp_src > src && (*temp_src == '=')) {
             DEBUG_PRINT("Found padding character: %c\n", *temp_src);
             internal_padding++;
             temp_src--;
             }
+
+
+            // Count padding characters while skipping whitespaces
+            // const char* end_check = src;
+            // int padding_from_start = 0;
+            // // Check up to 2 padding characters
+            // while (end_check < srcend && padding_from_start < 2) {
+            //   if (is_ascii_white_space(*end_check)) {
+            //     end_check++;
+            //     continue;
+            //   }
+            //   if (*end_check == '=') {
+            //     DEBUG_PRINT("Found padding character: %c\n", *end_check);
+            //     padding_from_start++;
+            //     idx_buf++;
+            //     valid_b64++;
+            //     if (idx_buf % 64 == 0){
+            //       DEBUG_PRINT("idx_buf % 64 == 0\n");
+            //       idx_buf = 0;
+            //       last_buf_chkpt = end_check;
+            //     }
+            //   } else {
+            //     break;
+            //   }
+            //   end_check++;
+            // }
 
           if (idx == 2) {
             DEBUG_PRINT("idx == 2\n");
@@ -1659,7 +1692,12 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
       // if ((src - srcinit - whitespaces) % 64 == 0) {
       //   last_buf_chkpt = src;}
 
+      DEBUG_PRINT("idx_buf: %d\n", idx_buf);
+
+
       if (idx_buf % 64 == 0){
+        // if (idx_buf == 63){
+        DEBUG_PRINT("idx_buf % 64 == 0\n");
         idx_buf = 0;
         last_buf_chkpt = src;
       }
