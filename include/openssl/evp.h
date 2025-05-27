@@ -715,37 +715,18 @@ __owur int EVP_Cipher(EVP_CIPHER_CTX *c,
         OBJ_NAME_remove(alias,OBJ_NAME_TYPE_MD_METH|OBJ_NAME_ALIAS);
 
         typedef enum error_code {
-        BASE64_SUCCESS = 0,
-        HEADER_BITS, // Any byte must have fewer than 5 header bits.
-        TOO_SHORT,   // The leading byte must be followed by N-1 continuation bytes,
-                        // where N is the UTF-8 character length This is also the error
-                        // when the input is truncated.
-        TOO_LONG,    // We either have too many consecutive continuation bytes or the
-                        // string starts with a continuation byte.
-        OVERLONG, // The decoded character must be above U+7F for two-byte characters,
-                    // U+7FF for three-byte characters, and U+FFFF for four-byte
-                    // characters.
-        TOO_LARGE, // The decoded character must be less than or equal to
-                    // U+10FFFF,less than or equal than U+7F for ASCII OR less than
-                    // equal than U+FF for Latin1
-        SURROGATE, // The decoded character must be not be in U+D800...DFFF (UTF-8 or
-                    // UTF-32) OR a high surrogate must be followed by a low surrogate
-                    // and a low surrogate must be preceded by a high surrogate
-                    // (UTF-16) OR there must be no surrogate at all (Latin1)
+        BASE64_SUCCESS,
         INVALID_BASE64_CHARACTER, // Found a character that cannot be part of a valid
                                     // base64 string. This may include a misplaced
                                     // padding character ('=').
         BASE64_INPUT_REMAINDER,   // The base64 input terminates with a single
                                     // character, excluding padding (=).
-        BASE64_EXTRA_BITS,        // The base64 input terminates with non-zero
-                                    // padding bits.
-        OUTPUT_BUFFER_TOO_SMALL,  // The provided buffer is too small.
         NOT_MULTIPLE_OF_FOUR, // The base64 input is not a multiple of four after 
                                 // removing padding and removing white spaces at beginning.
         OTHER,                     // Not related to validation/transcoding.
         EXTRA_PADDING_CORE, // There is extra padding is found in the core kernel
         ADDITIONAL_PADDING_CHECK_FAILED, // The additional padding check failed.
-        EXTRA_PADDING_EMPTY, // There shouldn't be extra padding if nothing to decode  there is no e.g.  "     ="
+        EXTRA_PADDING_EMPTY, // There shouldn't be extra padding if nothing to decode e.g.  "     ="
         } error_code;
 
         typedef enum has_seof {
@@ -768,7 +749,7 @@ __owur int EVP_Cipher(EVP_CIPHER_CTX *c,
               has_seof has_seof;
               size_t whitespaces;
               size_t padding; // padding removed by base64_tail_decode_trim_end
-              size_t internal_padding; // padding removed by the scalar kernel
+              size_t internal_padding; // padding removed by the main kernel
           } full_result;
           
 
