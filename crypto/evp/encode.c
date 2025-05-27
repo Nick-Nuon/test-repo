@@ -1587,10 +1587,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
     while (idx < 4 && src < srcend) {
       // DEBUG_PRINT("Main 4 char loop\n");
       char c = *src;
-      if (idx_sum % 64 == 0){
-        idx_sum = 0;
-        last_buf_chkpt = src;
-      }
+
 
       uint8_t code = to_base64[(uint8_t)(c)];
       buffer[idx] = code;
@@ -1660,8 +1657,13 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
         // A whitespace or newline; ignore it.
       }
       src++;
-      if ((src - srcinit - whitespaces) % 64 == 0) {
-        last_buf_chkpt = src;}
+      // if ((src - srcinit - whitespaces) % 64 == 0) {
+      //   last_buf_chkpt = src;}
+
+      if (idx_sum % 64 == 0){
+        idx_sum = 0;
+        last_buf_chkpt = src;
+      }
  
       // DEBUG_PRINT("idx = %d\n", idx);
     }
