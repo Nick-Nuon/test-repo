@@ -1220,12 +1220,14 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     const size_t ws_betw_pd = (size_t)((pd_ws_pd) - max_internal_padding);
     const size_t packed_len_pad = r.input_count - r.last_buf_chk + pd_ws_pd;
     const size_t packed_len_nopad = r.input_count - r.last_buf_chk;
+    const size_t valid_b64 = r.input_count - r.last_buf_chk + max_internal_padding;
     // **********************************
 
   // Check for standard base64 length success
   if (r.error == BASE64_SUCCESS) {
-    DEBUG_PRINT("packed_len_pad: %zu\n", packed_len_pad);
-    if (((packed_len_pad) & 3) == 0) { // is it a multiple of 4?
+    // DEBUG_PRINT("packed_len_pad: %zu\n", packed_len_pad);
+    // if (((packed_len_pad) & 3) == 0) { // is it a multiple of 4?
+    if (((valid_b64) & 3) == 0){
 
     } else {pack_characters(ctx, packed_start, packed_len_pad);}
 
