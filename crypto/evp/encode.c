@@ -1239,17 +1239,20 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
 
   // Check for base64 input remainder
   if (r.error == BASE64_INPUT_REMAINDER) { // treeated the same as an error
-    pack_characters(ctx, packed_start, packed_len_nopad);
+    // pack_characters(ctx, packed_start, packed_len_nopad);
+    pack_characters(ctx, packed_start, valid_b64_in_buf);
   }  
 
   // Check for not multiple of four
   if (r.error == NOT_MULTIPLE_OF_FOUR) {
-    pack_characters(ctx, packed_start, packed_len_pad);
+    // pack_characters(ctx, packed_start, packed_len_pad);
+    pack_characters(ctx, packed_start, valid_b64_in_buf);
   }
 
   // Check for invalid characters
   if (r.error == INVALID_BASE64_CHARACTER) {
-    pack_characters(ctx, packed_start, packed_len_nopad);
+    // pack_characters(ctx, packed_start, packed_len_nopad);
+    pack_characters(ctx, packed_start, valid_b64_in_buf);
   }
 
   // Handle empty padding error
@@ -1265,7 +1268,8 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
 
   // Handle additional padding check failure
   if (r.error == ADDITIONAL_PADDING_CHECK_FAILED) {
-    pack_characters(ctx, packed_start, packed_len_nopad);
+    // pack_characters(ctx, packed_start, packed_len_nopad);
+    pack_characters(ctx, packed_start, valid_b64_in_buf);
   }
 
   // Catch any other errors

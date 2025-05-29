@@ -3619,22 +3619,19 @@ int setup_tests(void)
     ADD_TEST(test_doomed_truncated_base64_roundtrip);
     ADD_TEST(test_lots_of_data_after_padding);
     ADD_TEST(test_data_after_padding);
-    ADD_TEST(test_random_padding_and_spaces);
     ADD_TEST(test_issue_evp_b_overflow);
     ADD_TEST(test_encode_base64_invalid_cases);
-
-
-    
-    ADD_TEST(test_issue_504_8bit); //Not OK
+    ADD_TEST(test_issue_504_8bit); 
     ADD_TEST(test_issue_502_alt);
+    ADD_TEST(test_random_padding_insertion);
+    ADD_TEST(test_streaming_base64_roundtrip);
+
+
+    ADD_TEST(test_random_padding_and_spaces);
     ADD_TEST(test_issue_509); // Not OK
     ADD_TEST(test_bad_padding_base64); // Not OK
-    ADD_TEST(test_streaming_base64_roundtrip);
-    ADD_TEST(test_random_padding_insertion);
     ADD_TEST(test_doomed_partial_buffer_utf8);
     ADD_TEST(test_base64_decode_just_one_padding_loose);
-
-
 
     // Return 1 to indicate successful test setup.
     return 1;
