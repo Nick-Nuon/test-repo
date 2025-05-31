@@ -1207,31 +1207,40 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     //TODO: trim_end is not using outl...? I can probably simplify this
     full_result r = base64_tail_decode_trim_end(ctx, output, outl, input, length);
 
+    DEBUG_PRINT("DEBUG: ************* finding padding *************\n");
     size_t pd_aft_inpc = 0;
     size_t pd_aft_buf_chk = 0;
     int changed_buf_chk = 0;
     const char* p = input + r.input_count;
     while (p < input + length && pd_aft_inpc < 2) {
-        if (*p == '=') {
-          pd_aft_inpc++;
-          // In case there is extra padding, we will count it as it is considered valid in OpenSSL ... the Simdutf kernel cuts shorts
-          // if (r.error == EXTRA_PADDING_CORE) {
-          //       r.valid_b64++;
-          //       if (r.valid_b64 % 64 == 0){
-          //         r.last_buf_chk = (size_t)(p - input);
-          //         changed_buf_chk = 1;
-          //         continue;
-          //       }
-          //       if (changed_buf_chk == 1) {
-          //         if (pd_aft_buf_chk < 2 && pd_aft_inpc < 2) 
-          //             pd_aft_buf_chk++;
-          //       }
-          // }
-        } else if (!is_ascii_white_space(*p)) {
-          break;
+      if (*p == '=') {
+        pd_aft_inpc++;
+        DEBUG_PRINT("Found padding char at position %ld, pd_aft_inpc=%zu\n", 
+               (long)(p - input), pd_aft_inpc);
+        
+        if (r.error == EXTRA_PADDING_CORE) {
+          r.valid_b64++;
+          if (r.valid_b64 % 64 == 0){
+            r.last_buf_chk = (size_t)(p - input);
+            changed_buf_chk = 1;
+            DEBUG_PRINT("Buffer checkpoint updated: last_buf_chk=%zu, changed_buf_chk=1\n", 
+                  r.last_buf_chk);
+          } else if (changed_buf_chk == 1) {
+            if (pd_aft_buf_chk < 2 && pd_aft_inpc < 2) {
+              pd_aft_buf_chk++;
+              DEBUG_PRINT("Updated pd_aft_buf_chk=%zu\n", pd_aft_buf_chk);
+            }
+          }
         }
-        p++;
+      } else if (!is_ascii_white_space(*p)) {
+        DEBUG_PRINT("Found non-whitespace char '%c' at position %ld, breaking\n",
+               *p, (long)(p - input));
+        break;
+      }
+      p++;
     }
+
+    DEBUG_PRINT("DEBUG: ************* *************\n");
 
     //TODO: A lot of this code is redundant, I will simplify it later
     int valid_b64_up_to_inpc = r.valid_b64;
@@ -1314,7 +1323,12 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
       DEBUG_PRINT(RED_TEXT("DEBUG: r.trimmed_padding == 0\n")); 
       // Data after padding
       // e.g. XXXX == XXXX      
-      pack_characters(ctx, packed_start, packed_len_pad);
+      if (changed_buf_chk == 1) {
+        pack_characters(ctx, packed_start, pd_aft_buf_chk);
+      }
+      else {
+        pack_characters(ctx, packed_start, packed_len_pad);
+      }
     }
     if (r.trimmed_padding == 1){
       DEBUG_PRINT(RED_TEXT("DEBUG: r.trimmed_padding == 1\n"));
@@ -1326,34 +1340,7 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
       // this is kosher: we just take the pad afterwards.
       // ,== XXXXX ==
       DEBUG_PRINT(RED_TEXT("DEBUG: r.trimmed_padding == 2\n"));
-      // DEBUG_PRINT(RED_TEXT("DEBUG: packed_start: %p\n"), (void*)packed_start);
-      // DEBUG_PRINT(RED_TEXT("DEBUG: packed_len_nopad: %zu\n"), packed_len_nopad);
-      // DEBUG_PRINT(RED_TEXT("DEBUG: r.input_count: %d, r.last_buf_chk: %d\n"), r.input_count, r.last_buf_chk);
-      // DEBUG_PRINT(RED_TEXT("DEBUG: pd_aft_inpc: %zu\n"), pd_aft_inpc);
-      
-      // if (packed_start == NULL) {
-      //     DEBUG_PRINT(RED_TEXT("DEBUG: packed_start is NULL\n"));
-      //     return r;
-      // }
-      // if (ctx == NULL) {
-      //     DEBUG_PRINT(RED_TEXT("DEBUG: ctx is NULL\n"));
-      //     return r;
-      // } 
-      // if (pd_aft_inpc > (size_t)sizeof(ctx->enc_data)) {
-      //     DEBUG_PRINT(RED_TEXT("DEBUG: pd_aft_inpc overflow: %zu > %zu\n"), 
-      //     pd_aft_inpc, sizeof(ctx->enc_data));
-      //     return r;
-      // }
-      // if (packed_len_nopad > (size_t)sizeof(ctx->enc_data)) {
-      //     DEBUG_PRINT(RED_TEXT("DEBUG: packed_len_nopad overflow: %zu > %zu\n"), 
-      //     packed_len_nopad, sizeof(ctx->enc_data));
-      //     return r;
-      // }
-      // if ((packed_len_nopad + pd_aft_inpc) > (size_t)sizeof(ctx->enc_data)) {
-      //     DEBUG_PRINT(RED_TEXT("DEBUG: combined length overflow: %zu > %zu\n"), 
-      //     packed_len_nopad + pd_aft_inpc, sizeof(ctx->enc_data));
-      //     return r;
-      // }
+
       if (changed_buf_chk == 1) {
         DEBUG_PRINT(RED_TEXT("DEBUG: changed_buf_chk == 1\n"));
         DEBUG_PRINT(RED_TEXT("DEBUG: r.last_buf_chk: %zu and pd_aft_buf_chk: %zu\n"), r.last_buf_chk, pd_aft_buf_chk);

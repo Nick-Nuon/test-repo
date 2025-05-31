@@ -416,53 +416,53 @@ int EVP_DecodeUpdate_test(EVP_ENCODE_CTX *dummy,
     //  unsigned char *out, int *outl, 
     const unsigned char *in, int inl, int expected_outl) {
 
-    // DEBUG_PRINT(GREEN_TEXT("***DEBUG: TEST TEST****\n"));
+    DEBUG_PRINT(GREEN_TEXT("***DEBUG: TEST TEST****\n"));
 
-    // /* First create two contexts */
-    // EVP_ENCODE_CTX *simdutf_ctx = EVP_ENCODE_CTX_new();
-    // EVP_ENCODE_CTX *openssl_ctx = EVP_ENCODE_CTX_new();
-    // if (!simdutf_ctx || !openssl_ctx) {
-    //     EVP_ENCODE_CTX_free(simdutf_ctx);
-    //     EVP_ENCODE_CTX_free(openssl_ctx);
-    //     return -1;
-    // }
-    // // Allocate separate buffers for each decoder
-    // unsigned char *decodeUpdate_openssl = OPENSSL_malloc(inl + 2);
-    // unsigned char *decodeUpdate_simdutf = OPENSSL_malloc(inl + 2);
-    // if (!decodeUpdate_openssl || !decodeUpdate_simdutf) {
-    //     OPENSSL_free(decodeUpdate_openssl);
-    //     OPENSSL_free(decodeUpdate_simdutf);
-    //     return -1;
-    // }
+    /* First create two contexts */
+    EVP_ENCODE_CTX *simdutf_ctx = EVP_ENCODE_CTX_new();
+    EVP_ENCODE_CTX *openssl_ctx = EVP_ENCODE_CTX_new();
+    if (!simdutf_ctx || !openssl_ctx) {
+        EVP_ENCODE_CTX_free(simdutf_ctx);
+        EVP_ENCODE_CTX_free(openssl_ctx);
+        return -1;
+    }
+    // Allocate separate buffers for each decoder
+    unsigned char *decodeUpdate_openssl = OPENSSL_malloc(inl + 2);
+    unsigned char *decodeUpdate_simdutf = OPENSSL_malloc(inl + 2);
+    if (!decodeUpdate_openssl || !decodeUpdate_simdutf) {
+        OPENSSL_free(decodeUpdate_openssl);
+        OPENSSL_free(decodeUpdate_simdutf);
+        return -1;
+    }
 
-    // int decodeUpdate_outl_openssl = 0;
-    // int decodeUpdate_outl_simdutf = 0;
+    int decodeUpdate_outl_openssl = 0;
+    int decodeUpdate_outl_simdutf = 0;
 
-    // // Run both decoders
-    // int decodeUpdate_ret_openssl = EVP_DecodeUpdate_OpenSSL(openssl_ctx, decodeUpdate_openssl, &decodeUpdate_outl_openssl, in, inl);
-    // int decodeUpdate_ret_simdutf = EVP_DecodeUpdate_simdutf(simdutf_ctx, decodeUpdate_simdutf, &decodeUpdate_outl_simdutf, in, inl);
+    // Run both decoders
+    int decodeUpdate_ret_openssl = EVP_DecodeUpdate_OpenSSL(openssl_ctx, decodeUpdate_openssl, &decodeUpdate_outl_openssl, in, inl);
+    int decodeUpdate_ret_simdutf = EVP_DecodeUpdate_simdutf(simdutf_ctx, decodeUpdate_simdutf, &decodeUpdate_outl_simdutf, in, inl);
 
-    // // // Compare results
-    // ASSERT_EQUAL_INT(decodeUpdate_outl_openssl, decodeUpdate_outl_simdutf);
-    // ASSERT_EQUAL_INT(decodeUpdate_ret_openssl, decodeUpdate_ret_simdutf);
-    // ASSERT_MEM_EQUAL(decodeUpdate_openssl, decodeUpdate_simdutf, decodeUpdate_outl_openssl);
+    // // Compare results
+    ASSERT_EQUAL_INT(decodeUpdate_outl_openssl, decodeUpdate_outl_simdutf);
+    ASSERT_EQUAL_INT(decodeUpdate_ret_openssl, decodeUpdate_ret_simdutf);
+    ASSERT_MEM_EQUAL(decodeUpdate_openssl, decodeUpdate_simdutf, decodeUpdate_outl_openssl);
 
-    // /* Compare contexts */
-    // ASSERT_TRUE(EVP_ENCODE_CTX_cmp(simdutf_ctx, openssl_ctx));
+    /* Compare contexts */
+    ASSERT_TRUE(EVP_ENCODE_CTX_cmp(simdutf_ctx, openssl_ctx));
     
-    // // Copy result to caller's buffer if provided
-    // // if (out && outl) {
-    // //     memcpy(out, decodeUpdate_openssl, decodeUpdate_outl_openssl);
-    // //     *outl = decodeUpdate_outl_openssl;
-    // // }
+    // Copy result to caller's buffer if provided
+    // if (out && outl) {
+    //     memcpy(out, decodeUpdate_openssl, decodeUpdate_outl_openssl);
+    //     *outl = decodeUpdate_outl_openssl;
+    // }
 
-    // // Clean up
-    // OPENSSL_free(decodeUpdate_openssl);
-    // OPENSSL_free(decodeUpdate_simdutf);
+    // Clean up
+    OPENSSL_free(decodeUpdate_openssl);
+    OPENSSL_free(decodeUpdate_simdutf);
 
 
-    // EVP_ENCODE_CTX_free(simdutf_ctx);
-    // EVP_ENCODE_CTX_free(openssl_ctx);
+    EVP_ENCODE_CTX_free(simdutf_ctx);
+    EVP_ENCODE_CTX_free(openssl_ctx);
 
 
     return 1;
@@ -475,41 +475,41 @@ int EVP_DecodeFinal_test(EVP_ENCODE_CTX *dummy,
     DEBUG_PRINT(GREEN_TEXT("***DEBUG: EVP_DecodeFinal_test****\n"));
 
     // First create two contexts
-    // EVP_ENCODE_CTX *simdutf_ctx = EVP_ENCODE_CTX_new();
-    // EVP_ENCODE_CTX *openssl_ctx = EVP_ENCODE_CTX_new();
-    // if (!simdutf_ctx || !openssl_ctx) {
-    //     EVP_ENCODE_CTX_free(simdutf_ctx);
-    //     EVP_ENCODE_CTX_free(openssl_ctx);
-    //     return -1;
-    // }
+    EVP_ENCODE_CTX *simdutf_ctx = EVP_ENCODE_CTX_new();
+    EVP_ENCODE_CTX *openssl_ctx = EVP_ENCODE_CTX_new();
+    if (!simdutf_ctx || !openssl_ctx) {
+        EVP_ENCODE_CTX_free(simdutf_ctx);
+        EVP_ENCODE_CTX_free(openssl_ctx);
+        return -1;
+    }
 
-    // // Allocate separate buffers for each decoder 
-    // unsigned char *decodeFinal_openssl = OPENSSL_malloc(inl + 2);
-    // unsigned char *decodeFinal_simdutf = OPENSSL_malloc(inl + 2);
-    // if (!decodeFinal_openssl || !decodeFinal_simdutf) {
-    //     OPENSSL_free(decodeFinal_openssl);
-    //     OPENSSL_free(decodeFinal_simdutf);
-    //     return -1;
-    // }
+    // Allocate separate buffers for each decoder 
+    unsigned char *decodeFinal_openssl = OPENSSL_malloc(inl + 2);
+    unsigned char *decodeFinal_simdutf = OPENSSL_malloc(inl + 2);
+    if (!decodeFinal_openssl || !decodeFinal_simdutf) {
+        OPENSSL_free(decodeFinal_openssl);
+        OPENSSL_free(decodeFinal_simdutf);
+        return -1;
+    }
 
-    // int decodeFinal_outl_openssl = 0;
-    // int decodeFinal_outl_simdutf = 0;
+    int decodeFinal_outl_openssl = 0;
+    int decodeFinal_outl_simdutf = 0;
 
-    // // Run both decoders
-    // int decodeFinal_ret_openssl = EVP_DecodeFinal_OpenSSL(openssl_ctx, decodeFinal_openssl, &decodeFinal_outl_openssl, in, inl);
-    // int decodeFinal_ret_simdutf = EVP_DecodeFinal_simdutf(simdutf_ctx, decodeFinal_simdutf, &decodeFinal_outl_simdutf, in, inl);
+    // Run both decoders
+    int decodeFinal_ret_openssl = EVP_DecodeFinal_OpenSSL(openssl_ctx, decodeFinal_openssl, &decodeFinal_outl_openssl, in, inl);
+    int decodeFinal_ret_simdutf = EVP_DecodeFinal_simdutf(simdutf_ctx, decodeFinal_simdutf, &decodeFinal_outl_simdutf, in, inl);
 
-    // // Compare results
-    // ASSERT_EQUAL_INT(decodeFinal_outl_openssl, decodeFinal_outl_simdutf);
-    // ASSERT_EQUAL_INT(decodeFinal_ret_openssl, decodeFinal_ret_simdutf);
-    // ASSERT_MEM_EQUAL(decodeFinal_openssl, decodeFinal_simdutf, decodeFinal_outl_openssl);
+    // Compare results
+    ASSERT_EQUAL_INT(decodeFinal_outl_openssl, decodeFinal_outl_simdutf);
+    ASSERT_EQUAL_INT(decodeFinal_ret_openssl, decodeFinal_ret_simdutf);
+    ASSERT_MEM_EQUAL(decodeFinal_openssl, decodeFinal_simdutf, decodeFinal_outl_openssl);
 
-    // // Clean up
-    // OPENSSL_free(decodeFinal_openssl);
-    // OPENSSL_free(decodeFinal_simdutf);
+    // Clean up
+    OPENSSL_free(decodeFinal_openssl);
+    OPENSSL_free(decodeFinal_simdutf);
 
-    // EVP_ENCODE_CTX_free(simdutf_ctx);
-    // EVP_ENCODE_CTX_free(openssl_ctx);
+    EVP_ENCODE_CTX_free(simdutf_ctx);
+    EVP_ENCODE_CTX_free(openssl_ctx);
 
     return 1;
 }
@@ -3630,7 +3630,7 @@ int setup_tests(void)
     ADD_TEST(test_seof_bad_basic_cases); 
     ADD_TEST(test_seof_bad_cases);
     ADD_TEST(test_readme_test);
-    ADD_TEST(test_seof_good_basic_cases);  //OK
+    ADD_TEST(test_seof_good_basic_cases);  
     ADD_TEST(test_complete_decode_base64_cases); 
     ADD_TEST(test_encode_base64_no_padding_cases); 
     ADD_TEST(test_multiple_of_4_good);
@@ -3641,22 +3641,20 @@ int setup_tests(void)
     ADD_TEST(test_encode_base64_basic_cases); 
     ADD_TEST(test_doomed_truncated_base64_roundtrip);
     ADD_TEST(test_issue_evp_b_overflow);
-    ADD_TEST(test_encode_base64_invalid_cases);
     ADD_TEST(test_issue_504_8bit); // '='
     ADD_TEST(test_issue_502_alt); // lots of '='
     ADD_TEST(test_issue_509); // ' ='
-
-
-    // //
-
     ADD_TEST(test_data_after_padding);
     ADD_TEST(test_lots_of_data_after_padding);
     ADD_TEST(test_random_padding_insertion);
     ADD_TEST(test_random_padding_and_spaces);
     ADD_TEST(test_doomed_partial_buffer_utf8);
+
+    ADD_TEST(test_encode_base64_invalid_cases); // NOT OK
     ADD_TEST(test_streaming_base64_roundtrip);
     ADD_TEST(test_bad_padding_base64); // Not OK
     ADD_TEST(test_base64_decode_just_one_padding_loose);
+
 
     // Return 1 to indicate successful test setup.
     return 1;
