@@ -667,18 +667,19 @@ static int pack_characters(EVP_ENCODE_CTX *ctx, const unsigned char *in, int len
 
   // Pack only valid base64 characters into ctx->enc_data, skipping whitespace
   for (int i = 0; i < length && packed_length < (int)sizeof(ctx->enc_data); i++) {
-    DEBUG_PRINT(GREEN_TEXT("DEBUG: Processing index %d: char='%c' (0x%02x)\n"), 
-                i, in[i], (unsigned char)in[i]);
-                
     if (!is_ascii_white_space(in[i])) {
       if (packed_length >= (int)sizeof(ctx->enc_data)) {
-        DEBUG_PRINT(RED_TEXT("DEBUG: Buffer overflow prevented at index %d\n"), i);
         break;
       }
+      if (packed_length == 0) {
+        DEBUG_PRINT(GREEN_TEXT("DEBUG: First packed char at pos %d: %c (0x%02x)\n"), i, in[i], in[i]);
+      }
       ctx->enc_data[packed_length++] = in[i];
-      DEBUG_PRINT(GREEN_TEXT("DEBUG: Packed character: %c (0x%02x) at position %d\n"), in[i], in[i], packed_length-1);
+      if (i == length-1 || packed_length == (int)sizeof(ctx->enc_data)) {
+        DEBUG_PRINT(GREEN_TEXT("DEBUG: Last packed char at pos %d: %c (0x%02x)\n"), i, in[i], in[i]);
+      }
     } else {
-      DEBUG_PRINT(GREEN_TEXT("DEBUG: Skipped whitespace character 0x%02x at position %d\n"), in[i], i);
+      
     }
   }
 
@@ -1207,6 +1208,12 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     //TODO: trim_end is not using outl...? I can probably simplify this
     full_result r = base64_tail_decode_trim_end(ctx, output, outl, input, length);
 
+
+    //TODO: A lot of this code is redundant, I will simplify it later
+    int valid_b64_up_to_inpc = r.valid_b64;
+    // Recall r.input_count is the value returned by the core kernel
+    const size_t ws_up_to_input_count = r.input_count - r.valid_b64;
+
     DEBUG_PRINT("DEBUG: ************* finding padding *************\n");
     size_t pd_aft_inpc = 0;
     size_t pd_aft_buf_chk = 0;
@@ -1218,7 +1225,7 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         DEBUG_PRINT("Found padding char at position %ld, pd_aft_inpc=%zu\n", 
                (long)(p - input), pd_aft_inpc);
         
-        if (r.error == EXTRA_PADDING_CORE) {
+        if (r.error == EXTRA_PADDING_CORE | r.error == NOT_MULTIPLE_OF_FOUR) {
           r.valid_b64++;
           if (r.valid_b64 % 64 == 0){
             r.last_buf_chk = (size_t)(p - input);
@@ -1242,13 +1249,8 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
 
     DEBUG_PRINT("DEBUG: ************* *************\n");
 
-    //TODO: A lot of this code is redundant, I will simplify it later
-    int valid_b64_up_to_inpc = r.valid_b64;
     // int all_valid_b64 = r.valid_b64 + r.trimmed_padding; 
-    int all_valid_b64 = r.valid_b64 + pd_aft_inpc; 
-
-    // Recall r.input_count is the value returned by the core kernel
-    const size_t ws_up_to_input_count = r.input_count - r.valid_b64;
+    int all_valid_b64 = valid_b64_up_to_inpc + pd_aft_inpc; 
 
     DEBUG_PRINT("DEBUG: pd_aft_buf_chk: %zu\n", pd_aft_buf_chk);
     // Store the buffered input for further processing
@@ -1283,14 +1285,28 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
 
   // Check for not multiple of four
   if (r.error == NOT_MULTIPLE_OF_FOUR) {
-    pack_characters(ctx, packed_start, packed_len_pad);
+
+    DEBUG_PRINT("DEBUG: r.valid_b64: %d\n", r.valid_b64);
+    if (changed_buf_chk == 1) {
+      DEBUG_PRINT("DEBUG: NOT_MULTIPLE_OF_FOUR: changed_buf_chk == 1\n");
+      // pack_characters(ctx, packed_start, pd_aft_buf_chk);
+      pack_characters(ctx, packed_start, r.valid_b64 % 64);
+    }
+    else {
+      DEBUG_PRINT("DEBUG: NOT_MULTIPLE_OF_FOUR: changed_buf_chk == 0\n");
+      pack_characters(ctx, packed_start, packed_len_pad);
+    }
+
+    // size_t valid = r.va - (r.output_count % 48);
+    // *outl = (int) valid;
+    // return r
+    // pack_characters(ctx, packed_start, packed_len_pad);
     // pack_characters(ctx, packed_start, valid_b64_in_buf);
   }
 
   // Check for invalid characters
   if (r.error == INVALID_BASE64_CHARACTER) {
     pack_characters(ctx, packed_start, packed_len_nopad);
-    // pack_characters(ctx, packed_start, valid_b64_in_buf);
   }
 
   // Handle empty padding error
@@ -1334,7 +1350,14 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
       DEBUG_PRINT(RED_TEXT("DEBUG: r.trimmed_padding == 1\n"));
       // XXXX = ... XXXXX = OK!
       // No other scenario is possible, because the core kernel would have stopped at the first padding character
-      pack_characters(ctx, packed_start, packed_len_pad);
+      // pack_characters(ctx, packed_start, packed_len_pad);
+
+      if (changed_buf_chk == 1) {
+        pack_characters(ctx, packed_start, pd_aft_buf_chk);
+      }
+      else {
+        pack_characters(ctx, packed_start, packed_len_pad);
+      }
     }
     if (r.trimmed_padding == 2){
       // this is kosher: we just take the pad afterwards.
@@ -1366,7 +1389,13 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
 
   // Handle additional padding check failure
   if (r.error == ADDITIONAL_PADDING_CHECK_FAILED) {
-    pack_characters(ctx, packed_start, packed_len_pad);
+    // pack_characters(ctx, packed_start, packed_len_pad);
+    if (changed_buf_chk == 1) {
+      pack_characters(ctx, packed_start, pd_aft_buf_chk);
+    }
+    else {
+      pack_characters(ctx, packed_start, packed_len_pad);
+    }
   }
 
   // Catch any other errors
@@ -1540,23 +1569,23 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
       BRIGHT_YELLOW_TEXT("DEBUG: Entered base64_tail_decode_trim_end\n"));
       DEBUG_CHECK_NULL(output);
 
-  // DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (hex): \n"));
-  // for (size_t i = 0; i < (size_t)length; i++) {
-  //   DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)input[i]);
-  //   if ((i + 1) % 8 == 0) {
-  //     DEBUG_PRINT("\n");
-  //   }
-  // }
-  // DEBUG_PRINT("\n\n");
+  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (hex): \n"));
+  for (size_t i = 0; i < (size_t)length; i++) {
+    DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)input[i]);
+    if ((i + 1) % 8 == 0) {
+      DEBUG_PRINT("\n");
+    }
+  }
+  DEBUG_PRINT("\n\n");
 
-  // DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (char): \n")); 
-  // for (size_t i = 0; i < (size_t)length; i++) {
-  //   DEBUG_PRINT(GREEN_TEXT("%c "), (unsigned char)input[i]);
-  //   if ((i + 1) % 8 == 0) {
-  //     DEBUG_PRINT("\n");
-  //   }
-  // }
-  // DEBUG_PRINT("\n");
+  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (char): \n")); 
+  for (size_t i = 0; i < (size_t)length; i++) {
+    DEBUG_PRINT(GREEN_TEXT("%c "), (unsigned char)input[i]);
+    if ((i + 1) % 8 == 0) {
+      DEBUG_PRINT("\n");
+    }
+  }
+  DEBUG_PRINT("\n");
   DEBUG_PRINT(GREEN_TEXT("DEBUG: Length: %zu\n"), length);
 
   // TODO: there is probably a far more performant way to calculate whitespaces
