@@ -1235,8 +1235,8 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
 
     //TODO: A lot of this code is redundant, I will simplify it later
     int valid_b64_up_to_inpc = r.valid_b64;
-    // int in_cnt_wo_ws_ext_pad = r.valid_b64 + r.trimmed_padding; 
-    int in_cnt_wo_ws_ext_pad = r.valid_b64 + r.trimmed_padding; 
+    // int all_valid_b64 = r.valid_b64 + r.trimmed_padding; 
+    int all_valid_b64 = r.valid_b64 + pd_aft_inpc; 
 
     // Recall r.input_count is the value returned by the core kernel
     const size_t ws_up_to_input_count = r.input_count - r.valid_b64;
@@ -1457,7 +1457,7 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         return r;
 
       }
-      if (in_cnt_wo_ws_ext_pad % 64 == 0) {
+      if (all_valid_b64 % 64 == 0) {
         // DEBUG_PRINT(RED_TEXT("DEBUG: Second option\n"));
 
         // we cap possible padding to 2 because OpenSSL only removes 2 padding from *outlen
@@ -1465,7 +1465,7 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         // surplus_paddings = 2;
         DEBUG_PRINT(RED_TEXT("DEBUG: surplus_paddings: %d\n"), surplus_paddings);  
 
-        int valid = in_cnt_wo_ws_ext_pad/4 *3 - surplus_paddings;
+        int valid = all_valid_b64/4 *3 - surplus_paddings;
         valid = valid > 0 ? valid : 0;
   
         *outl = (int) valid;
@@ -1473,12 +1473,12 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         return r;
       }
       // XX,=|== where ‘X’ denotes a valid character, ‘=’ denotes padding and ‘|’ denotes the point where the 64 buffer ends
-      else if (in_cnt_wo_ws_ext_pad % 64 == 63) {
+      else if (all_valid_b64 % 64 == 63) {
         // DEBUG_PRINT(RED_TEXT("DEBUG: Third option\n"));
         int surplus_paddings = r.trimmed_padding + r.internal_padding > 2 ? 2 : r.trimmed_padding + r.internal_padding;
 
         // The + 1 is because we need to go up to the next multiple of 64
-        int valid = (in_cnt_wo_ws_ext_pad +1)/4 *3 - surplus_paddings;
+        int valid = (all_valid_b64 +1)/4 *3 - surplus_paddings;
         valid = valid > 0 ? valid : 0;
   
         *outl = (int) valid;
@@ -1502,7 +1502,7 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   //Not a success , not extra padding in CORE
   // e.g.  last bytes were ended with XXX=|= where ‘X’ denotes a valid character, ‘=’ denotes padding and ‘|’ denotes the point where the 64 buffer ends
   // OpenSSL's outln will take up to '|' into account but no more 
-  else if (r.error == NOT_MULTIPLE_OF_FOUR && r.trimmed_padding == 2 && ((in_cnt_wo_ws_ext_pad % 64) == 0 || (in_cnt_wo_ws_ext_pad % 64) == 1) ) {
+  else if (r.error == NOT_MULTIPLE_OF_FOUR && r.trimmed_padding == 2 && ((all_valid_b64 % 64) == 0 || (all_valid_b64 % 64) == 1) ) {
         DEBUG_PRINT(RED_TEXT("DEBUG: Simdutf decode failed, invalid base64 character with padding at seems\n"));
         // Calculate the number of bytes that constitute the valid part.
        
