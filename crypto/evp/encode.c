@@ -1366,8 +1366,7 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
 
   // Handle additional padding check failure
   if (r.error == ADDITIONAL_PADDING_CHECK_FAILED) {
-    pack_characters(ctx, packed_start, packed_len_nopad);
-    // pack_characters(ctx, packed_start, valid_b64_in_buf);
+    pack_characters(ctx, packed_start, packed_len_pad);
   }
 
   // Catch any other errors

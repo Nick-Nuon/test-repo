@@ -3649,11 +3649,12 @@ int setup_tests(void)
     ADD_TEST(test_random_padding_insertion);
     ADD_TEST(test_random_padding_and_spaces);
     ADD_TEST(test_doomed_partial_buffer_utf8);
-
-    ADD_TEST(test_encode_base64_invalid_cases); // NOT OK
     ADD_TEST(test_streaming_base64_roundtrip);
-    ADD_TEST(test_bad_padding_base64); // Not OK
     ADD_TEST(test_base64_decode_just_one_padding_loose);
+
+    ADD_TEST(test_encode_base64_invalid_cases); 
+    ADD_TEST(test_bad_padding_base64); 
+
 
 
     // Return 1 to indicate successful test setup.
