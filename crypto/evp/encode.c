@@ -474,32 +474,32 @@ int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
 //   // TODO: Simplify this.  This is a bit confusing, but the outlen is deferenced once in the inner fucniton
   // return EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
 // #else
-  // return EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl); 
+  return EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl); 
 // #endif
 
-size_t max = maximal_binary_length_from_base64_lazy_duplicate(in,inl);
-unsigned char *out_openssl = OPENSSL_malloc(max + 30);
+// size_t max = maximal_binary_length_from_base64_lazy_duplicate(in,inl);
+// unsigned char *out_openssl = OPENSSL_malloc(max + 30);
 
- int ret_openssl = EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl);
+//  int ret_openssl = EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl);
 
-int outl_openssl = -2;
+// int outl_openssl = -2;
 
-if (outl != NULL) {
- outl_openssl = *outl;}
+// if (outl != NULL) {
+//  outl_openssl = *outl;}
 
-  int ret_simdutf = EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
-int outl_simdutf = -2;
-if (outl != NULL) {
-  outl_simdutf = *outl;}
+  // int ret_simdutf = EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
+// int outl_simdutf = 0;
+// if (outl != NULL) {
+//   outl_simdutf = *outl;}
 
-if (outl_openssl != outl_simdutf || ret_openssl != ret_simdutf) {
-  DEBUG_PRINT(RED_TEXT("DEBUG: MISMATCH: simdutf outl = %d, OpenSSL outl = %d "), outl_simdutf, outl_openssl);
-  DEBUG_PRINT(RED_TEXT(" simdutf ret = %d, OpenSSL ret = %d\n"), ret_simdutf, ret_openssl);
-}
+// if (outl_openssl != outl_simdutf || ret_openssl != ret_simdutf) {
+//   DEBUG_PRINT(RED_TEXT("DEBUG: MISMATCH: simdutf outl = %d, OpenSSL outl = %d "), outl_simdutf, outl_openssl);
+//   DEBUG_PRINT(RED_TEXT(" simdutf ret = %d, OpenSSL ret = %d\n"), ret_simdutf, ret_openssl);
+// }
 
-OPENSSL_free(out_openssl);
+// OPENSSL_free(out_openssl);
 
-return ret_simdutf;
+// return ret_simdutf;
 }
 
 /*-
@@ -1265,22 +1265,14 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
 
   // Check for standard base64 length success
   if (r.error == BASE64_SUCCESS) {
-    const size_t valid_b64 = r.input_count - ws_up_to_input_count + pd_aft_inpc;
-    const size_t valid_b64_in_buf = valid_b64 % 64;
-    // DEBUG_PRINT("packed_len_pad: %zu\n", packed_len_pad);
-    // if (((packed_len_pad) & 3) == 0) { // is it a multiple of 4?
-    if (((valid_b64) & 3) == 0){
-
-    } else {pack_characters(ctx, packed_start, packed_len_pad);}
-
-    // pack_characters(ctx, (const unsigned char *)(input + r.last_buf_chk), r.input_count - r.last_buf_chk + (p - (input + r.input_count)));
-    
+    if (((r.valid_b64 + pd_aft_inpc) & 3) == 0) // is it a multiple of 4?
+    { }
+    else {pack_characters(ctx, packed_start, packed_len_pad);}    
   }
 
   // Check for base64 input remainder
   if (r.error == BASE64_INPUT_REMAINDER) { // treeated the same as an error
     pack_characters(ctx, packed_start, packed_len_nopad);
-    // pack_characters(ctx, packed_start, valid_b64_in_buf);
   }  
 
   // Check for not multiple of four
@@ -1289,19 +1281,12 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     DEBUG_PRINT("DEBUG: r.valid_b64: %d\n", r.valid_b64);
     if (changed_buf_chk == 1) {
       DEBUG_PRINT("DEBUG: NOT_MULTIPLE_OF_FOUR: changed_buf_chk == 1\n");
-      // pack_characters(ctx, packed_start, pd_aft_buf_chk);
       pack_characters(ctx, packed_start, r.valid_b64 % 64);
     }
     else {
       DEBUG_PRINT("DEBUG: NOT_MULTIPLE_OF_FOUR: changed_buf_chk == 0\n");
       pack_characters(ctx, packed_start, packed_len_pad);
     }
-
-    // size_t valid = r.va - (r.output_count % 48);
-    // *outl = (int) valid;
-    // return r
-    // pack_characters(ctx, packed_start, packed_len_pad);
-    // pack_characters(ctx, packed_start, valid_b64_in_buf);
   }
 
   // Check for invalid characters
@@ -1312,14 +1297,6 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   // Handle empty padding error
   if (r.error == EXTRA_PADDING_EMPTY) 
   {
-    const size_t valid_b64 = r.input_count - ws_up_to_input_count;
-    const size_t valid_b64_in_buf = valid_b64 % 64;
-
-    DEBUG_PRINT("DEBUG: pd_aft_inpc: %zu\n", pd_aft_inpc);
-    DEBUG_PRINT("DEBUG: valid_b64_in_buf: %zu\n", valid_b64_in_buf);
-    DEBUG_PRINT("DEBUG: packed_len_nopad: %zu\n", packed_len_nopad);
-    DEBUG_PRINT("DEBUG: r.input_count: %d\n", r.input_count);
-    DEBUG_PRINT("DEBUG: r.whitespaces: %d\n", r.whitespaces);
     pack_characters(ctx, packed_start, packed_len_pad);
   }
 
@@ -1364,16 +1341,6 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
       // ,== XXXXX ==
       DEBUG_PRINT(RED_TEXT("DEBUG: r.trimmed_padding == 2\n"));
 
-      if (changed_buf_chk == 1) {
-        DEBUG_PRINT(RED_TEXT("DEBUG: changed_buf_chk == 1\n"));
-        DEBUG_PRINT(RED_TEXT("DEBUG: r.last_buf_chk: %zu and pd_aft_buf_chk: %zu\n"), r.last_buf_chk, pd_aft_buf_chk);
-        pack_characters(ctx, packed_start, pd_aft_buf_chk);
-      }
-      else {
-        DEBUG_PRINT(RED_TEXT("DEBUG: changed_buf_chk == 0\n"));
-        pack_characters(ctx, packed_start, packed_len_pad);
-      }
-
 
       // this is a special case, because the core kernel would have stopped at the second padding character
       // and the input count would have stopped just before the first padding character.
@@ -1383,6 +1350,15 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
       // ,==|= 
       // ,==|==
       //  all is not kosher.
+      if (changed_buf_chk == 1) {
+        DEBUG_PRINT(RED_TEXT("DEBUG: changed_buf_chk == 1\n"));
+        DEBUG_PRINT(RED_TEXT("DEBUG: r.last_buf_chk: %zu and pd_aft_buf_chk: %zu\n"), r.last_buf_chk, pd_aft_buf_chk);
+        pack_characters(ctx, packed_start, pd_aft_buf_chk);
+      }
+      else {
+        DEBUG_PRINT(RED_TEXT("DEBUG: changed_buf_chk == 0\n"));
+        pack_characters(ctx, packed_start, packed_len_pad);
+      }
 
     }
   }
@@ -1398,11 +1374,6 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     }
   }
 
-  // Catch any other errors
-  if (r.error == OTHER) {
-   DEBUG_PRINT("NOT SUPPOSED TO HAPPEN: r.error == OTHER\n"); 
-  }
-
   // **********************************
 
   if (r.error == EXTRA_PADDING_CORE || r.error == EXTRA_PADDING_EMPTY) {
@@ -1411,45 +1382,27 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
       // XX .... = XX | 
       if (r.trimmed_padding == 0){
         // DEBUG_PRINT(RED_TEXT("DEBUG: padding == 0\n"));
-        // Count internal padding after r.input_count, capped at 2
-
-        // pack_characters(ctx, (const unsigned char *)(input + r.last_buf_chk), r.input_count - r.last_buf_chk + (p - (input + r.input_count)));
-
-
-        // DEBUG_PRINT(RED_TEXT("DEBUG: pd_aft_inpc: %zu\n"), pd_aft_inpc);
-
-        // Count whitespaces up to r.input_count
-        size_t whitespaces_up_to_input = 0;
-        for (size_t i = 0; i < r.input_count && i < length; i++) {
-          if (is_ascii_white_space(input[i])) {
-            whitespaces_up_to_input++;
-          }
-        }
-
-        int in_nows_intpad = r.input_count - whitespaces_up_to_input + pd_aft_inpc;
 
         // .... XX== |   --> 
-        if (in_nows_intpad % 64 ==  0)        
+        if (r.valid_b64 % 64 ==  0)        
         {        
         // DEBUG_PRINT(RED_TEXT("DEBUG: Zeroth option\n"));
-        int valid = in_nows_intpad/4*3 - pd_aft_inpc;
+        int valid = r.valid_b64/4*3 - pd_aft_inpc;
         valid = valid > 0 ? valid : 0;
   
         *outl = (int) valid;
         return r;
-        // Cleanse (erase) the remaining incomplete portion.
-
         } else 
-        if (in_nows_intpad <=  64)
+        if (r.valid_b64 <=  64)
         {
           // DEBUG_PRINT(RED_TEXT("r.input_count + pd_aft_inpc) <  64\n"));
           *outl = 0;
           return r;
         } 
-        else if (in_nows_intpad % 64 != 0)
+        else if (r.valid_b64 % 64 != 0)
         {
           // DEBUG_PRINT(RED_TEXT("DEBUG: r.input_count + pd_aft_inpc) % 64 != 0\n"));
-          int valid = in_nows_intpad/4*3 - (in_nows_intpad/4*3) % 48;
+          int valid = r.valid_b64/4*3 - (r.valid_b64/4*3) % 48;
   
           *outl = (int) valid;
           return r;
@@ -1462,50 +1415,22 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
       }
       if (r.input_count > 64 && valid_b64_up_to_inpc % 64 == 0){
         // DEBUG_PRINT(RED_TEXT("DEBUG: First option\n"));
-
-        int surplus_paddings = r.trimmed_padding + r.internal_padding > 2 ? 2 : r.trimmed_padding + r.internal_padding;
-        int valid = valid_b64_up_to_inpc/4 *3 - surplus_paddings;
-        valid = valid > 0 ? valid : 0;
-  
-        *outl = (int) valid;
-        // Cleanse (erase) the remaining incomplete portion.
-        return r;
-
-      }
-      if (all_valid_b64 % 64 == 0) {
-        // DEBUG_PRINT(RED_TEXT("DEBUG: Second option\n"));
-
-        // we cap possible padding to 2 because OpenSSL only removes 2 padding from *outlen
-        int surplus_paddings = r.trimmed_padding + r.internal_padding > 2 ? 2 : r.trimmed_padding + r.internal_padding;
-        // surplus_paddings = 2;
-        DEBUG_PRINT(RED_TEXT("DEBUG: surplus_paddings: %d\n"), surplus_paddings);  
-
-        int valid = all_valid_b64/4 *3 - surplus_paddings;
+        int valid = valid_b64_up_to_inpc/4 *3 - pd_aft_inpc;
         valid = valid > 0 ? valid : 0;
   
         *outl = (int) valid;
         // Cleanse (erase) the remaining incomplete portion?
         return r;
       }
-      // XX,=|== where ‘X’ denotes a valid character, ‘=’ denotes padding and ‘|’ denotes the point where the 64 buffer ends
-      else if (all_valid_b64 % 64 == 63) {
-        // DEBUG_PRINT(RED_TEXT("DEBUG: Third option\n"));
-        int surplus_paddings = r.trimmed_padding + r.internal_padding > 2 ? 2 : r.trimmed_padding + r.internal_padding;
-
-        // The + 1 is because we need to go up to the next multiple of 64
-        int valid = (all_valid_b64 +1)/4 *3 - surplus_paddings;
+      if (all_valid_b64 % 64 == 0 || all_valid_b64 % 64 == 63) {
+        // For all_valid_b64 % 64 == 63 case, add 1 to round up to next multiple of 64
+        int rounded_valid = (all_valid_b64 + (all_valid_b64 % 64 == 63 ? 1 : 0));
+        int valid = (rounded_valid/4 * 3) - pd_aft_inpc;
         valid = valid > 0 ? valid : 0;
-  
-        *outl = (int) valid;
-        // Cleanse (erase) the remaining incomplete portion.
-        // TODO: because OpenSSL does buffering, we need to cleanse what simdutf decoded but openssl didn't
-        // size_t to_cleanse = r.output_count % 48;
-        // OPENSSL_cleanse(output + valid, to_cleanse);
+
+        *outl = (int)valid;
         return r;
       }
-      DEBUG_PRINT(RED_TEXT("DEBUG: length: %d\n"), length);
-      DEBUG_PRINT(RED_TEXT("DEBUG: length - length mod 64: %d\n"), length - length % 64);
-      DEBUG_PRINT(RED_TEXT("DEBUG: Length - length mod 64 == 0: %d\n"), ((length - length % 64) % 64) == 0);
     }
 
   if (r.error == BASE64_SUCCESS) {
@@ -1517,16 +1442,16 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   //Not a success , not extra padding in CORE
   // e.g.  last bytes were ended with XXX=|= where ‘X’ denotes a valid character, ‘=’ denotes padding and ‘|’ denotes the point where the 64 buffer ends
   // OpenSSL's outln will take up to '|' into account but no more 
-  else if (r.error == NOT_MULTIPLE_OF_FOUR && r.trimmed_padding == 2 && ((all_valid_b64 % 64) == 0 || (all_valid_b64 % 64) == 1) ) {
+  else if ( r.trimmed_padding == 2 && ((all_valid_b64 % 64) == 0 || (all_valid_b64 % 64) == 1) ) {
         DEBUG_PRINT(RED_TEXT("DEBUG: Simdutf decode failed, invalid base64 character with padding at seems\n"));
         // Calculate the number of bytes that constitute the valid part.
        
         int valid = r.output_count + r.trimmed_padding;
         valid = valid > 0 ? valid : 0;
         *outl = (int) valid;
-        // TODO: do something about the cleansing
+        // TODO: do something about the cleansing. Should we cleanse the remaining incomplete portion? Not sure. 
         // Cleanse (erase) the remaining incomplete portion.
-        int to_cleanse = r.output_count % 48 -1;
+        // int to_cleanse = r.output_count % 48 -1;
         // OPENSSL_cleanse(output + valid, to_cleanse);
         return r;
 
@@ -1753,32 +1678,6 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
             temp_src--;
             }
 
-
-            // Count padding characters while skipping whitespaces
-            // const char* end_check = src;
-            // int padding_from_start = 0;
-            // // Check up to 2 padding characters
-            // while (end_check < srcend && padding_from_start < 2) {
-            //   if (is_ascii_white_space(*end_check)) {
-            //     end_check++;
-            //     continue;
-            //   }
-            //   if (*end_check == '=') {
-            //     DEBUG_PRINT("Found padding character: %c\n", *end_check);
-            //     padding_from_start++;
-            //     idx_buf++;
-            //     valid_b64++;
-            //     if (idx_buf % 64 == 0){
-            //       DEBUG_PRINT("idx_buf % 64 == 0\n");
-            //       idx_buf = 0;
-            //       last_buf_chkpt = end_check;
-            //     }
-            //   } else {
-            //     break;
-            //   }
-            //   end_check++;
-            // }
-
           if (idx == 2) {
             DEBUG_PRINT("idx == 2\n");
             uint32_t triple = ((uint32_t)(buffer[0]) << (3 * 6)) +
@@ -1816,26 +1715,17 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
           return (full_result){INVALID_BASE64_CHARACTER, (size_t)(src - srcinit),
             (size_t)(dst - dstinit),(size_t)(last_buf_chkpt - srcinit),valid_b64, has_seof, whitespaces};
         }
-        // DEBUG_PRINT("WS detected!!!!\n");
         whitespaces++;
         // A whitespace or newline; ignore it.
       }
       src++;
-      // if ((src - srcinit - whitespaces) % 64 == 0) {
-      //   last_buf_chkpt = src;}
-
-      // DEBUG_PRINT("idx_buf: %d\n", idx_buf);
-
 
       if (idx_buf % 64 == 0){
-        // if (idx_buf == 63){
         DEBUG_PRINT("idx_buf % 64 == 0\n");
         idx_buf = 0;
         last_buf_chkpt = src;
       }
- 
-      // DEBUG_PRINT("idx = %d\n", idx);
-    }
+     }
     if (idx != 4) {
       DEBUG_PRINT("idx != 4\n");
 
@@ -1873,16 +1763,6 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
         return (full_result){NOT_MULTIPLE_OF_FOUR, (size_t)(src - srcinit),(size_t)(dst - dstinit),(size_t)(last_buf_chkpt - srcinit),valid_b64,has_seof, whitespaces};
       }
       DEBUG_PRINT("idx == 0\n");
-#if DEBUG
-      // {
-      //   int final_bytes = (int)(dst - dstinit);
-      //   DEBUG_PRINT("DEBUG: Final output (hex): ");
-      //   for (int j = 0; j < final_bytes; j++) {
-      //     DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)dstinit[j]);
-      //   }
-      //   DEBUG_PRINT("\n\n");
-      // }
-#endif
       return (full_result){BASE64_SUCCESS, (size_t)(src - srcinit),
                            (size_t)(dst - dstinit),(size_t)(last_buf_chkpt - srcinit),valid_b64,has_seof,whitespaces};
 
@@ -1890,7 +1770,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
     // DEBUG_PRINT("idx == 4 remaining\n");
     // DEBUG_PRINT("Buffer: %02x %02x %02x %02x\n", buffer[0], buffer[1],buffer[2], buffer[3]);
 
-        /* Count whitespace characters in the buffer */
+    /* Count whitespace characters in the buffer */
     int ws_count = 0;
     for (int i = 0; i < 4; i++) {
         if (is_ascii_white_space(buffer[i])) {
