@@ -1125,19 +1125,14 @@ static inline uint32_t swap_bytes(const uint32_t word) {
          ((word << 24) & 0xff000000); // byte 0 to byte 3
 }
 
-// int max(int a, int b) {
-//   return (a > b) ? a : b;
-// }
 
-// // Returns the number of bytes written. The destination buffer must be large
-// // enough. It will add padding (=) if needed.
-//
+// Returns the number of bytes written. The destination buffer must be large
+// enough. It will add padding (=) if needed.
 int tail_encode_base64(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
                        size_t srclen) {
   // This looks like 3 branches, but we expect the compiler to resolve this to a
   // single branch:
   DEBUG_PRINT(RED_TEXT("DEBUG: Entering tail_encode_base64\n"));
-  // DEBUG_PRINT(GREEN_TEXT("DEBUG: Source string: \"%s\"\n"), src);
   
   const char *e0 = base64_e0;
   const char *e1 = base64_e1;
@@ -1151,52 +1146,33 @@ int tail_encode_base64(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
     t1 = (uint8_t)src[i];
     t2 = (uint8_t)src[i + 1];
     t3 = (uint8_t)src[i + 2];
-    // DEBUG_PRINT(
-    //     RED_TEXT("DEBUG: Processing bytes at index %zu: %02x %02x %02x\n"), i,
-    //     t1, t2, t3);
-
     *out++ = e0[t1];
     *out++ = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
     *out++ = e1[((t2 & 0x0F) << 2) | ((t3 >> 6) & 0x03)];
     *out++ = e2[t3];
 
-    // DEBUG_PRINT(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst),
-    //             dst);
   }
   size_t remaining = srclen - i;
-  // DEBUG_PRINT(RED_TEXT("DEBUG: Remaining bytes = %zu\n"), remaining);
   switch (remaining) {
   case 0:
     break;
   case 1:
     t1 = (uint8_t)src[i];
-    // DEBUG_PRINT(RED_TEXT("DEBUG: Processing last byte at index %zu: %02x\n"), i,
-    //             t1);
     *out++ = e0[t1];
     *out++ = e1[(t1 & 0x03) << 4];
     *out++ = '=';
     *out++ = '=';
-    // DEBUG_PRINT(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst),
-    //             dst);
     break;
   case 2:
     t1 = (uint8_t)src[i];
     t2 = (uint8_t)src[i + 1];
-    // DEBUG_PRINT(
-    //     RED_TEXT("DEBUG: Processing last 2 bytes at index %zu: %02x %02x\n"), i,
-    //     t1, t2);
     *out++ = e0[t1];
     *out++ = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
     *out++ = e2[(t2 & 0x0F) << 2];
     *out++ = '=';
-    // DEBUG_PRINT(RED_TEXT("DEBUG: Output so far: %.*s\n"), (int)(out - dst),
-    //             dst);
     break;
   }
   int total = (int)(out - dst);
-  // DEBUG_PRINT(
-  //     RED_TEXT("DEBUG: Exiting tail_encode_base64, total output bytes = %d\n"),
-  //     total);
   return total;
 }
 
@@ -1204,15 +1180,10 @@ int tail_encode_base64(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
 
 full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length) {
-
-    //TODO: trim_end is not using outl...? I can probably simplify this
     full_result r = base64_tail_decode_trim_end(ctx, output, outl, input, length);
 
     int valid_b64_up_to_inpc = r.valid_b64;
-    // Recall r.input_count is the value returned by the core kernel
-    const size_t ws_up_to_input_count = r.input_count - r.valid_b64;
 
-    DEBUG_PRINT("DEBUG: ************* finding padding *************\n");
     size_t pd_aft_inpc = 0;
     size_t pd_aft_buf_chk = 0;
     int changed_buf_chk = 0;
@@ -1220,26 +1191,18 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     while (p < input + length && pd_aft_inpc < 2) {
       if (*p == '=') {
         pd_aft_inpc++;
-        DEBUG_PRINT("Found padding char at position %ld, pd_aft_inpc=%zu\n", 
-               (long)(p - input), pd_aft_inpc);
-        
         if (r.error == EXTRA_PADDING_CORE | r.error == NOT_MULTIPLE_OF_FOUR) {
           r.valid_b64++;
           if (r.valid_b64 % 64 == 0){
             r.last_buf_chk = (size_t)(p - input);
             changed_buf_chk = 1;
-            DEBUG_PRINT("Buffer checkpoint updated: last_buf_chk=%zu, changed_buf_chk=1\n", 
-                  r.last_buf_chk);
           } else if (changed_buf_chk == 1) {
             if (pd_aft_buf_chk < 2 && pd_aft_inpc < 2) {
               pd_aft_buf_chk++;
-              DEBUG_PRINT("Updated pd_aft_buf_chk=%zu\n", pd_aft_buf_chk);
             }
           }
         }
       } else if (!is_ascii_white_space(*p)) {
-        DEBUG_PRINT("Found non-whitespace char '%c' at position %ld, breaking\n",
-               *p, (long)(p - input));
         break;
       }
       p++;
@@ -1247,17 +1210,11 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
 
     int all_valid_b64 = valid_b64_up_to_inpc + pd_aft_inpc; 
 
-    DEBUG_PRINT("DEBUG: pd_aft_buf_chk: %zu\n", pd_aft_buf_chk);
-    // Store the buffered input for further processing
     const unsigned char *packed_start = (const unsigned char *)input + r.last_buf_chk;
     const int pd_ws_pd =  (p - (input + r.input_count));
     const size_t packed_len_pad = r.input_count - r.last_buf_chk + pd_ws_pd;
     const size_t packed_len_nopad = r.input_count - r.last_buf_chk;
-    
 
-    // **********************************
-
-  // Check for standard base64 length success
   if (r.error == BASE64_SUCCESS) {
     if (((r.valid_b64 + pd_aft_inpc) & 3) == 0) // is it a multiple of 4?
     { }
@@ -1266,25 +1223,15 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     return r;
   }
 
-  // Check for base64 input remainder
-  if (r.error == BASE64_INPUT_REMAINDER) { // treeated the same as an error
+  if (r.error == INVALID_BASE64_CHARACTER || r.error == BASE64_INPUT_REMAINDER) {
     pack_characters(ctx, packed_start, packed_len_nopad);
-  }  
 
-  // Check for not multiple of four , can be 2 or 3 bytes
-  if (r.error == NOT_MULTIPLE_OF_FOUR) {
-
-    DEBUG_PRINT("DEBUG: r.valid_b64: %d\n", r.valid_b64);
-    if (changed_buf_chk == 1) {
-      pack_characters(ctx, packed_start, r.valid_b64 % 64);
-    }
-    else {
-      pack_characters(ctx, packed_start, packed_len_pad);
-    }
-  }
-
-  if (r.error == INVALID_BASE64_CHARACTER) {
-    pack_characters(ctx, packed_start, packed_len_nopad);
+    size_t valid = r.output_count - (r.output_count % 48);
+    *outl = (int) valid;
+    // Cleanse (erase) the remaining incomplete portion.
+    size_t to_cleanse = r.output_count % 48;
+    OPENSSL_cleanse(output + valid, to_cleanse);
+    return r;
   }
 
   if (r.error == EXTRA_PADDING_CORE || r.error == EXTRA_PADDING_EMPTY) {
@@ -1310,12 +1257,12 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
       else if (r.valid_b64 % 64 != 0)
       {
         int valid = r.valid_b64/4*3 - (r.valid_b64/4*3) % 48;
-
         *outl = (int) valid;
         return r;
       }
   }
 
+  // TODO: This part can probably be cleaned up further.
   if (r.error == ADDITIONAL_PADDING_CHECK_FAILED) {
     if (changed_buf_chk == 1) {
       pack_characters(ctx, packed_start, pd_aft_buf_chk);
@@ -1325,13 +1272,18 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     }
   }
 
-  //Not a success , not extra padding in CORE
-  // e.g.  last bytes were ended with XXX=|= where ‘X’ denotes a valid character, ‘=’ denotes padding and ‘|’ denotes the point where the 64 buffer ends
-  // OpenSSL's outln will take up to '|' into account but no more 
+
+  if (r.error == NOT_MULTIPLE_OF_FOUR) {
+    if (changed_buf_chk == 1) {
+      pack_characters(ctx, packed_start, r.valid_b64 % 64);
+    }
+    else {
+      pack_characters(ctx, packed_start, packed_len_pad);
+    }
+  }
+
   if ( r.trimmed_padding == 2 && ((all_valid_b64 % 64) == 0 || (all_valid_b64 % 64) == 1) ) {
-        DEBUG_PRINT(RED_TEXT("DEBUG: Simdutf decode failed, invalid base64 character with padding at seems\n"));
-        // Calculate the number of bytes that constitute the valid part.
-       
+        DEBUG_PRINT(RED_TEXT("DEBUG: Simdutf decode failed, invalid base64 character with padding at seems\n"));       
         int valid = r.output_count + r.trimmed_padding;
         valid = valid > 0 ? valid : 0;
         *outl = (int) valid;
