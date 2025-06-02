@@ -1297,11 +1297,10 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
 
       if (r.valid_b64 % 64 ==  0)        
       {        
-      int valid = r.valid_b64/4*3 - pd_aft_inpc;
-      valid = valid > 0 ? valid : 0;
-
-      *outl = (int) valid;
-      return r;
+        int valid = r.valid_b64/4*3 - pd_aft_inpc;
+        valid = valid > 0 ? valid : 0;
+        *outl = (int) valid;
+        return r;
       } else 
       if (r.valid_b64 <  64)
       {
