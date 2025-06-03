@@ -748,7 +748,8 @@ __owur int EVP_Cipher(EVP_CIPHER_CTX *c,
               size_t last_buf_chk; // Number of bytes till the last buffer starts
               size_t valid_b64; // sum of all valid b64 found by core kernel
               has_seof has_seof;
-              size_t trimmed_padding; // padding removed by base64_tail_decode_trim_end
+              size_t trimmed_padding; // padding removed by first base64_tail_decode_trim_end, and then summed with those 
+              // counted by the adj_outlen function
           } full_result;
           
 

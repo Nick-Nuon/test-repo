@@ -306,7 +306,6 @@ static size_t swap_seof(char **v, size_t *v_len, unsigned int *seed, int at_mult
     }
     
     // Swap: just overwrite the character at index with the SEOF marker '-'
-    // DEBUG_PRINT((GREEN_TEXT("DEBUG: Replacing character at index %zu with SEOF marker\n"), index));
     array[index] = (char)0x2D;   // 0x2D is the ASCII hyphen
     return index;
 }
@@ -322,8 +321,6 @@ size_t add_seof(char **v, size_t *v_len, unsigned int *seed, int at_multiple_of_
        If '=' is found, use its index; otherwise, use the full length.
     */
     len = *v_len;
-    // (Skipping searching for '=' for now)
-
     uint8_t c = 0x2D; // '-' character
 
     /* Choose a random insertion index between 0 and len (inclusive) */
@@ -346,12 +343,8 @@ size_t add_seof(char **v, size_t *v_len, unsigned int *seed, int at_multiple_of_
             index += rand_r(seed) % 2 + 1;
         }
     } else if (at_multiple_of_4){
-        DEBUG_PRINT(GREEN_TEXT("DEBUG: at_multiple_of_4 is true\n"));
-        DEBUG_PRINT("DEBUG: index before slashing = %zu\n", index);
         index = index - (index % 4);
-        DEBUG_PRINT("DEBUG: index after slashing = %zu\n", index);
     } else if (index_mod == 0) {
-        DEBUG_PRINT(GREEN_TEXT("DEBUG: index_mod == 0\n"));
         index -= rand_r(seed) % 3 + 1; 
     }
 
@@ -394,13 +387,10 @@ int OpenSSL_decode(EVP_ENCODE_CTX *dummy,char *dst,int *outl, const char *src, i
     int final_result = EVP_DecodeFinal_OpenSSL(ctx, (unsigned char *)&dst[outlen], &taillen);
     if (update_result < 0 || final_result < 0
     ) {
-        // fprintf(stderr, "Invalid input for openssl base64 decode.\n");
         EVP_ENCODE_CTX_free(ctx);
         *outl = outlen;
         DEBUG_PRINT(RED_TEXT("DEBUG: OpenSSL decode error: outlen = %d, taillen = %d\n"), outlen, taillen);
-        // fprintf(stderr, "Decoded length: %d\n", outlen);
         return -1;
-        // return (result){NOT_MULTIPLE_OF_FOUR, (size_t)outlen};        
     }
 
     EVP_ENCODE_CTX_free(ctx);
@@ -409,7 +399,6 @@ int OpenSSL_decode(EVP_ENCODE_CTX *dummy,char *dst,int *outl, const char *src, i
 
     DEBUG_PRINT(GREEN_TEXT("DEBUG: OpenSSL decode: outlen = %d, taillen = %d\n"), outlen, taillen);
     return outlen;
-    // return (result){BASE64_SUCCESS, (size_t)outlen};
 }
 
 int EVP_DecodeUpdate_test(EVP_ENCODE_CTX *dummy,
@@ -449,12 +438,6 @@ int EVP_DecodeUpdate_test(EVP_ENCODE_CTX *dummy,
 
     /* Compare contexts */
     ASSERT_TRUE(EVP_ENCODE_CTX_cmp(simdutf_ctx, openssl_ctx));
-    
-    // Copy result to caller's buffer if provided
-    // if (out && outl) {
-    //     memcpy(out, decodeUpdate_openssl, decodeUpdate_outl_openssl);
-    //     *outl = decodeUpdate_outl_openssl;
-    // }
 
     // Clean up
     OPENSSL_free(decodeUpdate_openssl);
@@ -463,7 +446,6 @@ int EVP_DecodeUpdate_test(EVP_ENCODE_CTX *dummy,
 
     EVP_ENCODE_CTX_free(simdutf_ctx);
     EVP_ENCODE_CTX_free(openssl_ctx);
-
 
     return 1;
 }
@@ -646,12 +628,6 @@ static int test_complete_decode_base64_cases(void)
             }
         }
 
-        // printf("max_len: %zu\n", max_len);
-        // printf("simdutf_result: %d\n", simdutf_result);
-        // printf("simdutf_outlen: %d\n", outlen_simdutf);
-        // printf("result_openssl: %d\n", result_openssl);
-        // printf("openssl_outlen: %d\n", openssl_outlen);
-
         ASSERT_EQUAL_INT(simdutf_result, result_openssl);
         ASSERT_EQUAL_INT(outlen_simdutf, openssl_outlen);
         // ****** TEST SPECIFIC ASSERTIONS ******
@@ -759,16 +735,9 @@ static int inline check_cases(case_pair *cases, size_t num_cases)
             }
         }
 
-        // printf("max_len: %zu\n", max_len);
-        // printf("simdutf_result: %d\n", simdutf_result);
-        // printf("simdutf_outlen: %d\n", outlen_simdutf);
-        // printf("result_openssl: %d\n", result_openssl);
-        // printf("openssl_outlen: %d\n", openssl_outlen);
-
         ASSERT_EQUAL_INT(simdutf_result, result_openssl);
         ASSERT_EQUAL_INT(outlen_simdutf, openssl_outlen);
         ASSERT_MEM_EQUAL(buffer_openssl, buffer, openssl_outlen);
-        // ****** TEST SPECIFIC ASSERTIONS ******
 
         ASSERT_EQUAL_INT(openssl_outlen, strlen(cases[i].decoded));
         ASSERT_EQUAL_INT(outlen_simdutf, strlen(cases[i].decoded));
@@ -824,14 +793,6 @@ static int inline check_seof(case_pair *cases, size_t num_cases)
 
         int openssl_outlen = 0;
         int result_openssl = OpenSSL_decode(NULL, (char *)buffer_openssl, &openssl_outlen, cases[i].encoded, enc_len);
-
-
-
-        // printf("max_len: %zu\n", max_len);
-        // printf("simdutf_result: %d\n", simdutf_result);
-        // printf("simdutf_outlen: %d\n", outlen_simdutf);
-        // printf("result_openssl: %d\n", result_openssl);
-        // printf("openssl_outlen: %d\n", openssl_outlen);
 
         ASSERT_EQUAL_INT(simdutf_result, result_openssl);
         ASSERT_EQUAL_INT(outlen_simdutf, openssl_outlen);
@@ -903,32 +864,10 @@ static int inline check_cases_no_padding(case_pair *cases, size_t num_cases)
         }
         int openssl_outlen = 0;
         int result_openssl = OpenSSL_decode(NULL, (char *)buffer_openssl, &openssl_outlen, cases[i].encoded, enc_len);
-        // ASSERT_EQUAL_INT(result_openssl, -1);
-
-
-        // for(size_t j = 0; j < result_openssl; j++) {
-        //     if(buffer_openssl[j] != cases[i].decoded[j]) {
-        //         // TEST_error(RED_TEXT("Decoded:Mismatch at index %zu in test case %zu for OpenSSL: got %02x, expected %02x"), 
-        //         //            j, i, (unsigned int)buffer_openssl[j], (unsigned int)cases[i].decoded[j]);
-        //         // OPENSSL_free(buffer_openssl);
-        //         // return 0;
-        //     }
-        // }
-
-        // printf("max_len: %zu\n", max_len);
-        // printf("simdutf_result: %d\n", simdutf_result);
-        // printf("simdutf_outlen: %d\n", outlen_simdutf);
-        // printf("result_openssl: %d\n", result_openssl);
-        // printf("openssl_outlen: %d\n", openssl_outlen);
 
         ASSERT_EQUAL_INT(simdutf_result, result_openssl);
         ASSERT_EQUAL_INT(outlen_simdutf, openssl_outlen);
         ASSERT_MEM_EQUAL(buffer_openssl, buffer, openssl_outlen);
-        // ****** TEST SPECIFIC ASSERTIONS ******
-
-        // Some of the cases are intentionally failing and some intentionally passing
-        // ASSERT_EQUAL_INT(openssl_outlen, 0);
-        // ASSERT_EQUAL_INT(outlen_simdutf, 0);
         
         OPENSSL_free(buffer);
         OPENSSL_free(buffer_openssl);
@@ -1036,15 +975,6 @@ const case_pair no_padding[] = {
             const char *input = invalid_cases[i].encoded;
             size_t inlen = strlen(input);
 
-            /* Testing for EVP_DecodeUpdate with invalid cases */
-            // DEBUG_PRINT("Testing case %zu:\n", i);
-            // DEBUG_PRINT("Input: ");
-            // for (size_t j = 0; j < strlen(input); j++) {
-            //     DEBUG_PRINT("%02x ", (unsigned char)input[j]);
-            //     if ((j + 1) % 8 == 0) DEBUG_PRINT("\n      ");
-            // }
-            // DEBUG_PRINT("\n");
-
             /* Decode using both methods */
             size_t back_bufsize = maximal_binary_length_from_base64(input, inlen);
             unsigned char *back_simd = OPENSSL_malloc(back_bufsize + 2);
@@ -1089,15 +1019,6 @@ const case_pair no_padding[] = {
             if (e != 1) {
                 return 0;
             }
-
-            // Test EVP_DecodeFinal 
-            // int f = EVP_DecodeFinal_test(NULL, input, inlen, NULL);
-            // if (f != 1) {
-            //     return 0;
-            // }
-
-            // // Also test the full decode operation
-            // ASSERT_BASE64_DECODE_EQUAL(input);
         }
         return 1;
     }
@@ -1112,11 +1033,7 @@ static int test_encode_base64_basic_cases(void){
 }
 
 const case_pair seof_good_cases[] = {
-    { "123", "MTIz\x2DNDU2" }, 
-    // { "Base64 Encod", "QmFzZTY0IEVuY29k\x2DW5n" }, 
-    // { "!R~J-2jL&m",
-    //   "IVJ+SjJqTCZt\x2DSV1PKTM9YzpHM01vKW9xbUpkeG9wclRaRHl4RXZVME1JLidXdzVIe0c+fXk7OytCOEVfQWgsRWRbIFBkQnFZJ15OPk8kNDo3TEsxPDp8NylidFZAfHtZV1IkJEVyNTktWGpWckZsNEx9fnl6VEVkNCdFW0Br-" }
-};
+    { "123", "MTIz\x2DNDU2" }, };
 
 const case_pair seof_bad_cases[] = {
     { "Hello, Wo", "SGVsbG8sIFdv\x2DcmxkIQ==" }, // bad
@@ -1125,13 +1042,11 @@ const case_pair seof_bad_cases[] = {
 
 static int test_seof_good_basic_cases(void){
     int result = check_seof(seof_good_cases,1);
-    // printf(GREEN_TEXT("DEBUG: SEOF good test result: %d\n"), result);
     return result;
 }
 
 static int test_seof_bad_basic_cases(void){
     int result = check_seof(seof_bad_cases,2);
-    // printf(GREEN_TEXT("DEBUG: SEOF good test result: %d\n"), result);
     return result;
 }
 
@@ -2240,12 +2155,6 @@ static int test_issue_520(void) {
     return 1;
 }
 
-// unsigned char test_input[] = {
-//     0x61, 0x47, 0x56, 0x73, 0x62, 0x47, 0x38, 0x3d, // "aGVsbG8="
-//     0x0a,                                           // '\n'
-//     0x00                                            // '\0'
-// };
-
 static int test_issue_evp_b_overflow(void)
 {
     /* Test vector: "aGVsbG8=\n\0" which is Base64 for "hello" with newline and NUL */
@@ -2744,11 +2653,6 @@ static int test_bad_padding_base64(void) {
             /* Compare results */
             ASSERT_EQUAL_INT(result_openssl, result_simdutf);
             ASSERT_EQUAL_SIZE(outlen_openssl, outlen_simdutf);
-            // if ((copy_len - 5) % 64 == 1) {
-            //     ASSERT_EQUAL_INT(outlen_openssl, max(0,(copy_len - 5)/4 * 3 - (((copy_len - 5)/4 * 3) % 48)) -1);
-            // } else {
-            //     ASSERT_EQUAL_INT(outlen_openssl, max(0,(copy_len - 5)/4 * 3 - (((copy_len - 5)/4 * 3) % 48)));
-            // }
 
             OPENSSL_free(copy);
             OPENSSL_free(back_simd);
@@ -2814,12 +2718,6 @@ static int test_bad_padding_base64(void) {
             /* Compare results */
             ASSERT_EQUAL_INT(result_openssl, result_simdutf);
             ASSERT_EQUAL_SIZE(outlen_openssl, outlen_simdutf);
-            // ASSERT_EQUAL_INT(outlen_openssl, max(0,(copy_len - 5)/4 * 3 - (((copy_len - 5)/4 * 3) % 48)));
-            // if ((copy_len - 5) % 64 == 1) {
-            //     ASSERT_EQUAL_INT(outlen_openssl, max(0,(copy_len - 5)/4 * 3 - (((copy_len - 5)/4 * 3) % 48)) -1);
-            // } else {
-            //     ASSERT_EQUAL_INT(outlen_openssl, max(0,(copy_len - 5)/4 * 3 - (((copy_len - 5)/4 * 3) % 48)));
-            // }
 
             OPENSSL_free(copy);
             OPENSSL_free(back_simd);
@@ -3021,15 +2919,6 @@ static int test_streaming_base64_roundtrip(void)
             /* Check partial results match source */
             ASSERT_MEM_EQUAL(back_simd, back_openssl, outlen_openssl);
 
-            // printf("*********");
-            // printf("DEBUG: result_openssl = %d,  count/4*3 = %zu, pos = %zu, count mod 4 = %zu, outlen = %d\n", result_openssl,  count/4*3, pos, count % 4, outlen_openssl);
-            // if (pos + count >= size) {
-                /* Last chunk: success expected */
-                // ASSERT_EQUAL_INT(result_openssl, result_simd);
-                // ASSERT_NOT_EQUAL_INT(result_openssl, -1);
-                // ASSERT_EQUAL_INT(outlen_openssl, len);
-            // }
-
             int e = EVP_DecodeUpdate_test(NULL, buffer + pos, count, NULL);
             if (e != 1) {
                 OPENSSL_free(source);
@@ -3037,13 +2926,6 @@ static int test_streaming_base64_roundtrip(void)
                 return 0;
             }
         }
-
-        /* Final validation */
-        // ASSERT_EQUAL_INT(outlen_simd, len);
-        // ASSERT_EQUAL_INT(outlen_openssl, len);
-        // ASSERT_EQUAL_INT(result_simd, 0);
-        // ASSERT_MEM_EQUAL(back_simd, source, len);
-        // ASSERT_MEM_EQUAL(back_openssl, source, len);
 
         OPENSSL_free(back_simd);
         OPENSSL_free(back_openssl);
@@ -3116,22 +2998,17 @@ static int test_data_after_padding(void) {
             int err_simd = simdutf_decode(NULL, (char *)back_simd, &outlen_simd,
                                           buffer, total_len);
             ASSERT_EQUAL_INT(err_simd,   -1);
-            // ASSERT_EQUAL_INT(outlen_simd,  0);
 
             /* Decode with OpenSSL */
             int outlen_ssl = 0;
             int err_ssl = OpenSSL_decode(NULL, (char *)back_openssl, &outlen_ssl,
                                          buffer, total_len);
             ASSERT_EQUAL_INT(err_ssl,     -1);
-            // ASSERT_EQUAL_INT(outlen_ssl,   0);
 
             /* They must agree */
             ASSERT_EQUAL_INT(err_ssl,     err_simd);
             ASSERT_EQUAL_INT(outlen_ssl, outlen_simd);
             ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_ssl);
-
-            /* And output count should match processing up to the padding: */
-            // ASSERT_EQUAL_INT(outlen_ssl, (int)((pad_pos/4)*3 - ((pad_pos/4)*3 % 48)));
 
             OPENSSL_free(back_simd);
             OPENSSL_free(back_openssl);
@@ -3234,9 +3111,6 @@ static int test_lots_of_data_after_padding(void) {
             ASSERT_EQUAL_INT(result_openssl, result_simdutf);
             ASSERT_EQUAL_SIZE(outlen_openssl, outlen_simdutf);
             ASSERT_MEM_EQUAL(back_openssl, back_simd, outlen_openssl);
-            
-            /* Output length should match processed data up to padding */
-            // ASSERT_EQUAL_INT(outlen_openssl, (pad_pos/4)*3 - ((pad_pos/4)*3 % 48));
 
             OPENSSL_free(back_simd);
             OPENSSL_free(back_openssl);
@@ -3598,13 +3472,6 @@ static int test_doomed_partial_buffer_utf8(void)
             ASSERT_EQUAL_INT(result_openssl, -1);
             
             size_t expected_outlen = garbage_location/4*3 - ((garbage_location/4*3) % 48);
-            // if (outlen_openssl != expected_outlen) {
-            //     OPENSSL_free(base64);
-            //     OPENSSL_free(back_simd);
-            //     OPENSSL_free(back_openssl); 
-            //     TEST_error(RED_TEXT("Bad output length"));
-            //     return 0;
-            // }
 
             OPENSSL_free(back_simd);
             OPENSSL_free(back_openssl);
@@ -3620,11 +3487,8 @@ static int test_doomed_partial_buffer_utf8(void)
     return 1;
 }
 
-// The setup_tests() function is called by the test harness to register tests.
 int setup_tests(void)
 {
-    // // Register our sample test. The macro ADD_TEST() takes our test function.
-
     ADD_TEST(test_issue_520);
     ADD_TEST(test_multiple_of_4_bad);
     ADD_TEST(test_seof_bad_basic_cases); 
