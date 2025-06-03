@@ -1367,7 +1367,7 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
   if (r.error == BASE64_SUCCESS | r.error == BASE64_INPUT_REMAINDER) {
     return (full_result){r.error, r.input_count, (size_t)r.output_count,r.last_buf_chk,r.valid_b64, r.has_seof, equalsigns};
   } else {
-    return (full_result){r.error, r.input_count,(size_t)r.output_count,r.last_buf_chk,r.valid_b64, r.has_seof, equalsigns, r.internal_padding};
+    return (full_result){r.error, r.input_count,(size_t)r.output_count,r.last_buf_chk,r.valid_b64, r.has_seof, equalsigns};
   }
 }
 
@@ -1472,7 +1472,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
             DEBUG_PRINT("idx == 1\n");
           }
           return (full_result){EXTRA_PADDING_CORE, (size_t)(src - srcinit),
-            (size_t)((dst - dstinit)),  (size_t)(last_buf_chkpt - srcinit),valid_b64, equalsigns, internal_padding};
+            (size_t)((dst - dstinit)),  (size_t)(last_buf_chkpt - srcinit),valid_b64, equalsigns};
         }
         else {
             return (full_result){INVALID_BASE64_CHARACTER, (size_t)(src - srcinit),
