@@ -268,7 +268,7 @@ inline int set_evp_encode_ctx(EVP_ENCODE_CTX *ctx,
   ctx->line_num = line_num;
   ctx->flags = flags;
 
-
+  int packed_len = 0;
   // Pack and copy buffer data if provided
   if (enc_data != NULL && enc_data_len > 0) {
     packed_len = pack_characters(ctx, enc_data, enc_data_len);
@@ -281,7 +281,7 @@ inline int set_evp_encode_ctx(EVP_ENCODE_CTX *ctx,
     memset(ctx->enc_data, 0, sizeof(ctx->enc_data));
     ctx->num = 0;
   }
-  return packed_len
+  return packed_len;
 }
 
 // TODO: Maybe delete when all is said and done?
@@ -462,7 +462,6 @@ void EVP_DecodeInit(EVP_ENCODE_CTX *ctx) {
   ctx->flags = 0;
 }
 
-// TODO: don't forget to delete this function when you're done
 size_t maximal_binary_length_from_base64_lazy_duplicate(const char *input, size_t length) {
   size_t padding = 0;
   if(length > 0) {
@@ -701,21 +700,6 @@ int pack_characters(EVP_ENCODE_CTX *ctx, const unsigned char *in, int length) {
 
 int EVP_DecodeUpdate_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                const unsigned char *in, int inl) {
-  DEBUG_PRINT(GREEN_TEXT("********************* DEBUG: Entered EVP_DecodeUpdate_simdutf\n"));
-
-  // Print input data in hex and char format
-  // DEBUG_PRINT(GREEN_TEXT("DEBUG: Input (hex): "));
-  // for (int i = 0; i < inl; i++) {
-  //   DEBUG_PRINT(GREEN_TEXT("%02x "), in[i]);
-  //   if ((i + 1) % 8 == 0) DEBUG_PRINT("\n");
-  // }
-  // DEBUG_PRINT("\n\n");
-  // DEBUG_PRINT(GREEN_TEXT("DEBUG: Input (char): "));
-  // for (int i = 0; i < inl; i++) { 
-  //   DEBUG_PRINT(GREEN_TEXT("%c "), in[i]);
-  //   if ((i + 1) % 8 == 0) DEBUG_PRINT("\n");
-  // }
-  // DEBUG_PRINT("\n");
   
   /* Legacy behaviour: an empty input chunk signals end of input. */
   if (inl == 0) {
@@ -1207,6 +1191,9 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     else {pack_characters(ctx, packed_start, packed_len_pad);}    
     *outl = (int)r.output_count;
     r.trimmed_padding += pd_aft_inpc;
+
+    int valid = (int)r.output_count - (*outl);
+    OPENSSL_cleanse(output + *outl, valid);
     return r;
   }
 
@@ -1229,6 +1216,10 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
           *outl = decoded_bytes - (decoded_bytes % 48); 
         }
       }
+      int valid = (int)r.output_count - (*outl);
+      if (valid > 0) {
+        OPENSSL_cleanse(output + *outl, valid);
+      }
       return r;
   }
 
@@ -1249,10 +1240,9 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         int valid = r.output_count + r.trimmed_padding;
         valid = valid > 0 ? valid : 0;
         *outl = (int) valid;
-        // TODO: do something about the cleansing. Should we cleanse the remaining incomplete portion? Not sure. 
-        // Cleanse (erase) the remaining incomplete portion.
-        // int to_cleanse = r.output_count % 48 -1;
-        // OPENSSL_cleanse(output + valid, to_cleanse);
+        // Simdutf writes past this point, but we cleanse (erase) the remaining incomplete portion.
+        int to_cleanse = r.output_count % 48;
+        OPENSSL_cleanse(output + valid, to_cleanse);
         return r;
 
   } else {
@@ -1392,6 +1382,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
   uint8_t buffer[4];
 
   while (1) {
+    // Possible Optimization?
     // DEBUG_PRINT("Entering While(1) loop\n:");
     // while (src + 4 <= srcend &&
     //        (x = p0[(uint8_t)(src[0])] | p1[(uint8_t)(src[1])] |
@@ -1414,7 +1405,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
         valid_b64 ++;
       } else if (code > 64) {
         DEBUG_PRINT("INVALID_BASE64_CHARACTER: code > 64 \n");
-        if (c == 0x2D & (idx % 4) == 0 ) { // '-' sign/ SEOF. TODO: change the tables
+        if (c == 0x2D & (idx % 4) == 0 ) { // '-' sign/ SEOF.
           DEBUG_PRINT("SEOF detected\n");
           has_seof = 1;
           break; // out of the while (idx < 4 && src < srcend)  loop
@@ -1547,7 +1538,7 @@ static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
     b = conv_ascii2bin(*(f++), table);
     c = conv_ascii2bin(*(f++), table);
     d = conv_ascii2bin(*(f++), table);
-    if ((a | b | c | d) & 0x80) // does any of them return B64_Error or (additional checks) non-base 64 chars(eg WS)?
+    if ((a | b | c | d) & 0x80)
       return -1;
     l = ((((unsigned long)a) << 18L) | (((unsigned long)b) << 12L) |
          (((unsigned long)c) << 6L) | (((unsigned long)d)));
