@@ -962,6 +962,14 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char* output, int* 
 int tail_encode_base64(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen); 
 int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     const char *input, int length);
+void set_evp_encode_ctx(EVP_ENCODE_CTX *ctx, 
+    int num,
+    int length, 
+    int line_num,
+    unsigned int flags,
+    const unsigned char *enc_data,
+    size_t enc_data_len);
+
 
 # ifndef OPENSSL_NO_DEPRECATED_1_1_0
 #  define EVP_CIPHER_CTX_init(c)      EVP_CIPHER_CTX_reset(c)

@@ -401,15 +401,26 @@ int OpenSSL_decode(EVP_ENCODE_CTX *dummy,char *dst,int *outl, const char *src, i
     return outlen;
 }
 
-int EVP_DecodeUpdate_test(EVP_ENCODE_CTX *dummy,
-    //  unsigned char *out, int *outl, 
+
+int EVP_DecodeUpdate_test(EVP_ENCODE_CTX *ctx,
     const unsigned char *in, int inl, int expected_outl) {
 
-    DEBUG_PRINT(GREEN_TEXT("***DEBUG: TEST TEST****\n"));
+    /* Create new contexts if needed */
+    EVP_ENCODE_CTX *simdutf_ctx = ctx ? ctx : EVP_ENCODE_CTX_new();
+    EVP_ENCODE_CTX *openssl_ctx = ctx ? ctx : EVP_ENCODE_CTX_new();
 
-    /* First create two contexts */
-    EVP_ENCODE_CTX *simdutf_ctx = EVP_ENCODE_CTX_new();
-    EVP_ENCODE_CTX *openssl_ctx = EVP_ENCODE_CTX_new();
+    if (!simdutf_ctx || !openssl_ctx) {
+        EVP_ENCODE_CTX_free(simdutf_ctx);
+        EVP_ENCODE_CTX_free(openssl_ctx);
+        return -1;
+    }
+
+    /* Calculate how much of the input to process now */
+    size_t cut_len = inl;
+    /* Process random amount up to 64 bytes, leaving remainder in context */
+    unsigned int seed = 12345;
+    cut_len = rand_r(&seed) % (64 + 1); 
+
     if (!simdutf_ctx || !openssl_ctx) {
         EVP_ENCODE_CTX_free(simdutf_ctx);
         EVP_ENCODE_CTX_free(openssl_ctx);
@@ -427,22 +438,33 @@ int EVP_DecodeUpdate_test(EVP_ENCODE_CTX *dummy,
     int decodeUpdate_outl_openssl = 0;
     int decodeUpdate_outl_simdutf = 0;
 
-    // Run both decoders
-    int decodeUpdate_ret_openssl = EVP_DecodeUpdate_OpenSSL(openssl_ctx, decodeUpdate_openssl, &decodeUpdate_outl_openssl, in, inl);
-    int decodeUpdate_ret_simdutf = EVP_DecodeUpdate_simdutf(simdutf_ctx, decodeUpdate_simdutf, &decodeUpdate_outl_simdutf, in, inl);
 
-    // // Compare results
-    ASSERT_EQUAL_INT(decodeUpdate_outl_openssl, decodeUpdate_outl_simdutf);
-    ASSERT_EQUAL_INT(decodeUpdate_ret_openssl, decodeUpdate_ret_simdutf);
-    ASSERT_MEM_EQUAL(decodeUpdate_openssl, decodeUpdate_simdutf, decodeUpdate_outl_openssl);
 
-    /* Compare contexts */
-    ASSERT_TRUE(EVP_ENCODE_CTX_cmp(simdutf_ctx, openssl_ctx));
+
+    for (size_t process_len = 0; process_len < 64; process_len++) {
+        size_t process_len = 0;
+
+        /* Store processed data in context */
+        set_evp_encode_ctx(simdutf_ctx,  process_len,48, 0, 0, in, process_len);
+        set_evp_encode_ctx(openssl_ctx,  process_len,48, 0, 0, in, process_len);
+
+        // Run both decoders
+        int decodeUpdate_ret_openssl = EVP_DecodeUpdate_OpenSSL(openssl_ctx, decodeUpdate_openssl, &decodeUpdate_outl_openssl, in, inl);
+        int decodeUpdate_ret_simdutf = EVP_DecodeUpdate_simdutf(simdutf_ctx, decodeUpdate_simdutf, &decodeUpdate_outl_simdutf, in, inl);
+
+        // // Compare results
+        ASSERT_EQUAL_INT(decodeUpdate_outl_openssl, decodeUpdate_outl_simdutf);
+        ASSERT_EQUAL_INT(decodeUpdate_ret_openssl, decodeUpdate_ret_simdutf);
+        ASSERT_MEM_EQUAL(decodeUpdate_openssl, decodeUpdate_simdutf, decodeUpdate_outl_openssl);
+
+        /* Compare contexts */
+        ASSERT_TRUE(EVP_ENCODE_CTX_cmp(simdutf_ctx, openssl_ctx));
+
+    }
 
     // Clean up
     OPENSSL_free(decodeUpdate_openssl);
     OPENSSL_free(decodeUpdate_simdutf);
-
 
     EVP_ENCODE_CTX_free(simdutf_ctx);
     EVP_ENCODE_CTX_free(openssl_ctx);

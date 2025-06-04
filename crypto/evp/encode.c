@@ -251,6 +251,36 @@ void EVP_EncodeInit(EVP_ENCODE_CTX *ctx) {
   ctx->flags = 0;
 }
 
+inline void set_evp_encode_ctx(EVP_ENCODE_CTX *ctx, 
+                  int num,
+                  int length, 
+                  int line_num,
+                  unsigned int flags,
+                  const unsigned char *enc_data,
+                  size_t enc_data_len) {
+  if (ctx == NULL) {
+    return;
+  }
+
+  // Set the fields directly
+  ctx->num = num; // Number of bytes currently in the buffer , we really only use this for EvP_DecodeUpdate
+  ctx->length = length;
+  ctx->line_num = line_num;
+  ctx->flags = flags;
+
+  // Pack and copy buffer data if provided
+  if (enc_data != NULL && enc_data_len > 0) {
+    size_t packed_len = pack_characters(ctx, enc_data, enc_data_len);
+    if (packed_len > sizeof(ctx->enc_data)) {
+      packed_len = sizeof(ctx->enc_data);
+    }
+    memcpy(ctx->enc_data, enc_data, packed_len);
+    ctx->num = packed_len;
+  } else {
+    memset(ctx->enc_data, 0, sizeof(ctx->enc_data));
+    ctx->num = 0;
+  }
+}
 
 // TODO: Maybe delete when all is said and done?
 // Returns 1 if the contexts are equal, 0 otherwise
@@ -633,7 +663,7 @@ end:
 }
 
 // Returns the number of non-whitespace characters
-static int pack_characters(EVP_ENCODE_CTX *ctx, const unsigned char *in, int length) {
+int pack_characters(EVP_ENCODE_CTX *ctx, const unsigned char *in, int length) {
   DEBUG_PRINT(GREEN_TEXT("DEBUG: Entering pack_characters\n"));
   DEBUG_PRINT(GREEN_TEXT("DEBUG: Input length: %d\n"), length);
 
