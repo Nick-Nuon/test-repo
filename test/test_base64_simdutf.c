@@ -449,8 +449,8 @@ int EVP_DecodeUpdate_test(EVP_ENCODE_CTX *ctx,
         set_evp_encode_ctx(openssl_ctx,  process_len,48, 0, 0, in, process_len);
 
         // Run both decoders
-        int decodeUpdate_ret_openssl = EVP_DecodeUpdate_OpenSSL(openssl_ctx, decodeUpdate_openssl, &decodeUpdate_outl_openssl, in, inl);
-        int decodeUpdate_ret_simdutf = EVP_DecodeUpdate_simdutf(simdutf_ctx, decodeUpdate_simdutf, &decodeUpdate_outl_simdutf, in, inl);
+        int decodeUpdate_ret_openssl = EVP_DecodeUpdate_OpenSSL(openssl_ctx, decodeUpdate_openssl, &decodeUpdate_outl_openssl, in + process_len, inl - process_len);
+        int decodeUpdate_ret_simdutf = EVP_DecodeUpdate_simdutf(simdutf_ctx, decodeUpdate_simdutf, &decodeUpdate_outl_simdutf, in + process_len, inl - process_len);
 
         // // Compare results
         ASSERT_EQUAL_INT(decodeUpdate_outl_openssl, decodeUpdate_outl_simdutf);

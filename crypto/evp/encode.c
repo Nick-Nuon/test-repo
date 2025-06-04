@@ -251,7 +251,7 @@ void EVP_EncodeInit(EVP_ENCODE_CTX *ctx) {
   ctx->flags = 0;
 }
 
-inline void set_evp_encode_ctx(EVP_ENCODE_CTX *ctx, 
+inline int set_evp_encode_ctx(EVP_ENCODE_CTX *ctx, 
                   int num,
                   int length, 
                   int line_num,
@@ -268,9 +268,10 @@ inline void set_evp_encode_ctx(EVP_ENCODE_CTX *ctx,
   ctx->line_num = line_num;
   ctx->flags = flags;
 
+
   // Pack and copy buffer data if provided
   if (enc_data != NULL && enc_data_len > 0) {
-    size_t packed_len = pack_characters(ctx, enc_data, enc_data_len);
+    packed_len = pack_characters(ctx, enc_data, enc_data_len);
     if (packed_len > sizeof(ctx->enc_data)) {
       packed_len = sizeof(ctx->enc_data);
     }
@@ -280,6 +281,7 @@ inline void set_evp_encode_ctx(EVP_ENCODE_CTX *ctx,
     memset(ctx->enc_data, 0, sizeof(ctx->enc_data));
     ctx->num = 0;
   }
+  return packed_len
 }
 
 // TODO: Maybe delete when all is said and done?
