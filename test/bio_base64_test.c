@@ -183,6 +183,36 @@ static int genb64(char *prefix, char *suffix, unsigned const char *buf,
     return outlen;
 }
 
+void print_str_n(const char *label, const char *s, size_t len) {
+    char buf[1024];
+    size_t i;
+
+    if (len >= sizeof(buf))  // fallback to partial print
+        len = sizeof(buf) - 1;
+
+    for (i = 0; i < len; i++) {
+        buf[i] = isprint((unsigned char)s[i]) ? s[i] : '.';
+    }
+    buf[i] = '\0';
+
+    TEST_note("%s: \"%s\"", label, buf);
+}
+
+
+void print_hex_n(const char *label, const unsigned char *s, size_t len) {
+    char buf[4096];
+    size_t i, pos = 0;
+
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "%s (hex):", label);
+
+    for (i = 0; i < len && pos + 4 < sizeof(buf); i++) {
+        pos += snprintf(buf + pos, sizeof(buf) - pos, " %02X", s[i]);
+    }
+
+    buf[pos] = '\0';
+    TEST_note("%s", buf);
+}
+
 static int test_bio_base64_run(test_case *t, int llen, int wscnt)
 {
     unsigned char *raw;
@@ -193,6 +223,7 @@ static int test_bio_base64_run(test_case *t, int llen, int wscnt)
     BIO *bio, *b64;
     int n, n1, n2;
     int ret;
+
 
     /*
      * Pre-encoded data always encodes NUL octets.  If all we care about is the
@@ -232,7 +263,7 @@ static int test_bio_base64_run(test_case *t, int llen, int wscnt)
 
     /*
      * When the input is long enough, and the source bio is retriable, exercise
-     * retries by writting the input to the underlying BIO in two steps (1024
+     * retries by writing the input to the underlying BIO in two steps (1024
      * bytes, then the rest) and trying to decode some data after each write.
      */
     n1 = elen;
@@ -291,11 +322,61 @@ static int test_bio_base64_run(test_case *t, int llen, int wscnt)
         || ((t->bytes > 0 || t->no_nl) && *t->suffix && *t->suffix != '-')
         || (t->no_nl && *t->prefix)) {
         if ((ret = ret < 0 ? 0 : -1) != 0)
+        print_str_n("Prefix", t->prefix, strlen(t->prefix));
+        print_str_n("Suffix", t->suffix, strlen(t->suffix));
+        print_hex_n("Base64 encoded input", (const unsigned char *)encoded, (size_t)elen);
+        // print_str_n("Base64 encoded", encoded, (size_t)elen);
+        // print_hex_n("Expected raw", raw, t->bytes);
+        // print_hex_n("Decoded output", out, (n > 0 ? (size_t)n : 0));
+
+        int should_fail = 0;
+
+        if (t->trunc > 0) {
+            TEST_note("Reason for forced failure: truncation enabled (t->trunc=%d)", t->trunc);
+            should_fail = 1;
+        }
+
+        if ((t->bytes > 0 || t->no_nl) && *t->suffix && *t->suffix != '-') {
+            TEST_note("Reason for forced failure: suffix is non-empty and not '-' with bytes > 0 or no_nl");
+            should_fail = 1;
+        }
+
+        if (t->no_nl && *t->prefix) {
+            TEST_note("Reason for forced failure: prefix is non-empty while no_nl is set");
+            should_fail = 1;
+        }
+
+        if (should_fail) {
+            if ((ret = ret < 0 ? 0 : -1) != 0) {
+                TEST_error("Forced failure triggered due to test case configuration");
+            }
+        }
+        
+
             TEST_error("Final read result was non-negative");
     } else if (ret != 0
              || n != (int) t->bytes
              || (n > 0 && memcmp(raw, out, n) != 0)) {
         TEST_error("Failed to decode expected data: ret=%d, n=%d, expected_bytes=%d", ret, n, (int)t->bytes);
+        print_str_n("Prefix", t->prefix, strlen(t->prefix));
+        print_str_n("Suffix", t->suffix, strlen(t->suffix));
+        print_hex_n("Base64 encoded input", (const unsigned char *)encoded, (size_t)elen);
+
+        int safe_to_compare = 1;
+
+        if (ret != 0) {
+            TEST_error("Failed: return value should be 0, but got ret=%d", ret);
+            safe_to_compare = 0;
+        }
+        if (n != (int)t->bytes) {
+            TEST_error("Failed: number of bytes read (n=%d) does not match expected (t->bytes=%d)", n, (int)t->bytes);
+            safe_to_compare = 0;
+        }
+    
+        if (safe_to_compare && n > 0 && memcmp(raw, out, n) != 0) {
+            TEST_error("Failed: decoded data does not match expected raw bytes");
+        }
+
         ret = -1;
     }
 
@@ -341,6 +422,7 @@ static int generic_case(test_case *t, int verbose)
                 ok = 0;
 
             if (verbose) {
+                fprintf(stderr, "*----------------------------------------------------------------------------*");
                 fprintf(stderr, "bio_base64_test: ok=%d", ok);
                 if (*t->prefix)
                     fprintf(stderr, ", prefix='%s'", t->prefix);
@@ -381,6 +463,11 @@ static int quotrem(int i, unsigned int m, int *q)
     *q = i / m;
     return i - *q * m;
 }
+
+
+
+
+
 
 static int test_bio_base64_generated(int idx)
 {

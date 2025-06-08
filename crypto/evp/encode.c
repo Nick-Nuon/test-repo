@@ -32,7 +32,7 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
 #define TEST_SIMDUTF_BIO 1
 #define TEST_SIMDUTF_BIO_ONLY_FINAL 0
 #define RED_TEXT(str) "\033[31m" str "\033[0m"
-#define GREEN_TEXT(str) "\033[32m" str "\033[0m"
+#define GRnN_TEXT(str) "\033[32m" str "\033[0m"
 
 // Standard Colors
 #define BLACK_TEXT(str) "\033[30m" str "\033[0m"
@@ -482,32 +482,46 @@ size_t maximal_binary_length_from_base64_lazy_duplicate(const char *input, size_
 
 
 int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
-           const unsigned char *in, int inl) {
+       const unsigned char *in, int inl) {
 
-  return EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
-  // return EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl); 
+DEBUG_PRINT("**Entered EVP_DecodeUpdate***");
+
+return EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
+// return EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl); 
+
 
 // size_t max = maximal_binary_length_from_base64_lazy_duplicate(in,inl);
 // unsigned char *out_openssl = OPENSSL_malloc(max + 30);
 
-//  int ret_openssl = EVP_DecodeUpdate_OpenSSL(ctx, out, outl, in, inl);
+// // Create copy of ctx for OpenSSL path
+// EVP_ENCODE_CTX *ctx_openssl = EVP_ENCODE_CTX_new();
+// EVP_ENCODE_CTX_copy(ctx_openssl, ctx);
+
+// int ret_openssl = EVP_DecodeUpdate_OpenSSL(ctx_openssl, out, outl, in, inl);
 
 // int outl_openssl = -2;
-
 // if (outl != NULL) {
-//  outl_openssl = *outl;}
+//   outl_openssl = *outl;
+// }
 
-  // int ret_simdutf = EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
+// int ret_simdutf = EVP_DecodeUpdate_simdutf(ctx, out, outl, in, inl);
 // int outl_simdutf = 0;
 // if (outl != NULL) {
-//   outl_simdutf = *outl;}
+//   outl_simdutf = *outl;
+// }
 
 // if (outl_openssl != outl_simdutf || ret_openssl != ret_simdutf) {
 //   DEBUG_PRINT(RED_TEXT("DEBUG: MISMATCH: simdutf outl = %d, OpenSSL outl = %d "), outl_simdutf, outl_openssl);
 //   DEBUG_PRINT(RED_TEXT(" simdutf ret = %d, OpenSSL ret = %d\n"), ret_simdutf, ret_openssl);
 // }
 
+// // Compare the contexts
+// if (!EVP_ENCODE_CTX_cmp(ctx, ctx_openssl)) {
+//   DEBUG_PRINT(RED_TEXT("DEBUG: Context mismatch between OpenSSL and simdutf paths\n"));
+// }
+
 // OPENSSL_free(out_openssl);
+// EVP_ENCODE_CTX_free(ctx_openssl);
 
 // return ret_simdutf;
 }
@@ -534,7 +548,7 @@ int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
  */
 int EVP_DecodeUpdate_OpenSSL(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                      const unsigned char *in, int inl) {
-  DEBUG_PRINT(GREEN_TEXT("********************* DEBUG: Entered EVP_DecodeUpdate\n"));
+  DEBUG_PRINT(GREEN_TEXT("********************* DEBUG: Entered EVP_DecodeUpdate_OpenSSL\n"));
   int seof = 0, eof = 0, rv = -1, ret = 0, i, v, tmp, n, decoded_len;
   unsigned char *d;
   const unsigned char *table;
@@ -624,7 +638,7 @@ int EVP_DecodeUpdate_OpenSSL(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
       // e.g. if the 64 bit block fails, then the pointers ret and out aren't incremented 
       ret += decoded_len - eof; // advance the "partial error" pointer
       out += decoded_len - eof; //advance the write pointer, for internal use
-      DEBUG_PRINT("DEBUG: eof after buffering: %d, \n", eof);
+      // DEBUG_PRINT("DEBUG: eof after buffering: %d, \n", eof);
     }
   }
 
@@ -658,20 +672,20 @@ tail:
 end:
   /* Legacy behaviour. This should probably rather be zeroed on error. */
   *outl = ret; 
-  DEBUG_PRINT(GREEN_TEXT("DEBUG: EVP_DecodeUpdate: outl: %d, ret: %d, n: %d, eof: %d, rv: %d, temp_total: %d\n"), *outl, ret, n, eof, rv, temp_total);
+  DEBUG_PRINT(GREEN_TEXT("DEBUG: EVP_DecodeUpdate_OpenSSL: outl: %d, ret: %d, n: %d, eof: %d, rv: %d, temp_total: %d\n"), *outl, ret, n, eof, rv, temp_total);
   ctx->num = n;
   return rv;
 }
 
 // Returns the number of non-whitespace characters
 int pack_characters(EVP_ENCODE_CTX *ctx, const unsigned char *in, int length) {
-  DEBUG_PRINT(GREEN_TEXT("DEBUG: Entering pack_characters\n"));
-  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input length: %d\n"), length);
+  // DEBUG_PRINT(GREEN_TEXT("DEBUG: Entering pack_characters\n"));
+  // DEBUG_PRINT(GREEN_TEXT("DEBUG: Input length: %d\n"), length);
 
   int packed_length = 0;
 
   if (length <= 0 || ctx == NULL || in == NULL) {
-    DEBUG_PRINT(RED_TEXT("DEBUG: Invalid input parameters\n"));
+    // DEBUG_PRINT(RED_TEXT("DEBUG: Invalid input parameters\n"));
     return 0;
   }
 
@@ -682,11 +696,11 @@ int pack_characters(EVP_ENCODE_CTX *ctx, const unsigned char *in, int length) {
         break;
       }
       if (packed_length == 0) {
-        DEBUG_PRINT(GREEN_TEXT("DEBUG: First packed char at pos %d: %c (0x%02x)\n"), i, in[i], in[i]);
+        // DEBUG_PRINT(GREEN_TEXT("DEBUG: First packed char at pos %d: %c (0x%02x)\n"), i, in[i], in[i]);
       }
       ctx->enc_data[packed_length++] = in[i];
       if (i == length-1 || packed_length == (int)sizeof(ctx->enc_data)) {
-        DEBUG_PRINT(GREEN_TEXT("DEBUG: Last packed char at pos %d: %c (0x%02x)\n"), i, in[i], in[i]);
+        // DEBUG_PRINT(GREEN_TEXT("DEBUG: Last packed char at pos %d: %c (0x%02x)\n"), i, in[i], in[i]);
       }
     } else {
       
@@ -694,13 +708,14 @@ int pack_characters(EVP_ENCODE_CTX *ctx, const unsigned char *in, int length) {
   }
 
   ctx->num = packed_length;
-  DEBUG_PRINT(GREEN_TEXT("DEBUG: Final packed length: %d\n"), packed_length);
+  // DEBUG_PRINT(GREEN_TEXT("DEBUG: Final packed length: %d\n"), packed_length);
   return packed_length;
 }
 
 int EVP_DecodeUpdate_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                const unsigned char *in, int inl) {
   
+  DEBUG_PRINT("*******Entered DecodeUpdate Simdutf\n");
   /* Legacy behaviour: an empty input chunk signals end of input. */
   if (inl == 0) {
     *outl = 0;
@@ -708,6 +723,9 @@ int EVP_DecodeUpdate_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
   }
 
   full_result ret = adjust_outlen(ctx, out, outl, (const char *)in, inl);
+
+  DEBUG_PRINT("ret.error: %d, ret.input_count: %zu, ret.output_count: %zu, ret.last_buf_chk: %zu, ret.valid_b64: %d, ret.has_seof: %d, ret.trimmed_padding: %d\n", 
+    ret.error, ret.input_count, ret.output_count, ret.last_buf_chk, ret.valid_b64, ret.has_seof, ret.trimmed_padding);
 
   if (ret.error == BASE64_SUCCESS && ret.trimmed_padding > 0
   || ret.error == BASE64_SUCCESS && ret.has_seof == 1){
@@ -1280,26 +1298,45 @@ int simdutf_decode(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
 // removes padding and white spaces at the end
 full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *outl,
                                    char *input, size_t length) {
-  DEBUG_PRINT(
-      BRIGHT_YELLOW_TEXT("DEBUG: Entered base64_tail_decode_trim_end\n"));
-      DEBUG_CHECK_NULL(output);
+  // DEBUG_PRINT(
+      // BRIGHT_YELLOW_TEXT("DEBUG: Entered base64_tail_decode_trim_end\n"));
+      // DEBUG_CHECK_NULL(output);
 
-  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (hex): \n"));
-  for (size_t i = 0; i < (size_t)length; i++) {
-    DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)input[i]);
-    if ((i + 1) % 8 == 0) {
-      DEBUG_PRINT("\n");
-    }
-  }
-  DEBUG_PRINT("\n\n");
+  // DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (hex): \n"));
+  // for (size_t i = 0; i < (size_t)length; i++) {
+  //   DEBUG_PRINT(GREEN_TEXT("%02x "), (unsigned char)input[i]);
+  //   if ((i + 1) % 8 == 0) {
+  //     DEBUG_PRINT("\n");
+  //   }
+  // }
+  // DEBUG_PRINT("\n\n");
 
-  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (char): \n")); 
-  for (size_t i = 0; i < (size_t)length; i++) {
-    DEBUG_PRINT(GREEN_TEXT("%c "), (unsigned char)input[i]);
-    if ((i + 1) % 8 == 0) {
-      DEBUG_PRINT("\n");
-    }
-  }
+  // DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (char): \n")); 
+  // for (size_t i = 0; i < (size_t)length; i++) {
+  //   DEBUG_PRINT(GREEN_TEXT("%c "), (unsigned char)input[i]);
+  //   if ((i + 1) % 8 == 0) {
+  //     DEBUG_PRINT("\n");
+  //   }
+  // }
+
+  // printf(GREEN_TEXT("**************************** \n"));
+  // for (size_t i = 0; i < (size_t)length; i++) {
+  //   printf(GREEN_TEXT("%02x "), (unsigned char)input[i]);
+  //   if ((i + 1) % 8 == 0) {
+  //     printf("\n");
+  //   }
+  // }
+  // printf("\n\n");
+
+  // for (size_t i = 0; i < (size_t)length; i++) {
+  //   printf(GREEN_TEXT("%c "), (unsigned char)input[i]);
+  //   if ((i + 1) % 8 == 0) {
+  //     printf("\n");
+  //   }
+  // }
+
+
+
 
   while (length > 0 && is_ascii_white_space(input[length - 1])) {
     length--;
@@ -1330,6 +1367,8 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
     }
     return (full_result){BASE64_SUCCESS, 0,0,0,0, NO_SEOF, equalsigns};
   }
+
+  
   full_result r = base64_tail_decode(ctx, output, input, length, equalsigns);
   
   if (r.error == BASE64_SUCCESS && equalsigns > 0) {
@@ -1350,8 +1389,8 @@ full_result base64_tail_decode_trim_end(EVP_ENCODE_CTX *ctx, char *output, int *
 // large enough. This function assumes that the padding (=) has been removed.
 full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
                                int length,int equalsigns) {
-  DEBUG_PRINT("\n");
-  DEBUG_PRINT(RED_TEXT("DEBUG: Starting base64_tail_decode\n"));
+  // DEBUG_PRINT("\n");
+  // DEBUG_PRINT(RED_TEXT("DEBUG: Starting base64_tail_decode\n"));
   
   int has_seof = 0;
 
@@ -1501,9 +1540,9 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
 // this doesn't take whitespaces into account
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n) {
-  DEBUG_PRINT(
-      RED_TEXT("DEBUG OpenSSL: Entering evp_decodeblock_int\n")); 
-      DEBUG_PRINT(      RED_TEXT("DEBUG OpenSSL: n = %d\n"), n);
+  // DEBUG_PRINT(
+  //     RED_TEXT("DEBUG OpenSSL: Entering evp_decodeblock_int\n")); 
+  //     DEBUG_PRINT(      RED_TEXT("DEBUG OpenSSL: n = %d\n"), n);
 
   int i, ret = 0, a, b, c, d;
   unsigned long l;
@@ -1529,7 +1568,7 @@ static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
 
 
   if (n % 4 != 0){
-    DEBUG_PRINT(RED_TEXT("DEBUG OpenSSL: n %% 4 != 0\n"));
+    // DEBUG_PRINT(RED_TEXT("DEBUG OpenSSL: n %% 4 != 0\n"));
     return -1;
   }
 
@@ -1547,7 +1586,7 @@ static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
     *(t++) = (unsigned char)(l) & 0xff;
     ret += 3;
   }
-  DEBUG_PRINT(RED_TEXT("DEBUG OpenSSL: ret = %d\n"), ret);
+  // DEBUG_PRINT(RED_TEXT("DEBUG OpenSSL: ret = %d\n"), ret);
   return ret;
 }
 
@@ -1558,7 +1597,7 @@ int EVP_DecodeBlock(unsigned char *t, const unsigned char *f, int n) {
 int EVP_DecodeFinal_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
 {
   DEBUG_PRINT(
-      BRIGHT_YELLOW_TEXT("DEBUG: *********************Entered EVP_DecodeFinal_simdutf\n"));
+      BRIGHT_YELLOW_TEXT("\nDEBUG: *********************Entered EVP_DecodeFinal_simdutf\n"));
   *outl = 0;
   if (ctx->num != 0) {
     full_result r = base64_tail_decode_trim_end(ctx, out, outl, (char *)ctx->enc_data, ctx->num);
