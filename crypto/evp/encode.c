@@ -626,7 +626,7 @@ int EVP_DecodeUpdate_OpenSSL(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
 
     if (n == 64) {
       temp_total += 64; // for debugging purposes
-      decoded_len = evp_decodeblock_int(ctx, out, d, n); // this only takes care of the conversion
+      decoded_len = evp_decodeblock_int(ctx, out, d, n); // this only takes care of the conversion outside of the ctx
       n = 0; // we process 64 bytes at a time
       if (decoded_len < 0 || eof > decoded_len) { //if there is an error or basic check to see  
         // if the padding is correcteg there will never decode only 1 or two bytes
@@ -695,13 +695,13 @@ int pack_characters(EVP_ENCODE_CTX *ctx, const unsigned char *in, int length) {
       if (packed_length >= (int)sizeof(ctx->enc_data)) {
         break;
       }
-      if (packed_length == 0) {
-        // DEBUG_PRINT(GREEN_TEXT("DEBUG: First packed char at pos %d: %c (0x%02x)\n"), i, in[i], in[i]);
-      }
+      // if (packed_length == 0) {
+      //   DEBUG_PRINT(GREEN_TEXT("DEBUG: First packed char at pos %d: %c (0x%02x)\n"), i, in[i], in[i]);
+      // }
       ctx->enc_data[packed_length++] = in[i];
-      if (i == length-1 || packed_length == (int)sizeof(ctx->enc_data)) {
-        // DEBUG_PRINT(GREEN_TEXT("DEBUG: Last packed char at pos %d: %c (0x%02x)\n"), i, in[i], in[i]);
-      }
+      // if (i == length-1 || packed_length == (int)sizeof(ctx->enc_data)) {
+      //   DEBUG_PRINT(GREEN_TEXT("DEBUG: Last packed char at pos %d: %c (0x%02x)\n"), i, in[i], in[i]);
+      // }
     } else {
       
     }
@@ -715,14 +715,132 @@ int pack_characters(EVP_ENCODE_CTX *ctx, const unsigned char *in, int length) {
 int EVP_DecodeUpdate_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                const unsigned char *in, int inl) {
   
+
   DEBUG_PRINT("*******Entered DecodeUpdate Simdutf\n");
+
+    // // If ctx has data in it, process that first
+    // if (ctx->num > 0) {
+    //   int tmp_outl = 0;
+
+    //   full_result ctx_result = adjust_outlen(ctx, out, &tmp_outl, (char *)ctx->enc_data, ctx->num);
+      
+    //   // Reset ctx after processing
+    //   ctx->num = 0;
+      
+    //   // Handle error cases
+    //   switch (ctx_result.error) {
+    //   case BASE64_SUCCESS:
+    //     // Advance output pointer by amount processed
+    //     out += tmp_outl;
+    //     *outl = tmp_outl;
+    //     break;
+
+    //   case EXTRA_PADDING_EMPTY:
+    //   case EXTRA_PADDING_CORE:
+    //   case ADDITIONAL_PADDING_CHECK_FAILED:
+    //   case INVALID_BASE64_CHARACTER:
+    //     // For padding-related errors, write nothing
+    //     *outl = 0;
+    //     return -1;
+
+    //   case BASE64_INPUT_REMAINDER:
+    //   case NOT_MULTIPLE_OF_FOUR:
+    //     // For invalid format errors, keep any valid output
+    //     //TODO:fix this later
+    //     // For invalid format errors, store remaining characters up to a multiple of 4
+    //     int remaining = r.valid_b64 % 4;
+    //     if (remaining > 0) {
+    //       const unsigned char *start = (const unsigned char *)input + (r.input_count - remaining);
+    //       for (int i = 0; i < remaining; i++) {
+    //         if (!is_ascii_white_space(start[i])) {
+    //           ctx->enc_data[ctx->num++] = start[i];
+    //         }
+    //       }
+    //     }
+                // TODO /
+    //     *outl = tmp_outl;
+    //     return ctx_result;
+
+    //   default:
+    //     // Unknown error - fail safe by writing nothing
+    //     *outl = 0;
+    //     return ctx_result;
+    //   }
+    // } else {
+    //   *outl = 0;
+    // }
+
+
+
   /* Legacy behaviour: an empty input chunk signals end of input. */
-  if (inl == 0) {
+  if ((inl == 0) && (ctx->num == 0)) {
     *outl = 0;
     return 0;
   }
 
-  full_result ret = adjust_outlen(ctx, out, outl, (const char *)in, inl);
+
+  full_result ret;
+  // If ctx has data in it, we need to process that along with the new input
+  if (ctx->num > 0) {
+    // Allocate temporary buffer for combined data
+
+    // Pack remaining ctx data first
+    // int packed_ctx_len = 0;
+    // if (ctx->num > 0) {
+    //   packed_ctx_len = pack_characters(ctx, (const unsigned char *)ctx->enc_data, ctx->num);
+    //   ctx->num = packed_ctx_len;
+    // }
+
+    if (ctx-> num >= 64){
+      return -1;
+    }
+    int o_ctx_num = ctx->num;
+
+    size_t combined_len = ctx->num + inl;
+    
+    DEBUG_PRINT("DEBUG: ctx->num:%d, inl:%d, combined->%zu\n", ctx->num, inl, combined_len);
+
+    char *combined = OPENSSL_malloc(combined_len);
+    if (combined == NULL) {
+      *outl = 0;
+      return -1;
+    }
+
+    // TODO: this will be painfully slow for long strings , must 
+    // Copy ctx buffer and new input into combined buffer
+    memcpy(combined, ctx->enc_data, ctx->num);
+    memcpy(combined + ctx->num, in, inl);
+
+    // Reset ctx buffer
+    ctx->num = 0;
+
+    // Process combined data
+    ret = adjust_outlen(ctx, out, outl, combined, combined_len);
+
+    // Free temporary buffer
+    OPENSSL_free(combined);
+
+    DEBUG_PRINT("ret.error: %d, ret.input_count: %zu, ret.output_count: %zu, ret.last_buf_chk: %zu, ret.valid_b64: %d, ret.has_seof: %d, ret.trimmed_padding: %d\n", 
+      ret.error, ret.input_count, ret.output_count, ret.last_buf_chk, ret.valid_b64, ret.has_seof, ret.trimmed_padding);
+  
+    if (ret.error == BASE64_SUCCESS && ret.trimmed_padding > 0
+    || ret.error == BASE64_SUCCESS && ret.has_seof == 1){
+      return 0;
+    }
+    if (ret.error == BASE64_SUCCESS && ret.has_seof == 0 
+    || ret.error == NOT_MULTIPLE_OF_FOUR && ret.has_seof == 0
+    || ret.error == ADDITIONAL_PADDING_CHECK_FAILED 
+    || ret.error == EXTRA_PADDING_EMPTY) {
+      return 1;
+    }
+   {
+      return -1;
+    }
+
+  }  else 
+  {
+    ret = adjust_outlen(ctx, out, outl, (const char *)in, inl);
+  }
 
   DEBUG_PRINT("ret.error: %d, ret.input_count: %zu, ret.output_count: %zu, ret.last_buf_chk: %zu, ret.valid_b64: %d, ret.has_seof: %d, ret.trimmed_padding: %d\n", 
     ret.error, ret.input_count, ret.output_count, ret.last_buf_chk, ret.valid_b64, ret.has_seof, ret.trimmed_padding);
@@ -1168,6 +1286,8 @@ int tail_encode_base64(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
 
 full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length) {
+
+    
     full_result r = base64_tail_decode_trim_end(ctx, output, outl, input, length);
 
     int valid_b64_up_to_inpc = r.valid_b64;
