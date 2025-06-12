@@ -28,7 +28,7 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
   const char *input, int length);
 
 
-#define DEBUG 0// Set to 1 to enable debug prints, 0 to disable
+#define DEBUG 0 // Set to 1 to enable debug prints, 0 to disable
 #define TEST_SIMDUTF_BIO 1
 #define TEST_SIMDUTF_BIO_ONLY_FINAL 0
 #define RED_TEXT(str) "\033[31m" str "\033[0m"
@@ -554,6 +554,22 @@ int EVP_DecodeUpdate_OpenSSL(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
   const unsigned char *table;
   int temp_total  = 0; // for debugging purposes
 
+  // Print hex representation
+  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input (hex): "));
+  for (int i = 0; i < inl; i++) {
+    DEBUG_PRINT("%02x ", (unsigned char)in[i]);
+    if ((i + 1) % 16 == 0) DEBUG_PRINT("\n");
+  }
+  DEBUG_PRINT("\n");
+
+  // Print character representation
+  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input (char): "));
+  for (int i = 0; i < inl; i++) {
+    DEBUG_PRINT("%c", isprint(in[i]) ? in[i] : '.');
+    if ((i + 1) % 16 == 0) DEBUG_PRINT("\n"); 
+  }
+  DEBUG_PRINT("\n\n");
+
   n = ctx->num; // this is the number of bytes in the ctx buffer
   d = ctx->enc_data;
 
@@ -718,6 +734,25 @@ int EVP_DecodeUpdate_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
 
   DEBUG_PRINT("*******Entered DecodeUpdate Simdutf\n");
 
+
+  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (hex): "));
+  for (int i = 0; i < inl; i++) {
+    DEBUG_PRINT("%02x ", (unsigned char)in[i]);
+    if ((i + 1) % 16 == 0) {
+      DEBUG_PRINT("\n");
+    }
+  }
+  DEBUG_PRINT("\n");
+
+  DEBUG_PRINT(GREEN_TEXT("DEBUG: Input string (char): "));
+  for (int i = 0; i < inl; i++) {
+    DEBUG_PRINT("%c", isprint(in[i]) ? in[i] : '.');
+    if ((i + 1) % 16 == 0) {
+      DEBUG_PRINT("\n");
+    }
+  }
+  DEBUG_PRINT("\n\n");
+
     // // If ctx has data in it, process that first
     // if (ctx->num > 0) {
     //   int tmp_outl = 0;
@@ -779,7 +814,7 @@ int EVP_DecodeUpdate_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
   }
 
 
-  full_result ret;
+  full_result ret = {OTHER, 0, 0, 0, 0, NO_SEOF, 0};
   // If ctx has data in it, we need to process that along with the new input
   if (ctx->num > 0) {
     // Allocate temporary buffer for combined data
@@ -810,6 +845,38 @@ int EVP_DecodeUpdate_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     // Copy ctx buffer and new input into combined buffer
     memcpy(combined, ctx->enc_data, ctx->num);
     memcpy(combined + ctx->num, in, inl);
+
+    // Print ctx buffer contents before resetting
+    // DEBUG_PRINT("DEBUG: ctx buffer before processing:\n");
+    // DEBUG_PRINT("ctx->num = %d\n", ctx->num);
+    // if (ctx->num > 0) {
+    //   DEBUG_PRINT("ctx->enc_data = ");
+    //   for (int i = 0; i < ctx->num; i++) {
+    //     DEBUG_PRINT("%c", (char)ctx->enc_data[i]);
+    //   }
+    //   DEBUG_PRINT("\n");
+    //   DEBUG_PRINT("ctx->enc_data (hex) = ");
+    //   for (int i = 0; i < ctx->num; i++) {
+    //     DEBUG_PRINT("%02x ", ctx->enc_data[i]);
+    //   }
+    //   DEBUG_PRINT("\n");
+    // }
+
+    // Print combined buffer contents before processing
+    DEBUG_PRINT("DEBUG: Combined buffer before processing:\n");
+    DEBUG_PRINT("Combined length = %zu\n", combined_len);
+    if (combined_len > 0) {
+      DEBUG_PRINT("Combined data = ");
+      for (size_t i = 0; i < combined_len; i++) {
+        DEBUG_PRINT("%c", combined[i]);
+      }
+      DEBUG_PRINT("\n");
+      DEBUG_PRINT("Combined data (hex) = ");
+      for (size_t i = 0; i < combined_len; i++) {
+        DEBUG_PRINT("%02x ", (const unsigned char)combined[i]);
+      }
+      DEBUG_PRINT("\n");
+    }
 
     // Reset ctx buffer
     ctx->num = 0;
@@ -846,7 +913,9 @@ int EVP_DecodeUpdate_simdutf(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     ret.error, ret.input_count, ret.output_count, ret.last_buf_chk, ret.valid_b64, ret.has_seof, ret.trimmed_padding);
 
   if (ret.error == BASE64_SUCCESS && ret.trimmed_padding > 0
-  || ret.error == BASE64_SUCCESS && ret.has_seof == 1){
+  // || ret.error == BASE64_SUCCESS && ret.has_seof == 1)
+  || ret.has_seof == 1)
+  {
     return 0;
   }
   if (ret.error == BASE64_SUCCESS && ret.has_seof == 0 
@@ -1290,6 +1359,8 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     
     full_result r = base64_tail_decode_trim_end(ctx, output, outl, input, length);
 
+    DEBUG_PRINT("trim_end r.has_seof:%d \n",r.has_seof);
+
     int valid_b64_up_to_inpc = r.valid_b64;
 
     size_t pd_aft_inpc = 0;
@@ -1323,7 +1394,7 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
     const size_t packed_len_pad = r.input_count - r.last_buf_chk + pd_ws_pd;
     const size_t packed_len_nopad = r.input_count - r.last_buf_chk;
 
-  if (r.error == BASE64_SUCCESS) {
+  if (r.error == BASE64_SUCCESS || r.has_seof == 1) {
     if (((r.valid_b64 + pd_aft_inpc) & 3) == 0) // is it a multiple of 4?
     { }
     else {pack_characters(ctx, packed_start, packed_len_pad);}    
@@ -1383,7 +1454,12 @@ full_result adjust_outlen(EVP_ENCODE_CTX *ctx, unsigned char *output, int *outl,
         OPENSSL_cleanse(output + valid, to_cleanse);
         return r;
 
-  } else {
+  } 
+  // else if ( r.has_seof == 1) {
+
+  // }
+  
+  else {
     DEBUG_PRINT(RED_TEXT("DEBUG: Simdutf decode failed, invalid base64 character(catchall category)\n"));
 
     size_t valid = r.output_count - (r.output_count % 48);
@@ -1563,7 +1639,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
         idx_buf ++;
         valid_b64 ++;
       } else if (code > 64) {
-        DEBUG_PRINT("INVALID_BASE64_CHARACTER: code > 64 \n");
+        DEBUG_PRINT("INVALID_BASE64_CHARACTER: code = 0x%02x, char = %c (0x%02x)\n", code, c, (unsigned char)c);
         if (c == 0x2D & (idx % 4) == 0 ) { // '-' sign/ SEOF.
           DEBUG_PRINT("SEOF detected\n");
           has_seof = 1;
@@ -1593,7 +1669,7 @@ full_result base64_tail_decode(EVP_ENCODE_CTX *ctx, char *dst, const char *src,
             DEBUG_PRINT("idx == 1\n");
           }
           return (full_result){EXTRA_PADDING_CORE, (size_t)(src - srcinit),
-            (size_t)((dst - dstinit)),  (size_t)(last_buf_chkpt - srcinit),valid_b64, equalsigns};
+            (size_t)((dst - dstinit)),  (size_t)(last_buf_chkpt - srcinit),valid_b64,has_seof, equalsigns};
         }
         else {
             return (full_result){INVALID_BASE64_CHARACTER, (size_t)(src - srcinit),
