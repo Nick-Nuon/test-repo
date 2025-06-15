@@ -195,10 +195,10 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
         total = j;
 
         // Add newline unless disabled by flags, by default every 48 bytes
-        if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
-            *(out++) = '\n';
-            total++;
-        }
+        // if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
+        //     *(out++) = '\n';
+        //     total++;
+        // }
         *out = '\0';
     }
 
@@ -211,10 +211,10 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
         total += j;
 
         // Add newline unless disabled by flags  
-        if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
-            *(out++) = '\n';
-            total++; 
-        }
+        // if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
+        //     *(out++) = '\n';
+        //     total++; 
+        // }
         *out = '\0';
     }
 
@@ -409,41 +409,43 @@ const char base64_std_bin2ascii_0[256] = {
 static int evp_encodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
   const unsigned char *f, int dlen)
 {
-  int i, ret = 0;
-  uint8_t t1, t2, t3;
-  const unsigned char *e0, *e1, *e2;
-  int use_padding = 1;
+    int i, ret = 0;
+    uint8_t t1, t2, t3;
+    const unsigned char *e0, *e1, *e2;
+    int use_padding = 1;
 
-  int srp = (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0);
+    int srp = (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0);
 
-  if (srp) {
-    e0 = base64_srp_bin2ascii_0;
-    e1 = base64_srp_bin2ascii_1;
-    e2 = base64_srp_bin2ascii_2;
-  } else {
-    e0 = base64_std_bin2ascii_0;
-    e1 = base64_std_bin2ascii_1;
-    e2 = base64_std_bin2ascii_2;
-  }
+    if (srp) {
+        e0 = base64_srp_bin2ascii_0;
+        e1 = base64_srp_bin2ascii_1;
+        e2 = base64_srp_bin2ascii_2;
+    } else {
+        e0 = base64_std_bin2ascii_0;
+        e1 = base64_std_bin2ascii_1;
+        e2 = base64_std_bin2ascii_2;
+    }
 
-for (i = 0; i + 2 < dlen; i += 3) {
-    t1 = f[i];
-    t2 = f[i + 1];
-    t3 = f[i + 2];
-    *(t++) = e0[t1];
-    *(t++) = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
-    *(t++) = e1[((t2 & 0x0F) << 2) | ((t3 >> 6) & 0x03)];
-    *(t++) = e2[t3];
-    ret += 4;
-    
-    // Add newline after every 48 input bytes (64 output bytes)
-    // if ((i + 3) % ctx->length == 0 && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
-    //     *(t++) = '\n';
-    //     ret++;
-    // }
-}
+    for (i = 0; i + 2 < dlen; i += 3) {
+        t1 = f[i];
+        t2 = f[i + 1];
+        t3 = f[i + 2];
+        *(t++) = e0[t1];
+        *(t++) = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
+        *(t++) = e1[((t2 & 0x0F) << 2) | ((t3 >> 6) & 0x03)];
+        *(t++) = e2[t3];
+        ret += 4;
+        
+        // Add newline after every 48 input bytes (64 output bytes)
+        if (ctx != NULL){
+            if ((i + 3) % ctx->length == 0 && ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
+                *(t++) = '\n';
+                ret++;
+            }
+        }
+    }
 
-  switch (dlen - i) {
+    switch (dlen - i) {
     case 0:
       break;
     case 1:
@@ -472,6 +474,10 @@ for (i = 0; i + 2 < dlen; i += 3) {
     // Add newline if we hit 48 bytes again (64 output chars) unless disabled by flags  
     // if ((ret * 3/4) % ctx->length == 0 && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
     //     *(t++) = '\n'; 
+    //     ret++;
+    // }
+    // if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
+    //     *(t++) = '\n';
     //     ret++;
     // }
 
