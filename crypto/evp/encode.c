@@ -182,7 +182,7 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
 
     // If context buffer has pending data that needs to be processed
     if (ctx->num != 0) {
-        // Fill remaining space in context buffer -- ctx->length is 48 by default
+        // Fill remaining space in context buffer
         i = ctx->length - ctx->num;
         memcpy(&(ctx->enc_data[ctx->num]), in, i);
         in += i;
@@ -194,32 +194,18 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
         out += j;
         total = j;
 
-        // Add newline unless disabled by flags, by default every 48 bytes
-        // if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
-        //     *(out++) = '\n';
-        //     total++;
-        // }
         *out = '\0';
     }
 
-    // Process complete blocks from input
-    // while (inl >= ctx->length && total <= INT_MAX) 
-    while (inl >= ctx->length) 
-    {
-        j = evp_encodeblock_int(ctx, out, in, ctx->length);
-        in += ctx->length;
-        inl -= ctx->length;
-        out += j;
-        total += j;
 
-        // Add newline unless disabled by flags  
-        // if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
-        //     *(out++) = '\n';
-        //     total++; 
-        // }
-        *out = '\0';
-    }
+    j = evp_encodeblock_int(ctx, out, in, inl - (inl % ctx->length));
+    in += inl - (inl % ctx->length);
+    inl -= inl - (inl % ctx->length);
+    out += j;
+    total += j;
 
+    *out = '\0';
+    
     // Check for output overflow
     if (total > INT_MAX) {
         *outl = 0;
