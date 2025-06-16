@@ -203,7 +203,9 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     }
 
     // Process complete blocks from input
-    while (inl >= ctx->length && total <= INT_MAX) {
+    // while (inl >= ctx->length && total <= INT_MAX) 
+    while (inl >= ctx->length) 
+    {
         j = evp_encodeblock_int(ctx, out, in, ctx->length);
         in += ctx->length;
         inl -= ctx->length;
@@ -426,7 +428,7 @@ static int evp_encodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
         e2 = base64_std_bin2ascii_2;
     }
 
-    for (i = 0; i + 2 < dlen; i += 3) {
+    for (i = 0; i + 2 < dlen && ret <= INT_MAX; i += 3) {
         t1 = f[i];
         t2 = f[i + 1];
         t3 = f[i + 2];
@@ -436,7 +438,6 @@ static int evp_encodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
         *(t++) = e2[t3];
         ret += 4;
         
-        // Add newline after every 48 input bytes (64 output bytes)
         if (ctx != NULL){
             if ((i + 3) % ctx->length == 0 && ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
                 *(t++) = '\n';
