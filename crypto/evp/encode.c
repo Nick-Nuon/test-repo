@@ -439,11 +439,10 @@ static int evp_encodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
       t1 = f[i];
         *(t++) = e0[t1];
         *(t++) = e1[(t1 & 0x03) << 4];
-      if (use_padding) {
         *(t++) = '=';
         *(t++) = '=';
-      }
-      ret += 2 + (use_padding ? 2 : 0);
+      
+      ret += 4;
       break;
     case 2:
       t1 = f[i];
@@ -451,22 +450,10 @@ static int evp_encodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
         *(t++) = e0[t1];
         *(t++) = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
         *(t++) = e2[(t2 & 0x0F) << 2];
-    if (use_padding) {
       *(t++) = '=';
-    }
-      ret += 3 + (use_padding ? 1 : 0);
+      ret += 4;
       break;
     }
-
-    // Add newline if we hit 48 bytes again (64 output chars) unless disabled by flags  
-    // if ((ret * 3/4) % ctx->length == 0 && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
-    //     *(t++) = '\n'; 
-    //     ret++;
-    // }
-    // if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
-    //     *(t++) = '\n';
-    //     ret++;
-    // }
 
   *t = '\0';
   return ret;
