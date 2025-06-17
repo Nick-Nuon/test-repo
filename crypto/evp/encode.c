@@ -273,8 +273,6 @@ static int evp_encodeblock_int_openssl(EVP_ENCODE_CTX *ctx, unsigned char *t,
     return ret;
 }
 
-<<<<<<< HEAD
-=======
 const char base64_srp_bin2ascii_0[256] = {
     '0', '0', '0', '0', '1', '1', '1', '1', '2', '2', '2', '2', '3', '3', '3', '3',
     '4', '4', '4', '4', '5', '5', '5', '5', '6', '6', '6', '6', '7', '7', '7', '7',
@@ -457,7 +455,6 @@ static int evp_encodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
   return ret;
 }
 
->>>>>>> 347087c765 (save game)
 int EVP_EncodeBlock(unsigned char *t, const unsigned char *f, int dlen)
 {
     return evp_encodeblock_int(NULL, t, f, dlen);
