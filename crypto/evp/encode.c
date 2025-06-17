@@ -400,8 +400,6 @@ static int evp_encodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
     int i, ret = 0;
     uint8_t t1, t2, t3;
     const unsigned char *e0, *e1, *e2;
-    int use_padding = 1;
-
     int srp = (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0);
 
     if (srp) {
