@@ -434,25 +434,25 @@ static int evp_encodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
 
     switch (dlen - i) {
     case 0:
-      break;
+        break;
     case 1:
-      t1 = f[i];
+        t1 = f[i];
         *(t++) = e0[t1];
         *(t++) = e1[(t1 & 0x03) << 4];
         *(t++) = '=';
         *(t++) = '=';
       
-      ret += 4;
-      break;
+        ret += 4;
+        break;
     case 2:
-      t1 = f[i];
-      t2 = f[i + 1];
+        t1 = f[i];
+        t2 = f[i + 1];
         *(t++) = e0[t1];
         *(t++) = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
         *(t++) = e2[(t2 & 0x0F) << 2];
-      *(t++) = '=';
-      ret += 4;
-      break;
+        *(t++) = '=';
+        ret += 4;
+        break;
     }
 
   *t = '\0';
