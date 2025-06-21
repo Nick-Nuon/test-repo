@@ -377,6 +377,7 @@ typedef struct {
     unsigned char *content;
     size_t size;
     size_t encoded_size;
+    unsigned char *encoded;
 } FileData;
 
 static long perf_event_open(struct perf_event_attr *hw_event, pid_t pid,
@@ -426,11 +427,15 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
         }
 
         unsigned char *buf = malloc(st.st_size);
-        if (!buf) {
+        unsigned char *encoded_buf = malloc(((st.st_size + 2) / 3) * 4); // Space for base64 encoded output
+        if (!buf || !encoded_buf) {
             perror("malloc");
+            free(buf); // Free buf if it was allocated successfully
+            free(encoded_buf); // Free encoded_buf if it was allocated successfully
             fclose(f);
             continue;
         }
+
 
         size_t read = fread(buf, 1, st.st_size, f);
         fclose(f);
@@ -444,6 +449,8 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
         files[count].filename = strdup(entry->d_name);
         files[count].content = buf;
         files[count].size = st.st_size;
+        files[count].encoded_size = ((st.st_size + 2) / 3) * 4; // Base64 encoded size calculation
+        files[count].encoded = encoded_buf;
         count++;
     }
 
@@ -504,6 +511,7 @@ int main(int argc, char **argv) {
         ioctl(fd_cycles, PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
 
         // === CODE TO BENCHMARK ===
+        // TODO:Here I want to benmark EvP_EncodeUpdate and Evp_EncodeFinal on all the files
         for (size_t f = 0; f < file_count; f++) {
             volatile size_t sum = 0;
             for (size_t j = 0; j < files[f].size; j++) {
