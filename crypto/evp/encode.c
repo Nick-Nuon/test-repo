@@ -16,7 +16,7 @@
 
 static unsigned char conv_ascii2bin(unsigned char a,
                                     const unsigned char *table);
-static int evp_encodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
+static int evp_encode_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int dlen);
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n, int eof);
@@ -189,7 +189,7 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
         inl -= i;
 
         // Encode complete block from context buffer
-        j = evp_encodeblock_int(ctx, out, ctx->enc_data, ctx->length);
+        j = evp_encode_int(ctx, out, ctx->enc_data, ctx->length);
         ctx->num = 0;
         out += j;
         total = j;
@@ -198,7 +198,7 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     }
 
 
-    j = evp_encodeblock_int(ctx, out, in, inl - (inl % ctx->length));
+    j = evp_encode_int(ctx, out, in, inl - (inl % ctx->length));
     in += inl - (inl % ctx->length);
     inl -= inl - (inl % ctx->length);
     out += j;
@@ -226,7 +226,7 @@ void EVP_EncodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
     unsigned int ret = 0;
 
     if (ctx->num != 0) {
-        ret = evp_encodeblock_int(ctx, out, ctx->enc_data, ctx->num);
+        ret = evp_encode_int(ctx, out, ctx->enc_data, ctx->num);
         if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)
             out[ret++] = '\n';
         out[ret] = '\0';
@@ -235,6 +235,7 @@ void EVP_EncodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
     *outl = ret;
 }
 
+// TODO: temporary functions only for benchmarking purposes
 static int evp_encodeblock_int_openssl(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int dlen)
 {
@@ -272,6 +273,79 @@ static int evp_encodeblock_int_openssl(EVP_ENCODE_CTX *ctx, unsigned char *t,
     *t = '\0';
     return ret;
 }
+
+
+
+int EVP_EncodeUpdate_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
+                      const unsigned char *in, int inl)
+{
+    int i, j;
+    size_t total = 0;
+
+    *outl = 0;
+    if (inl <= 0)
+        return 0;
+    OPENSSL_assert(ctx->length <= (int)sizeof(ctx->enc_data));
+    if (ctx->length - ctx->num > inl) {
+        memcpy(&(ctx->enc_data[ctx->num]), in, inl);
+        ctx->num += inl;
+        return 1;
+    }
+    if (ctx->num != 0) {
+        i = ctx->length - ctx->num;
+        memcpy(&(ctx->enc_data[ctx->num]), in, i);
+        in += i;
+        inl -= i;
+        j = evp_encodeblock_int_openssl(ctx, out, ctx->enc_data, ctx->length);
+        ctx->num = 0;
+        out += j;
+        total = j;
+        if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
+            *(out++) = '\n';
+            total++;
+        }
+        *out = '\0';
+    }
+    while (inl >= ctx->length && total <= INT_MAX) {
+        j = evp_encode_int(ctx, out, in, ctx->length);
+        in += ctx->length;
+        inl -= ctx->length;
+        out += j;
+        total += j;
+        if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
+            *(out++) = '\n';
+            total++;
+        }
+        *out = '\0';
+    }
+    if (total > INT_MAX) {
+        /* Too much output data! */
+        *outl = 0;
+        return 0;
+    }
+    if (inl != 0)
+        memcpy(&(ctx->enc_data[0]), in, inl);
+    ctx->num = inl;
+    *outl = total;
+
+    return 1;
+}
+
+// TODO: temporary functions only for benchmarking purposes
+void EVP_EncodeFinal_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
+{
+    unsigned int ret = 0;
+
+    if (ctx->num != 0) {
+        ret = evp_encodeblock_int_openssl(ctx, out, ctx->enc_data, ctx->num);
+        if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)
+            out[ret++] = '\n';
+        out[ret] = '\0';
+        ctx->num = 0;
+    }
+    *outl = ret;
+}
+
 
 const char base64_srp_bin2ascii_0[256] = {
     '0', '0', '0', '0', '1', '1', '1', '1', '2', '2', '2', '2', '3', '3', '3', '3',
@@ -392,7 +466,7 @@ const char base64_std_bin2ascii_0[256] = {
       '/'};
   
 
-static int evp_encodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
+static int evp_encode_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
   const unsigned char *f, int dlen)
 {
     int i, ret = 0;
@@ -457,7 +531,7 @@ static int evp_encodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
 
 int EVP_EncodeBlock(unsigned char *t, const unsigned char *f, int dlen)
 {
-    return evp_encodeblock_int(NULL, t, f, dlen);
+    return evp_encode_int(NULL, t, f, dlen);
 }
 
 void EVP_DecodeInit(EVP_ENCODE_CTX *ctx)
