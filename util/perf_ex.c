@@ -80,9 +80,9 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
         // unsigned char *encoded_buf = malloc(((st.st_size + 2) / 3) * 4 ); // Space for base64 encoded output --- NO_NL mode
         size_t encoded_len = 4 * ((st.st_size + 2) / 3);
         size_t line_breaks = encoded_len / 64;  // PEM line :1 newline per 64 bytes
-        size_t total = encoded_len + line_breaks + 16;  // final block overhead
+        size_t encoded_total = encoded_len + line_breaks + 16;  // final block overhead
 
-        unsigned char *encoded_buf = malloc(total);
+        unsigned char *encoded_buf = malloc(encoded_total);
 
         if (!buf || !encoded_buf) {
             perror("malloc");
@@ -92,7 +92,7 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
             continue;
         }
 
-        memset(encoded_buf, 0, ((st.st_size + 2) / 3) * 4 + 64);
+        memset(encoded_buf, 0, encoded_total); // I don't believe this to be strictly nescessary, but OpenSSL zeros its memory by default
 
 
         size_t read = fread(buf, 1, st.st_size, f);
@@ -109,7 +109,7 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
         files[count].filename = strdup(entry->d_name);
         files[count].content = buf;
         files[count].size = st.st_size;
-        files[count].encoded_size = ((st.st_size + 2) / 3) * 4 + 64; // Base64 encoded size calculation
+        files[count].encoded_size = encoded_total;
         files[count].encoded = encoded_buf;
         count++;
     }
