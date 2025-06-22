@@ -78,6 +78,7 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
 
         unsigned char *buf = malloc(st.st_size);
         // unsigned char *encoded_buf = malloc(((st.st_size + 2) / 3) * 4 ); // Space for base64 encoded output --- NO_NL mode
+        // --- NO_NL mode 
         size_t encoded_len = 4 * ((st.st_size + 2) / 3);
         size_t line_breaks = encoded_len / 64;  // PEM line :1 newline per 64 bytes
         size_t encoded_total = encoded_len + line_breaks + 16;  // final block overhead
@@ -119,29 +120,34 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
     return 1;
 }
 
-size_t base64_encode(unsigned char *dst, size_t dstlen,
-    const unsigned char *src, size_t srclen) {
-EVP_ENCODE_CTX *ctx = EVP_ENCODE_CTX_new();
-if (!ctx) {
-fprintf(stderr, "Failed to allocate EVP_ENCODE_CTX\n");
-exit(1);
-}
+typedef int (*encode_update_fn)(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
+                              const unsigned char *in, int inl);
+typedef void (*encode_final_fn)(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl);
 
-int outlen = 0;
-int taillen = 0;
+size_t base64_encode_custom(unsigned char *dst, size_t dstlen,
+    const unsigned char *src, size_t srclen,
+    encode_update_fn update_fn,
+    encode_final_fn final_fn) {
+    EVP_ENCODE_CTX *ctx = EVP_ENCODE_CTX_new();
+    if (!ctx) {
+        fprintf(stderr, "Failed to allocate EVP_ENCODE_CTX\n");
+        exit(1);
+    }
 
-EVP_EncodeInit(ctx);
-// EVP_ENCODE_CTX_set_flags(ctx, EVP_ENCODE_CTX_NO_NEWLINES); // 👈 disables \n
+    int outlen = 0;
+    int taillen = 0;
 
-if (EVP_EncodeUpdate(ctx, dst, &outlen, src, (int)srclen) < 0) {
-    fprintf(stderr, "Error: OpenSSL base64 encoding failed.\n");
+    EVP_EncodeInit(ctx);
+
+    if (update_fn(ctx, dst, &outlen, src, (int)srclen) < 0) {
+        fprintf(stderr, "Error: Custom base64 encoding failed.\n");
+        EVP_ENCODE_CTX_free(ctx);
+        exit(1);
+    }
+    final_fn(ctx, dst + outlen, &taillen);
+
     EVP_ENCODE_CTX_free(ctx);
-    exit(1);
-}
-EVP_EncodeFinal(ctx, dst + outlen, &taillen);
-
-EVP_ENCODE_CTX_free(ctx);
-return (size_t)(outlen + taillen);
+    return (size_t)(outlen + taillen);
 }
 
 
@@ -200,18 +206,12 @@ int main(int argc, char **argv) {
 
         // === CODE TO BENCHMARK ===
         for (size_t f = 0; f < file_count; f++) {
-            // EVP_ENCODE_CTX *ctx = EVP_ENCODE_CTX_new();
-            // EVP_EncodeInit(ctx);
-            // int outlen = 0;
-            // EVP_EncodeUpdate(ctx, files[f].encoded, &outlen, 
-            //         files[f].content, files[f].size);
-            // int final_len =0;
-            // EVP_EncodeFinal(ctx, files[f].encoded + outlen, &final_len);
-            // EVP_ENCODE_CTX_free(ctx);
-            base64_encode((char *)files[f].encoded,
-            files[f].encoded_size,
-            files[f].content,
-            files[f].size);
+            base64_encode_custom(files[f].encoded,
+                                files[f].encoded_size,
+                                files[f].content,
+                                files[f].size,
+                                EVP_EncodeUpdate,
+                                EVP_EncodeFinal);
         }
         // ==========================
 
@@ -251,7 +251,7 @@ int main(int argc, char **argv) {
     printf("\n\nProcessed files:\n");
 
     for (size_t i = 0; i < file_count; i++) {
-        // printf("File: %s (%zu bytes)\n", files[i].filename, files[i].size);
+        printf("File: %s (%zu bytes)\n", files[i].filename, files[i].size);
         if (files[i].content) free(files[i].content);
         if (files[i].filename) free(files[i].filename);
         if (files[i].encoded) free(files[i].encoded);
