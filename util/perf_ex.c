@@ -15,10 +15,13 @@
 #include <dirent.h>
 #include <openssl/evp.h>
 
+#define EVP_ENCODE_CTX_NO_NEWLINES          1
+
+
 #define MIN_REPEATS 5
 #define MIN_TIME_NS 1000000000ULL  // 1 second
 #define MAX_REPEATS 1000000
-#define WARMUP_RUNS 2
+#define WARMUP_RUNS 10000
 #define MAX_FILES 1024
 
 typedef struct {
@@ -78,14 +81,17 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
 
         unsigned char *buf = malloc(st.st_size);
         // unsigned char *encoded_buf = malloc(((st.st_size + 2) / 3) * 4 ); // Space for base64 encoded output --- NO_NL mode
-        // --- NO_NL mode 
+        // --- NO_NL mode -- this is very defensive, but I got tired of eating segfaults
         size_t encoded_len = 4 * ((st.st_size + 2) / 3);
-        size_t line_breaks = encoded_len / 64;  // PEM line :1 newline per 64 bytes
-        size_t encoded_total = encoded_len + line_breaks + 16;  // final block overhead
+        size_t line_breaks = (encoded_len)/ 48 * 2;  // PEM line :1 newline per 48 bytes by default, but the insertion length might be anything up to 80 bytes
+        size_t encoded_total = encoded_len + line_breaks + 64;  // final block overhead, the +64 is rather defensive
+
+        
 
         unsigned char *encoded_buf = malloc(encoded_total);
 
         if (!buf || !encoded_buf) {
+            printf("free once");
             perror("malloc");
             free(buf); // Free buf if it was allocated successfully
             free(encoded_buf); // Free encoded_buf if it was allocated successfully
@@ -93,13 +99,15 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
             continue;
         }
 
-        memset(encoded_buf, 0, encoded_total); // I don't believe this to be strictly nescessary, but OpenSSL zeros its memory by default
+        // memset(encoded_buf, 0, encoded_total); // I don't believe this to be strictly nescessary, but OpenSSL zeros its memory by default
 
 
         size_t read = fread(buf, 1, st.st_size, f);
         fclose(f);
 
         if (read != st.st_size) {
+            printf("free twice");
+
             fprintf(stderr, "Warning: incomplete read of %s\n", fullpath);
             free(buf);
             free(encoded_buf); // Add this
@@ -120,6 +128,12 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
     return 1;
 }
 
+// void evp_encode_ctx_set_flags(EVP_ENCODE_CTX *ctx, unsigned int flags)
+// {
+//     ctx->flags = flags;
+// }
+
+
 typedef int (*encode_update_fn)(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                               const unsigned char *in, int inl);
 typedef void (*encode_final_fn)(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl);
@@ -138,6 +152,7 @@ size_t base64_encode_custom(unsigned char *dst, size_t dstlen,
     int taillen = 0;
 
     EVP_EncodeInit(ctx);
+    // evp_encode_ctx_set_flags(ctx, EVP_ENCODE_CTX_NO_NEWLINES);
 
     if (update_fn(ctx, dst, &outlen, src, (int)srclen) < 0) {
         fprintf(stderr, "Error: Custom base64 encoding failed.\n");
@@ -149,6 +164,65 @@ size_t base64_encode_custom(unsigned char *dst, size_t dstlen,
     EVP_ENCODE_CTX_free(ctx);
     return (size_t)(outlen + taillen);
 }
+
+    typedef int (*encode_benchmark_fn)(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
+                                  const unsigned char *in, int inl);
+
+    void run_benchmark(const char *name, int fd_cycles, FileData *files, size_t file_count,
+                      encode_update_fn update_fn, encode_final_fn final_fn) {
+        uint64_t total_cycles = 0, total_instructions = 0, total_elapsed_ns = 0;
+        size_t N = MIN_REPEATS;
+        if (N == 0) N = 1;
+
+        for (size_t i = 0; i < N; i++) {
+            struct timespec start_time, end_time;
+            atomic_thread_fence(memory_order_acquire);
+            clock_gettime(CLOCK_MONOTONIC, &start_time);
+
+            ioctl(fd_cycles, PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
+            ioctl(fd_cycles, PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
+
+            for (size_t f = 0; f < file_count; f++) {
+                base64_encode_custom(files[f].encoded,
+                                   files[f].encoded_size,
+                                   files[f].content,
+                                   files[f].size,
+                                   update_fn,
+                                   final_fn);
+            }
+
+            ioctl(fd_cycles, PERF_EVENT_IOC_DISABLE, PERF_IOC_FLAG_GROUP);
+            atomic_thread_fence(memory_order_release);
+            clock_gettime(CLOCK_MONOTONIC, &end_time);
+
+            uint64_t values[3];
+            if (read(fd_cycles, values, sizeof(values)) == -1) {
+                perror("read (perf group)");
+                return;
+            }
+
+            if (i >= WARMUP_RUNS) {
+                total_cycles += values[1];
+                total_instructions += values[2];
+                total_elapsed_ns += elapsed_nanoseconds(start_time, end_time);
+            }
+
+            if ((i + 1 == N) && (total_elapsed_ns < MIN_TIME_NS) && (N < MAX_REPEATS)) {
+                N *= 10;
+            }
+        }
+
+        size_t effective_runs = N > WARMUP_RUNS ? (N - WARMUP_RUNS) : 1;
+        double elapsed_sec = total_elapsed_ns / 1e9;
+        double ipc = total_cycles > 0 ? ((double)total_instructions / total_cycles) : 0.0;
+
+        printf("\n\n ***** Benchmarking %s *****:\n", name);
+        printf("Benchmark ran %zu iterations (%zu used after warmup)\n", N, effective_runs);
+        printf("Total elapsed (wall):     %.6f s\n", elapsed_sec);
+        printf("CPU cycles (avg):         %llu\n", (unsigned long long)(total_cycles / effective_runs));
+        printf("Instructions (avg):       %llu\n", (unsigned long long)(total_instructions / effective_runs));
+        printf("Instructions per cycle:   %.4f\n", ipc);
+    }
 
 
 
@@ -191,62 +265,11 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    uint64_t total_cycles = 0, total_instructions = 0, total_elapsed_ns = 0;
-    size_t N = MIN_REPEATS;
-    if (N == 0) N = 1;
-
-    for (size_t i = 0; i < N; i++) {
-        struct timespec start_time, end_time;
-        atomic_thread_fence(memory_order_acquire);
-        clock_gettime(CLOCK_MONOTONIC, &start_time);
-
-        ioctl(fd_cycles, PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
-        ioctl(fd_cycles, PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
-
-
-        // === CODE TO BENCHMARK ===
-        for (size_t f = 0; f < file_count; f++) {
-            base64_encode_custom(files[f].encoded,
-                                files[f].encoded_size,
-                                files[f].content,
-                                files[f].size,
-                                EVP_EncodeUpdate,
-                                EVP_EncodeFinal);
-        }
-        // ==========================
-
-        ioctl(fd_cycles, PERF_EVENT_IOC_DISABLE, PERF_IOC_FLAG_GROUP);
-        atomic_thread_fence(memory_order_release);
-        clock_gettime(CLOCK_MONOTONIC, &end_time);
-
-
-        uint64_t values[3];
-        if (read(fd_cycles, values, sizeof(values)) == -1) {
-            perror("read (perf group)");
-            return 1;
-        }
-
-        if (i >= WARMUP_RUNS) {
-            total_cycles += values[1];
-            total_instructions += values[2];
-            total_elapsed_ns += elapsed_nanoseconds(start_time, end_time);
-        }
-
-        // If last run and runtime is too short, increase N
-        if ((i + 1 == N) && (total_elapsed_ns < MIN_TIME_NS) && (N < MAX_REPEATS)) {
-            N *= 10;
-        }
-    }
-
-    size_t effective_runs = N > WARMUP_RUNS ? (N - WARMUP_RUNS) : 1;
-    double elapsed_sec = total_elapsed_ns / 1e9;
-    double ipc = total_cycles > 0 ? ((double)total_instructions / total_cycles) : 0.0;
-
-    printf("Benchmark ran %zu iterations (%zu used after warmup)\n", N, effective_runs);
-    printf("Total elapsed (wall):     %.6f s\n", elapsed_sec);
-    printf("CPU cycles (avg):         %llu\n", (unsigned long long)(total_cycles / effective_runs));
-    printf("Instructions (avg):       %llu\n", (unsigned long long)(total_instructions / effective_runs));
-    printf("Instructions per cycle:   %.4f\n", ipc);
+    // Main benchmarking calls
+    run_benchmark("EVP_EncodeUpdate", fd_cycles, files, file_count, 
+                 EVP_EncodeUpdate, EVP_EncodeFinal);
+    run_benchmark("EVP_EncodeUpdate_openssl", fd_cycles, files, file_count,
+                 EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl);
 
     printf("\n\nProcessed files:\n");
 
@@ -255,7 +278,6 @@ int main(int argc, char **argv) {
         if (files[i].content) free(files[i].content);
         if (files[i].filename) free(files[i].filename);
         if (files[i].encoded) free(files[i].encoded);
-        
     }
 
     close(fd_instr);
