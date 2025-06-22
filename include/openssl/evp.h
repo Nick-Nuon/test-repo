@@ -912,9 +912,9 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                      const unsigned char *in, int inl);
 void EVP_EncodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl);
 // TODO: Only for benchmarking/testing purpose, remove when all is said and done ***********************
-int EVP_EncodeUpdate_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
+OPENSSL_EXPORT int EVP_EncodeUpdate_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     const unsigned char *in, int inl);
-void EVP_EncodeFinal_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl);
+OPENSSL_EXPORT void EVP_EncodeFinal_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl);
 // ****************************************************************************************
 int EVP_EncodeBlock(unsigned char *t, const unsigned char *f, int n);
 
