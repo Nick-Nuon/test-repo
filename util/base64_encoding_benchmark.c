@@ -1,4 +1,8 @@
 
+#ifndef __linux__
+    #error "This program requires a Linux system to compile."
+#endif
+
 #define _GNU_SOURCE
 #include <linux/perf_event.h>
 #include <sys/syscall.h>
@@ -18,11 +22,11 @@
 #define EVP_ENCODE_CTX_NO_NEWLINES          1
 
 
-#define MIN_REPEATS 5
-#define MIN_TIME_NS 1000000000ULL  // 1 second
-#define MAX_REPEATS 1000000
-#define WARMUP_RUNS 10000
-#define MAX_FILES 1024
+static const size_t min_repeats = 5;  
+static const size_t min_time_ns = 1000000000ULL;  // 1 second
+static const size_t max_repeats = 1000000;
+static const size_t warmup_runs = 10000;
+static const size_t max_files = 1024;
 
 typedef struct {
     char *filename;
@@ -60,7 +64,7 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
             continue;
 
-        if (count >= MAX_FILES) {
+        if (count >= max_files) {
             fprintf(stderr, "Too many files in directory.\n");
             break;
         }
@@ -87,13 +91,13 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
 
         
 
-        unsigned char *encoded_buf = malloc(encoded_total);
+        unsigned char *encoded_output = malloc(encoded_total);
 
-        if (!buf || !encoded_buf) {
+        if (!buf || !encoded_output) {
             printf("free once");
             perror("malloc");
             free(buf); // Free buf if it was allocated successfully
-            free(encoded_buf); // Free encoded_buf if it was allocated successfully
+            free(encoded_output); // Free encoded_output if it was allocated successfully
             fclose(f);
             continue;
         }
@@ -108,7 +112,7 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
 
             fprintf(stderr, "Warning: incomplete read of %s\n", fullpath);
             free(buf);
-            free(encoded_buf); // Add this
+            free(encoded_output); // Add this
             fclose(f); // Technically already closed, but safe to be consistent
             continue;
         }
@@ -117,7 +121,7 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
         files[count].content = buf;
         files[count].size = st.st_size;
         files[count].encoded_size = encoded_total;
-        files[count].encoded = encoded_buf;
+        files[count].encoded = encoded_output;
         count++;
     }
 
@@ -136,7 +140,7 @@ size_t base64_encode_custom(unsigned char *dst, size_t dstlen,
     const unsigned char *src, size_t srclen,
     encode_update_fn update_fn,
     encode_final_fn final_fn,
-    int NO_NL) {
+    int disable_newlines) {
     EVP_ENCODE_CTX *ctx = EVP_ENCODE_CTX_new();
     if (!ctx) {
         fprintf(stderr, "Failed to allocate EVP_ENCODE_CTX\n");
@@ -147,7 +151,7 @@ size_t base64_encode_custom(unsigned char *dst, size_t dstlen,
     int taillen = 0;
 
     EVP_EncodeInit(ctx);
-    if (NO_NL) {
+    if (disable_newlines) {
         evp_encode_ctx_set_flags(ctx, EVP_ENCODE_CTX_NO_NEWLINES);
     }
 
@@ -167,7 +171,7 @@ size_t base64_encode_custom(unsigned char *dst, size_t dstlen,
 void run_benchmark(const char *name, int fd_cycles, FileData *files, size_t file_count,
                     encode_update_fn update_fn, encode_final_fn final_fn, int NO_NL) {
     uint64_t total_cycles = 0, total_instructions = 0, total_elapsed_ns = 0;
-    size_t N = MIN_REPEATS;
+    size_t N = min_repeats;
     if (N == 0) N = 1;
 
     // Calculate total bytes processed
@@ -204,18 +208,18 @@ void run_benchmark(const char *name, int fd_cycles, FileData *files, size_t file
             return;
         }
 
-        if (i >= WARMUP_RUNS) {
+        if (i >= warmup_runs) {
             total_cycles += values[1];
             total_instructions += values[2];
             total_elapsed_ns += elapsed_nanoseconds(start_time, end_time);
         }
 
-        if ((i + 1 == N) && (total_elapsed_ns < MIN_TIME_NS) && (N < MAX_REPEATS)) {
+        if ((i + 1 == N) && (total_elapsed_ns < min_time_ns) && (N < max_repeats)) {
             N *= 10;
         }
     }
 
-    size_t effective_runs = N > WARMUP_RUNS ? (N - WARMUP_RUNS) : 1;
+    size_t effective_runs = N > warmup_runs ? (N - warmup_runs) : 1;
     double elapsed_sec = total_elapsed_ns / 1e9;
     double ipc = total_cycles > 0 ? ((double)total_instructions / total_cycles) : 0.0;
     double gb_per_sec = (total_bytes * effective_runs) / (elapsed_sec * 1e9);
@@ -238,7 +242,7 @@ int main(int argc, char **argv) {
     }
 
     const char *dirpath = argv[1];
-    FileData files[MAX_FILES];
+    FileData files[max_files];
     size_t file_count = 0;
 
     if (!load_files_from_dir(dirpath, files, &file_count)) {
