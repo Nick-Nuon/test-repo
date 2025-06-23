@@ -16,7 +16,7 @@
 
 static unsigned char conv_ascii2bin(unsigned char a,
                                     const unsigned char *table);
-static int evp_encode_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
+static int evp_encode_fast_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int dlen);
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n, int eof);
@@ -159,6 +159,7 @@ void EVP_EncodeInit(EVP_ENCODE_CTX *ctx)
     ctx->flags = 0;
 }
 
+
 int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,  
                       const unsigned char *in, int inl)
 {
@@ -189,7 +190,10 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
         inl -= i;
 
         // Encode complete block from context buffer
-        j = evp_encode_int(ctx, out, ctx->enc_data, ctx->length);
+        // a difference between this and the OpenSSL version is that
+        // the responsability for adding a newline is handled insede tho 
+        // evp_encode_fast_nl_int function instead of here. 
+        j = evp_encode_fast_nl_int(ctx, out, ctx->enc_data, ctx->length);
         ctx->num = 0;
         out += j;
         total = j;
@@ -198,7 +202,7 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     }
 
 
-    j = evp_encode_int(ctx, out, in, inl - (inl % ctx->length));
+    j = evp_encode_fast_nl_int(ctx, out, in, inl - (inl % ctx->length));
     in += inl - (inl % ctx->length);
     inl -= inl - (inl % ctx->length);
     out += j;
@@ -226,7 +230,7 @@ void EVP_EncodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
     unsigned int ret = 0;
 
     if (ctx->num != 0) {
-        ret = evp_encode_int(ctx, out, ctx->enc_data, ctx->num);
+        ret = evp_encode_fast_nl_int(ctx, out, ctx->enc_data, ctx->num);
         if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)
             out[ret++] = '\n';
         out[ret] = '\0';
@@ -307,7 +311,7 @@ int EVP_EncodeUpdate_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
         *out = '\0';
     }
     while (inl >= ctx->length && total <= INT_MAX) {
-        j = evp_encode_int(ctx, out, in, ctx->length);
+        j = evp_encode_fast_nl_int(ctx, out, in, ctx->length);
         in += ctx->length;
         inl -= ctx->length;
         out += j;
@@ -465,8 +469,8 @@ const char base64_std_bin2ascii_0[256] = {
       'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+',
       '/'};
   
-
-static int evp_encode_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
+// this now optionally take care of newlines insertion also!
+static int evp_encode_fast_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
   const unsigned char *f, int dlen)
 {
     int i, ret = 0;
@@ -531,7 +535,7 @@ static int evp_encode_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
 
 int EVP_EncodeBlock(unsigned char *t, const unsigned char *f, int dlen)
 {
-    return evp_encode_int(NULL, t, f, dlen);
+    return evp_encode_fast_nl_int(NULL, t, f, dlen);
 }
 
 void EVP_DecodeInit(EVP_ENCODE_CTX *ctx)
