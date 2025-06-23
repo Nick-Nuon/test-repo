@@ -80,7 +80,6 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
         }
 
         unsigned char *buf = malloc(st.st_size);
-        // unsigned char *encoded_buf = malloc(((st.st_size + 2) / 3) * 4 ); // Space for base64 encoded output --- NO_NL mode
         // --- NO_NL mode -- this is very defensive, but I got tired of eating segfaults
         size_t encoded_len = 4 * ((st.st_size + 2) / 3);
         size_t line_breaks = (encoded_len)/ 48 * 2;  // PEM line :1 newline per 48 bytes by default, but the insertion length might be anything up to 80 bytes
