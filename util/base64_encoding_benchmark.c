@@ -127,7 +127,6 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
 }
 
 // {
-//     ctx->flags = flags;
 
 
 typedef int (*encode_update_fn)(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
