@@ -126,7 +126,6 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
     return 1;
 }
 
-// void evp_encode_ctx_set_flags(EVP_ENCODE_CTX *ctx, unsigned int flags)
 // {
 //     ctx->flags = flags;
 
