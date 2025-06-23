@@ -98,7 +98,6 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
             continue;
         }
 
-        // memset(encoded_buf, 0, encoded_total); // I don't believe this to be strictly nescessary, but OpenSSL zeros its memory by default
 
 
         size_t read = fread(buf, 1, st.st_size, f);
