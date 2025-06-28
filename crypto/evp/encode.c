@@ -223,14 +223,6 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     ctx->num = inl;
     *outl = total;
 
-    #ifdef __AVX2__
-    printf("Using AVX2 for encoding\n");
-        if (ctx->length - ctx->num > inl && inl >= 32) {
-            __m256i a = _mm256_loadu_si256((__m256i*)in);
-            _mm256_storeu_si256((__m256i*)&(ctx->enc_data[ctx->num]), a);
-        }
-    #endif
-
     return 1;
 }
 
@@ -642,8 +634,8 @@ static size_t encode_base64_avx2(char *dst, const char *src, size_t srclen) {
     }
 
     // Return number of bytes written
-    return i / 3 * 4 ;
-    // + evp_encode_scalar_nl_int(NULL, out, src + i, srclen - i);
+    return i / 3 * 4 
+            + evp_encode_scalar_nl_int(NULL, out, src + i, srclen - i);
 }
 
 
