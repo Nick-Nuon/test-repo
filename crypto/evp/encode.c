@@ -550,7 +550,7 @@ static __m256i lookup_pshufb_improved_std(__m256i input) {
     return _mm256_add_epi8(result, input);
 }
 
-static size_t encode_base64_avx2(char *dst, const char *src, size_t srclen) {
+static int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen) {
     const uint8_t *input = (const uint8_t *)src;
     uint8_t *out = (uint8_t *)dst;
     size_t i = 0;
@@ -638,26 +638,14 @@ static size_t encode_base64_avx2(char *dst, const char *src, size_t srclen) {
             + evp_encode_scalar_nl_int(NULL, out, src + i, srclen - i);
 }
 
+static int evp_encode_switch(EVP_ENCODE_CTX *ctx, unsigned char *t,
+    const unsigned char *f, int dlen) {
 
-// this now optionally take care of newlines insertion also!
-static int evp_encode_AVX_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
-    const unsigned char *f, int dlen)
-  {
-      int ret = 0;
-      int srp = (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0);
-  
-      if (srp) {
-        // TODO
-      } else {
-        // fill this here
-      }
+if (ctx != NULL && ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET == 0 && ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES == 1) 
+return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen);
 
-      // fill this here
-  
-    *t = '\0';
-    return ret;
-  }
-  
+return evp_encode_scalar_nl_int(ctx, t, f, dlen);
+}
 
 int EVP_EncodeBlock(unsigned char *t, const unsigned char *f, int dlen)
 {
