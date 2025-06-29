@@ -22,6 +22,20 @@ static int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n, int eof);
 
+                               #define DEBUG 1 // Set to 1 to enable debug prints, 0 to disable
+
+                               #if DEBUG
+                                   #define DEBUG_PRINT(fmt, ...) \
+                                       do { \
+                                           fprintf(stderr, fmt, __VA_ARGS__); \
+                                           fflush(stderr); \
+                                           fflush(stdout); /* Optional: Flush stdout if you're also printing to it */ \
+                                       } while (0)
+                               #else
+                                   #define DEBUG_PRINT(fmt, ...) do {} while (0)
+                               #endif
+                                                   
+
 #ifndef CHARSET_EBCDIC
 # define conv_bin2ascii(a, table)       ((table)[(a)&0x3f])
 #else
@@ -177,6 +191,7 @@ static __m256i lookup_pshufb_improved_std(__m256i input) {
 }
 
 static int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen) {
+    // printf("Using AVX2 for base64 encoding\n");
     const uint8_t *input = (const uint8_t *)src;
     uint8_t *out = (uint8_t *)dst;
     size_t i = 0;
@@ -266,11 +281,13 @@ static int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, si
 
 static int evp_encode_switch(EVP_ENCODE_CTX *ctx, unsigned char *t,
     const unsigned char *f, int dlen) {
+    // DEBUG_PRINT("evp_encode_switch called with dlen: %d\n", dlen);
 
-if (ctx != NULL && ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET == 0 && ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES == 1) 
-return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen);
+    if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) == 0 && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) != 0) {
+        return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen);
+    }
 
-return evp_encode_scalar_nl_int(ctx, t, f, dlen);
+    return evp_encode_scalar_nl_int(ctx, t, f, dlen);
 }
 
 int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,  
