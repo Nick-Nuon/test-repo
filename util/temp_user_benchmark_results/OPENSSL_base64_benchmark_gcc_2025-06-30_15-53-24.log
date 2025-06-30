@@ -1,0 +1,4 @@
+📝 Logging to base64_benchmark_gcc_2025-06-30_15-53-24.log
+Benchmark started at Mon 30 Jun 2025 03:53:24 PM EDT
+========================================================
+b64_enc_bench.sh: line 15: ./config: No such file or directory

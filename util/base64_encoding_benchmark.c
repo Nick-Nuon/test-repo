@@ -18,6 +18,7 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <openssl/evp.h>
+#include <immintrin.h>  // For AVX2 intrinsics
 
 #define EVP_ENCODE_CTX_NO_NEWLINES          1
 
@@ -83,7 +84,7 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
             continue;
         }
 
-        unsigned char *buf = malloc(st.st_size);
+        unsigned char *file_content = malloc(st.st_size);
         // --- NO_NL mode -- this is very defensive, but I got tired of eating segfaults
         size_t encoded_len = 4 * ((st.st_size + 2) / 3);
         size_t line_breaks = (encoded_len)/ 48 * 2;  // PEM line :1 newline per 48 bytes by default, but the insertion length might be anything up to 80 bytes
@@ -93,10 +94,10 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
 
         unsigned char *encoded_output = malloc(encoded_total);
 
-        if (!buf || !encoded_output) {
+        if (!file_content || !encoded_output) {
             printf("free once");
             perror("malloc");
-            free(buf); // Free buf if it was allocated successfully
+            free(file_content); // Free file_content if it was allocated successfully
             free(encoded_output); // Free encoded_output if it was allocated successfully
             fclose(f);
             continue;
@@ -104,21 +105,21 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
 
 
 
-        size_t read = fread(buf, 1, st.st_size, f);
+        size_t read = fread(file_content, 1, st.st_size, f);
         fclose(f);
 
         if (read != st.st_size) {
             printf("free twice");
 
             fprintf(stderr, "Warning: incomplete read of %s\n", fullpath);
-            free(buf);
+            free(file_content);
             free(encoded_output); // Add this
             fclose(f); // Technically already closed, but safe to be consistent
             continue;
         }
 
         files[count].filename = strdup(entry->d_name);
-        files[count].content = buf;
+        files[count].content = file_content;
         files[count].size = st.st_size;
         files[count].encoded_size = encoded_total;
         files[count].encoded = encoded_output;
@@ -275,6 +276,12 @@ int main(int argc, char **argv) {
     }
 
 
+    printf ("-----------------------DISABLE NEWLINES/NO_NL mode---------------------------");
+    run_benchmark("EVP_EncodeUpdate", fd_cycles, files, file_count, 
+                EVP_EncodeUpdate, EVP_EncodeFinal, 1);
+    run_benchmark("EVP_EncodeUpdate_openssl", fd_cycles, files, file_count,
+                    EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 1);
+
     // A newline is inserted after every 47 bytes. 
     printf ("-----------------------PEM mode---------------------------");
     // Main benchmarking calls
@@ -283,11 +290,6 @@ int main(int argc, char **argv) {
     run_benchmark("EVP_EncodeUpdate_openssl", fd_cycles, files, file_count,
                  EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 0);
 
-    printf ("-----------------------NO_NL mode---------------------------");
-    run_benchmark("EVP_EncodeUpdate", fd_cycles, files, file_count, 
-                EVP_EncodeUpdate, EVP_EncodeFinal, 1);
-    run_benchmark("EVP_EncodeUpdate_openssl", fd_cycles, files, file_count,
-                    EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 1);
 
     printf("\n\nProcessed files:\n");
 
