@@ -191,7 +191,6 @@ static __m256i lookup_pshufb_improved_std(__m256i input) {
 }
 
 static int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen) {
-    // printf("Using AVX2 for base64 encoding\n");
     const uint8_t *input = (const uint8_t *)src;
     uint8_t *out = (uint8_t *)dst;
     size_t i = 0;
