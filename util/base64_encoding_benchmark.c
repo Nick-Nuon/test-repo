@@ -18,10 +18,8 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <openssl/evp.h>
-#include <immintrin.h>  // For AVX2 intrinsics
 
 #define EVP_ENCODE_CTX_NO_NEWLINES          1
-
 
 static const size_t min_repeats = 5;  
 static const size_t min_time_ns = 1000000000ULL;  // 1 second

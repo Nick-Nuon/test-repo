@@ -13,7 +13,12 @@
 #include <openssl/evp.h>
 #include "crypto/evp.h"
 #include "evp_local.h"
-#include "enc_b64_avx2.h"
+
+#if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
+    #include "enc_b64_avx2.h"
+#else
+    #include "enc_b64_scalar.h"
+#endif
 
 static unsigned char conv_ascii2bin(unsigned char a,
                                     const unsigned char *table);
@@ -191,6 +196,7 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     int i, j;
     size_t total = 0;
 
+
     // Initialize output length
     *outl = 0;
     if (inl <= 0)
@@ -227,7 +233,11 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     }
 
 
-    j = evp_encode_switch(ctx, out, in, inl - (inl % ctx->length));
+    #if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
+        j = evp_encode_switch(ctx, out, in, inl - (inl % ctx->length));
+    #else
+        j = evp_encode_scalar_nl_int(ctx, out, in, inl - (inl % ctx->length));
+    #endif
     in += inl - (inl % ctx->length);
     inl -= inl - (inl % ctx->length);
     out += j;
