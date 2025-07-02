@@ -1,8 +1,6 @@
 #!/bin/bash
 set -e
 
-#!/bin/bash
-
 # Check if the OS is Linux
 if [[ "$(uname -s)" != "Linux" ]]; then
     echo "❌ This script must be run on Linux. Detected: $(uname -s)"
