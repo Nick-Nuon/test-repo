@@ -22,10 +22,11 @@
     }
 
 
-    int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen) {
+    int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen, int disable_newlines) {
         const uint8_t *input = (const uint8_t *)src;
         uint8_t *out = (uint8_t *)dst;
         size_t i = 0;
+        size_t nl_count = 0;
 
         // Define shuffle mask for AVX2
         const __m256i shuf = _mm256_set_epi8(
@@ -77,37 +78,54 @@
             out += 32;
             _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input1));
             out += 32;
-            _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input2));
-            out += 32;
-            _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input3));
-            out += 32;
+            if (disable_newlines) {
+                _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input2));
+                out += 32;
+                _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input3));
+                out += 32;
+            }  else {
+                *(out++) = '\n';
+                nl_count++;
+
+                _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input2));
+                out += 32;
+
+                _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input3));
+                out += 32;
+
+                *(out++) = '\n';
+                nl_count++;
+            }
+
         }
 
-        // Process remaining 24-byte chunks
-        for (; i + 28 <= srclen; i += 24) {
-            // lo = [xxxx|DDDC|CCBB|BAAA]
-            // hi = [xxxx|HHHG|GGFF|FEEE]
-            const __m128i lo = _mm_loadu_si128((const __m128i *)(input + i));
-            const __m128i hi = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3));
-            
-            // bytes from groups A, B and C are needed in separate 32-bit lanes
-            // in = [0HHH|0GGG|0FFF|0EEE[0DDD|0CCC|0BBB|0AAA]
-            __m256i in = _mm256_shuffle_epi8(_mm256_set_m128i(hi, lo), shuf);
-            
-            // See comments in C++ SSE code and/or paper
-            const __m256i t0 = _mm256_and_si256(in, _mm256_set1_epi32(0x0fc0fc00));
-            const __m256i t1 = _mm256_mulhi_epu16(t0, _mm256_set1_epi32(0x04000040));
-            const __m256i t2 = _mm256_and_si256(in, _mm256_set1_epi32(0x003f03f0));
-            const __m256i t3 = _mm256_mullo_epi16(t2, _mm256_set1_epi32(0x01000010));
-            const __m256i indices = _mm256_or_si256(t1, t3);
+        if (disable_newlines) {
+            // Process remaining 24-byte chunks
+            for (; i + 28 <= srclen; i += 24) {
+                // lo = [xxxx|DDDC|CCBB|BAAA]
+                // hi = [xxxx|HHHG|GGFF|FEEE]
+                const __m128i lo = _mm_loadu_si128((const __m128i *)(input + i));
+                const __m128i hi = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3));
+                
+                // bytes from groups A, B and C are needed in separate 32-bit lanes
+                // in = [0HHH|0GGG|0FFF|0EEE[0DDD|0CCC|0BBB|0AAA]
+                __m256i in = _mm256_shuffle_epi8(_mm256_set_m128i(hi, lo), shuf);
+                
+                // See comments in C++ SSE code and/or paper
+                const __m256i t0 = _mm256_and_si256(in, _mm256_set1_epi32(0x0fc0fc00));
+                const __m256i t1 = _mm256_mulhi_epu16(t0, _mm256_set1_epi32(0x04000040));
+                const __m256i t2 = _mm256_and_si256(in, _mm256_set1_epi32(0x003f03f0));
+                const __m256i t3 = _mm256_mullo_epi16(t2, _mm256_set1_epi32(0x01000010));
+                const __m256i indices = _mm256_or_si256(t1, t3);
 
-            _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(indices));
-            out += 32;
+                _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(indices));
+                out += 32;
+            }
         }
 
         // Return number of bytes written
-        return i / 3 * 4 
-                + evp_encode_scalar_nl_int(NULL, out, src + i, srclen - i);
+        return i / 3 * 4 + nl_count + 
+                + evp_encode_scalar_nl_int(ctx, out, src + i, srclen - i);
     }
 
 #endif

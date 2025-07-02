@@ -7,18 +7,19 @@ if [[ "$(uname -s)" != "Linux" ]]; then
     exit 1
 fi
 
-echo "🛠️  Configuring and building OpenSSL with GCC and -march=native -mtune=native..."
-
 make clean
+echo "🛠️  Configuring and building OpenSSL with gcc and -march=native -mtune=native..."
+
 # # === Setup log file ===
-LOGFILE="util/benchmark_results/base64_benchmark_gcc_$(date +'%Y-%m-%d_%H-%M-%S').log"
+LOGFILE="./benchmark_results/base64_benchmark_CLI_gcc_$(date +'%Y-%m-%d_%H-%M-%S').log"
 exec > >(tee -a "$LOGFILE") 2>&1
 
 echo "📝 Logging to $LOGFILE"
 echo "Benchmark started at $(date)"
 echo "========================================================"
 
-# # === Configure and build OpenSSL with GCC + native CPU tuning ===
+# # === Configure and build OpenSSL with gcc + native CPU tuning ===
+# ./config linux-x86_64-gcc -march=native -mtune=native
 ./config -march=native -mtune=native
 echo "🛠️  Building OpenSSL quietly..."
 if ! make -j"$(nproc)" > /dev/null 2>&1; then
@@ -27,47 +28,8 @@ if ! make -j"$(nproc)" > /dev/null 2>&1; then
 fi
 
 # # === Build standalone benchmark binary ===
-echo "🧪 Compiling base64_encoding_benchmark.c with GCC..."
-gcc -O3 -mavx2 -I./include \
-    ./util/base64_encoding_benchmark.c \
-    ./crypto/evp/encode.c \
-    ./crypto/evp/enc_b64_scalar.c \
-    ./crypto/evp/enc_b64_avx2.c \
-    -o ./util/perf_basic -lcrypto
-
-
-# # === Run benchmark binary on Enron email files ===
-echo "📂 Benchmark: Enron email files"
-sudo ./util/perf_basic util/benchmark_data/email_bin
-echo " "
-
-# # === Run benchmark binary on Mula image files ===
-echo "🖼️  Benchmark: Mula JPG files"
-sudo ./util/perf_basic util/benchmark_data/Mula_img
-echo " "
-
-make clean
-echo "🛠️  Configuring and building OpenSSL with Clang and -march=native -mtune=native..."
-
-# # === Setup log file ===
-LOGFILE="./benchmark_results/base64_benchmark_clang_$(date +'%Y-%m-%d_%H-%M-%S').log"
-exec > >(tee -a "$LOGFILE") 2>&1
-
-echo "📝 Logging to $LOGFILE"
-echo "Benchmark started at $(date)"
-echo "========================================================"
-
-# # === Configure and build OpenSSL with Clang + native CPU tuning ===
-./config linux-x86_64-clang -march=native -mtune=native
-echo "🛠️  Building OpenSSL quietly..."
-if ! make -j"$(nproc)" > /dev/null 2>&1; then
-    echo "❌ Build failed!"
-    exit 1
-fi
-
-# # === Build standalone benchmark binary ===
 # echo "🧪 Compiling base64_encoding_benchmark.c with GCC..."
-clang -O3 -mavx2 -I./include \
+gcc -O3 -mavx2 -I./include \
     ./util/base64_encoding_benchmark.c \
     ./crypto/evp/encode.c \
     ./crypto/evp/enc_b64_scalar.c \
