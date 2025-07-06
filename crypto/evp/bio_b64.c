@@ -353,24 +353,18 @@ static int b64_write(BIO *b, const char *in, int inl)
         return -1;
     }
 
-    // TODO:EVP_ENCODE_LENGTH is defensive: for disable_newlines mode, we can use a smaller buffer
-    int encoded_length = EVP_ENCODE_LENGTH(inl);
-    int *encoded = OPENSSL_malloc(encoded_length + 1);
-
     // Write any remaining buffered data from a previous call
     n = ctx->buf_len - ctx->buf_off;
     while (n > 0) {
         i = BIO_write(next, &(ctx->buf[ctx->buf_off]), n);
         if (i <= 0) {
             BIO_copy_next_retry(b);  // Propagate retry status
-            // OPENSSL_free(encoded);
             return i;
         }
         ctx->buf_off += i;
         if (!ossl_assert(ctx->buf_off <= (int)sizeof(ctx->buf)) ||
             !ossl_assert(ctx->buf_len >= ctx->buf_off)) {
             ERR_raise(ERR_LIB_BIO, ERR_R_INTERNAL_ERROR);
-            // OPENSSL_free(encoded); 
             return -1;
         }
         n -= i;
@@ -384,8 +378,11 @@ static int b64_write(BIO *b, const char *in, int inl)
 
     // If there’s no input data, return 0 (no work to do)
     if (in == NULL || inl <= 0)
-        // OPENSSL_free(encoded); 
         return 0;
+
+        // TODO:EVP_ENCODE_LENGTH is defensive: for disable_newlines mode, we can use a smaller buffer
+    int encoded_length = EVP_ENCODE_LENGTH(inl);
+    int *encoded = OPENSSL_malloc(encoded_length + 1);
 
     // Main encoding loop
     while (inl > 0) { // clear all input. inl = input length
@@ -407,7 +404,7 @@ static int b64_write(BIO *b, const char *in, int inl)
             if (ctx->tmp_len > 0) {
                 if (!ossl_assert(ctx->tmp_len <= 3)) {
                     ERR_raise(ERR_LIB_BIO, ERR_R_INTERNAL_ERROR);
-                    // OPENSSL_free(encoded); 
+                    OPENSSL_free(encoded); 
                     return ret == 0 ? -1 : ret;
                 }
 
@@ -480,7 +477,7 @@ static int b64_write(BIO *b, const char *in, int inl)
             // Normal Base64 encoding with newlines (via EVP API)
             if (!EVP_EncodeUpdate(ctx->base64, ctx->buf, &ctx->buf_len, // TODO: figure out how to BIO write here to output directly
                                   (unsigned char *)in, n)) {
-                // OPENSSL_free(encoded); 
+                OPENSSL_free(encoded); 
                 return ret == 0 ? -1 : ret;
             }
 
