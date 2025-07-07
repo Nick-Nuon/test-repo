@@ -370,8 +370,6 @@ static int b64_write(BIO *b, const char *in, int inl)
         n -= i;
     }
 
-    
-
     // All buffered data has been written; reset buffer pointers
     ctx->buf_off = 0;
     ctx->buf_len = 0;
@@ -380,26 +378,21 @@ static int b64_write(BIO *b, const char *in, int inl)
     if (in == NULL || inl <= 0)
         return 0;
 
-        // TODO:EVP_ENCODE_LENGTH is defensive: for disable_newlines mode, we can use a smaller buffer
+    
+    // *********************************************************************************
+
+    // TODO:EVP_ENCODE_LENGTH is defensive: for disable_newlines mode, we can use a smaller buffer
     int encoded_length = EVP_ENCODE_LENGTH(inl);
     unsigned char *encoded = OPENSSL_malloc(encoded_length + 1);
 
+
     // Main encoding loop
     while (inl > 0) { // clear all input. inl = input length
-        // B64_BLOCK_SIZE is only 1024 bytes!!!!!
-        // n is however many bytes is left
-        n = inl > B64_BLOCK_SIZE ? B64_BLOCK_SIZE : inl; //  bottleneck : limited if input is bigger than the 1024 byte buffer
+        // n is how many bytes is left
+        n = inl;
 
         if ((BIO_get_flags(b) & BIO_FLAGS_BASE64_NO_NL) != 0) {
             // Encoding with no newlines (single line Base64 output)
-
-            // There are several ctx's: A larger one that B64 uses.
-            // Itself has two buffers: tmp buffer(ctx -> tmp) for leftover data from previous calls.
-            // and tmp -> buf which is the output buffer for the encoded data.
-            // This tmp buffer is used to accumulate input data until we have enough for a write
-
-            // And a smaller one that EncodeUpdate uses.... 
-            // In our case, we don't use the buffer. And only use the ctx to carry flags around
 
             // Fill leftover tmp buffer from previous call until we reach 3 bytes and dump them in ctx->buf
             if (ctx->tmp_len > 0) {
@@ -413,7 +406,6 @@ static int b64_write(BIO *b, const char *in, int inl)
                 n = 3 - ctx->tmp_len;
                 if (n > inl) n = inl;
                 memcpy(&(ctx->tmp[ctx->tmp_len]), in, n);
-                // memcpy(encoded, in, n);
                 ctx->tmp_len += n;
                 ret += n;
 
@@ -423,15 +415,7 @@ static int b64_write(BIO *b, const char *in, int inl)
 
                 // Encode full 3-byte tmp buffer
                 // the args are : (output, input, length)...
-                ctx->buf_len = EVP_EncodeBlock(encoded, ctx->tmp, ctx->tmp_len); // TODO: figure out how to BIO write here to output directly
-
-                if (
-                    !ossl_assert(encoded_length -1 >= ctx->buf_off)) {
-                    ERR_raise(ERR_LIB_BIO, ERR_R_INTERNAL_ERROR);
-                    OPENSSL_free(encoded); 
-
-                    return ret == 0 ? -1 : ret;
-                }
+                ctx->buf_len = EVP_EncodeBlock(encoded, ctx->tmp, ctx->tmp_len); 
 
                 ctx->tmp_len = 0;  // Done with tmp buffer
             } else {
@@ -446,14 +430,6 @@ static int b64_write(BIO *b, const char *in, int inl)
                 n -= n % 3;  // Round down to multiple of 3
                 ctx->buf_len = EVP_EncodeBlock(encoded, (unsigned char *)in, n); // TODO: figure out how to BIO write here to output directly
 
-                if (
-                    !ossl_assert(encoded_length -1 >= ctx->buf_off)) {
-                    ERR_raise(ERR_LIB_BIO, ERR_R_INTERNAL_ERROR);
-                    OPENSSL_free(encoded); 
-
-                    return ret == 0 ? -1 : ret;
-                }
-
                 ret += n;
             }
         } else {
@@ -461,14 +437,6 @@ static int b64_write(BIO *b, const char *in, int inl)
             if (!EVP_EncodeUpdate(ctx->base64, encoded, &ctx->buf_len, // TODO: figure out how to BIO write here to output directly
                                   (unsigned char *)in, n)) {
                 OPENSSL_free(encoded); 
-                return ret == 0 ? -1 : ret;
-            }
-
-            if (
-                !ossl_assert(encoded_length -1 >= ctx->buf_off)) {
-                ERR_raise(ERR_LIB_BIO, ERR_R_INTERNAL_ERROR);
-                OPENSSL_free(encoded); 
-
                 return ret == 0 ? -1 : ret;
             }
 
@@ -483,25 +451,15 @@ static int b64_write(BIO *b, const char *in, int inl)
         ctx->buf_off = 0;
         n = ctx->buf_len;
         while (n > 0) {
-            // i = BIO_write(next, &(ctx->buf[ctx->buf_off]), n);
             i = BIO_write(next, encoded, n);
             if (i <= 0) {
                 BIO_copy_next_retry(b);  // Propagate retry status
                 OPENSSL_free(encoded); 
-
                 return ret == 0 ? i : ret;
             }
 
             n -= i;
             ctx->buf_off += i;
-
-            if (!ossl_assert(ctx->buf_off <= (int)sizeof(ctx->buf)) ||
-                !ossl_assert(ctx->buf_len >= ctx->buf_off)) {
-                ERR_raise(ERR_LIB_BIO, ERR_R_INTERNAL_ERROR);
-                OPENSSL_free(encoded); 
-
-                return ret == 0 ? -1 : ret;
-            }
         }
 
         ctx->buf_len = 0;
