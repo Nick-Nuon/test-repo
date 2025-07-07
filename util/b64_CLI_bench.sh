@@ -7,7 +7,6 @@ if [[ "$(uname -s)" != "Linux" ]]; then
     exit 1
 fi
 
-make clean
 echo "🛠️  Configuring and building OpenSSL with gcc and -march=native -mtune=native..."
 
 # # === Setup log file ===
@@ -19,8 +18,10 @@ echo "Benchmark started at $(date)"
 echo "========================================================"
 
 # # === Configure and build OpenSSL with gcc + native CPU tuning ===
+
 # ./config linux-x86_64-gcc -march=native -mtune=native
 ./config -march=native -mtune=native
+make clean
 echo "🛠️  Building OpenSSL quietly..."
 if ! make -j"$(nproc)" > /dev/null 2>&1; then
     echo "❌ Build failed!"
@@ -36,50 +37,36 @@ gcc -O3 -mavx2 -I./include \
     ./crypto/evp/enc_b64_avx2.c \
     -o ./util/perf_basic -lcrypto
 
-echo "============== DISABLE NEWLINES MODE CLI ============================="
+run_benchmarks() {
+  local mode_flag="$1"
+  local mode_name="$2"
 
-echo "📏 Benchmark: Single file (lena_color_512.jpg)"
-LD_LIBRARY_PATH=$(pwd):$(pwd)/lib \
-hyperfine --warmup 1000 --min-runs 4000 \
-  './apps/openssl enc -base64 -A -in ./util/benchmark_data/Mula_img/lena_color_512.jpg > /dev/null'
+  echo "============== $mode_name ============================="
 
-echo "📦 Benchmark: All files in Mula_img"
-LD_LIBRARY_PATH=$(pwd):$(pwd)/lib \
-hyperfine --warmup 500 --min-runs 2000 \
-  'for f in ./util/benchmark_data/Mula_img/*; do [ -f "$f" ] && ./apps/openssl enc -base64 -A -in "$f" > /dev/null; done'
+  echo "📏 Benchmark: Single file (lena_color_512.jpg)"
+  LD_LIBRARY_PATH=$(pwd):$(pwd)/lib \
+  hyperfine --warmup 1000 --min-runs 4000 \
+    "./apps/openssl enc -base64 $mode_flag -in ./util/benchmark_data/Mula_img/lena_color_512.jpg > /dev/null"
 
-echo "📨 Benchmark: All files in email_bin"
-LD_LIBRARY_PATH=$(pwd):$(pwd)/lib \
-hyperfine --warmup 500 --min-runs 2000 \
-  'for f in ./util/benchmark_data/email_bin/*; do [ -f "$f" ] && ./apps/openssl enc -base64 -A -in "$f" > /dev/null; done'
+  echo "📦 Benchmark: All files in Mula_img"
+  LD_LIBRARY_PATH=$(pwd):$(pwd)/lib \
+  hyperfine --warmup 500 --min-runs 2000 \
+    "for f in ./util/benchmark_data/Mula_img/*; do [ -f \"\$f\" ] && ./apps/openssl enc -base64 $mode_flag -in \"\$f\" > /dev/null; done"
 
-echo "📨 Benchmark: Pride and prejudice"
-LD_LIBRARY_PATH=$(pwd):$(pwd)/lib \
-hyperfine --warmup 500 --min-runs 2000 \
-  'for f in ./util/benchmark_data/one_big_file/*; do [ -f "$f" ] && ./apps/openssl enc -base64 -A -in "$f" > /dev/null; done'
+  echo "📨 Benchmark: All files in email_bin"
+  LD_LIBRARY_PATH=$(pwd):$(pwd)/lib \
+  hyperfine --warmup 500 --min-runs 2000 \
+    "for f in ./util/benchmark_data/email_bin/*; do [ -f \"\$f\" ] && ./apps/openssl enc -base64 $mode_flag -in \"\$f\" > /dev/null; done"
 
+  echo "📨 Benchmark: Pride and prejudice"
+  LD_LIBRARY_PATH=$(pwd):$(pwd)/lib \
+  hyperfine --warmup 500 --min-runs 2000 \
+    "for f in ./util/benchmark_data/one_big_file/*; do [ -f \"\$f\" ] && ./apps/openssl enc -base64 $mode_flag -in \"\$f\" > /dev/null; done"
+}
 
-echo "============== PEM MODE CLI ============================="
+run_benchmarks "-A" "DISABLE NEWLINES MODE CLI"
+run_benchmarks "" "PEM MODE CLI"
 
-echo "📏 Benchmark: Single file (lena_color_512.jpg)"
-LD_LIBRARY_PATH=$(pwd):$(pwd)/lib \
-hyperfine --warmup 1000 --min-runs 4000 \
-  './apps/openssl enc -base64 -in ./util/benchmark_data/Mula_img/lena_color_512.jpg > /dev/null'
-
-echo "📦 Benchmark: All files in Mula_img"
-LD_LIBRARY_PATH=$(pwd):$(pwd)/lib \
-hyperfine --warmup 500 --min-runs 2000 \
-  'for f in ./util/benchmark_data/Mula_img/*; do [ -f "$f" ] && ./apps/openssl enc -base64 -in "$f" > /dev/null; done'
-
-echo "📨 Benchmark: All files in email_bin"
-LD_LIBRARY_PATH=$(pwd):$(pwd)/lib \
-hyperfine --warmup 500 --min-runs 2000 \
-  'for f in ./util/benchmark_data/email_bin/*; do [ -f "$f" ] && ./apps/openssl enc -base64 -in "$f" > /dev/null; done'
-
-echo "📨 Benchmark: Pride and prejudice"
-LD_LIBRARY_PATH=$(pwd):$(pwd)/lib \
-hyperfine --warmup 500 --min-runs 2000 \
-  'for f in ./util/benchmark_data/one_big_file/*; do [ -f "$f" ] && ./apps/openssl enc -base64 -in "$f" > /dev/null; done'
 
 
 echo "✅ Benchmarks complete at $(date)"
