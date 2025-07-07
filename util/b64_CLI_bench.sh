@@ -37,6 +37,16 @@ gcc -O3 -mavx2 -I./include \
     ./crypto/evp/enc_b64_avx2.c \
     -o ./util/perf_basic -lcrypto
 
+  run_hyperfine_benchmark() {
+    local label="$1"
+    local dir="$2"
+    echo "$label"
+    LD_LIBRARY_PATH=$(pwd):$(pwd)/lib \
+    hyperfine --warmup 500 --min-runs 2000 \
+      "for f in $dir/*; do [ -f \"\$f\" ] && ./apps/openssl enc -base64 $mode_flag -in \"\$f\" > /dev/null; done"
+  }
+
+
 run_benchmarks() {
   local mode_flag="$1"
   local mode_name="$2"
@@ -48,20 +58,10 @@ run_benchmarks() {
   hyperfine --warmup 1000 --min-runs 4000 \
     "./apps/openssl enc -base64 $mode_flag -in ./util/benchmark_data/Mula_img/lena_color_512.jpg > /dev/null"
 
-  echo "📦 Benchmark: All files in Mula_img"
-  LD_LIBRARY_PATH=$(pwd):$(pwd)/lib \
-  hyperfine --warmup 500 --min-runs 2000 \
-    "for f in ./util/benchmark_data/Mula_img/*; do [ -f \"\$f\" ] && ./apps/openssl enc -base64 $mode_flag -in \"\$f\" > /dev/null; done"
 
-  echo "📨 Benchmark: All files in email_bin"
-  LD_LIBRARY_PATH=$(pwd):$(pwd)/lib \
-  hyperfine --warmup 500 --min-runs 2000 \
-    "for f in ./util/benchmark_data/email_bin/*; do [ -f \"\$f\" ] && ./apps/openssl enc -base64 $mode_flag -in \"\$f\" > /dev/null; done"
-
-  echo "📨 Benchmark: Pride and prejudice"
-  LD_LIBRARY_PATH=$(pwd):$(pwd)/lib \
-  hyperfine --warmup 500 --min-runs 2000 \
-    "for f in ./util/benchmark_data/one_big_file/*; do [ -f \"\$f\" ] && ./apps/openssl enc -base64 $mode_flag -in \"\$f\" > /dev/null; done"
+  run_hyperfine_benchmark "📦 Benchmark: All files in Mula_img" "./util/benchmark_data/Mula_img"
+  run_hyperfine_benchmark "📨 Benchmark: All files in email_bin" "./util/benchmark_data/email_bin"
+  run_hyperfine_benchmark "📨 Benchmark: Pride and prejudice" "./util/benchmark_data/one_big_file"
 }
 
 run_benchmarks "-A" "DISABLE NEWLINES MODE CLI"
