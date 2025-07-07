@@ -327,16 +327,13 @@ static int b64_write(BIO *b, const char *in, int inl)
     BIO_B64_CTX *ctx;
     BIO *next;
 
-    // Retrieve the BIO context and the next BIO in the chain
     ctx = (BIO_B64_CTX *)BIO_get_data(b);
     next = BIO_next(b);
     if (ctx == NULL || next == NULL)
         return 0;
 
-    // Clear retry flags before doing anything else
     BIO_clear_retry_flags(b);
 
-    // Make sure we are in encoding mode, reset internal state if switching from decoding
     if (ctx->encode != B64_ENCODE) {
         ctx->encode = B64_ENCODE;
         ctx->buf_len = 0;
@@ -344,6 +341,9 @@ static int b64_write(BIO *b, const char *in, int inl)
         ctx->tmp_len = 0;
         EVP_EncodeInit(ctx->base64);  // Reinitialize base64 encoder
     }
+
+    // We don't use the buffer anymore, but other functions/BIO probably still write to it as 
+    // removing this section break their tests. 
 
     // Internal sanity checks to prevent buffer overflows or underflows
     if (!ossl_assert(ctx->buf_off < (int)sizeof(ctx->buf)) ||
@@ -354,7 +354,6 @@ static int b64_write(BIO *b, const char *in, int inl)
     }
 
     // Write any remaining buffered data from a previous call
-    // We don't really use the buffer anymore, but other functions/BIO might...
     n = ctx->buf_len - ctx->buf_off;
     while (n > 0) {
         i = BIO_write(next, &(ctx->buf[ctx->buf_off]), n);
@@ -377,9 +376,6 @@ static int b64_write(BIO *b, const char *in, int inl)
     if (in == NULL || inl <= 0)
         return 0;
 
-    
-    // *********************************************************************************
-
     // TODO:EVP_ENCODE_LENGTH is defensive: for disable_newlines mode, we can use a smaller buffer
     int encoded_length = EVP_ENCODE_LENGTH(inl);
     unsigned char *encoded = OPENSSL_malloc(encoded_length + 1);
@@ -389,74 +385,22 @@ static int b64_write(BIO *b, const char *in, int inl)
     return -1;
     }
 
-    n = inl;
     int n_bytes_enc =0;
 
-    if ((BIO_get_flags(b) & BIO_FLAGS_BASE64_NO_NL) != 0) {
-
-        // Fill leftover tmp buffer from previous call until we reach 3 bytes and dump them in ctx->buf
-        if (ctx->tmp_len > 0) {
-            if (!ossl_assert(ctx->tmp_len <= 3)) {
-                ERR_raise(ERR_LIB_BIO, ERR_R_INTERNAL_ERROR);
-                OPENSSL_free(encoded); 
-                return ret == 0 ? -1 : ret;
-            }
-
-            n = 3 - ctx->tmp_len;
-            if (n > inl) n = inl;
-            memcpy(&(ctx->tmp[ctx->tmp_len]), in, n);
-            ctx->tmp_len += n;
-            ret += n;
-
-            // Not enough for full block; keep tmp for next call
-            if (ctx->tmp_len < 3){
-                    OPENSSL_free(encoded); 
-                    return ret;  // Total bytes consumed from input
-            }
-
-            ctx->buf_len = EVP_EncodeBlock(encoded, ctx->tmp, ctx->tmp_len); 
-            ctx->tmp_len = 0;  
-        } else {
-            // No leftover tmp, check if enough input for full blocks
-            if (n < 3) {
-                memcpy(ctx->tmp, in, n);  // Store partial input in tmp
-                ctx->tmp_len = n;
-                ret += n;
-
-                OPENSSL_free(encoded); 
-                return ret;  // Total bytes consumed from input
-            }
-
-            n -= n % 3;  // Round down to multiple of 3
-            ctx->buf_len = EVP_EncodeBlock(encoded, (unsigned char *)in, n); // TODO: figure out how to BIO write here to output directly
-
-            ret += n;
-        }
-    } else {
-        // Normal Base64 encoding with newlines
-        if (!EVP_EncodeUpdate(ctx->base64, encoded, &ctx->buf_len, // TODO: figure out how to BIO write here to output directly
-                                (unsigned char *)in, n)) {
-            OPENSSL_free(encoded); 
-            return ret == 0 ? -1 : ret;
-        }
-
-        ret += n;
+    if (!EVP_EncodeUpdate(ctx->base64, encoded, &n_bytes_enc,
+                            (unsigned char *)in, inl)) {
+        OPENSSL_free(encoded); 
+        return ret == 0 ? -1 : ret;
     }
 
-    // Move input pointer forward
-    // inl -= n;
-    // in += n;
+    ret += inl;
 
-    // Write newly encoded data
-    n = ctx->buf_len;
-    i = BIO_write(next, encoded, n);
+    i = BIO_write(next, encoded, n_bytes_enc);
     if (i <= 0) {
         BIO_copy_next_retry(b);  // Propagate retry status
         OPENSSL_free(encoded); 
         return ret == 0 ? i : ret;
     }
-
-    ctx->buf_len = 0;
 
     OPENSSL_free(encoded); 
     return ret;  // Total bytes consumed from input
