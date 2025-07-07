@@ -354,6 +354,7 @@ static int b64_write(BIO *b, const char *in, int inl)
     }
 
     // Write any remaining buffered data from a previous call
+    // We don't really use the buffer anymore, but other functions/BIO might...
     n = ctx->buf_len - ctx->buf_off;
     while (n > 0) {
         i = BIO_write(next, &(ctx->buf[ctx->buf_off]), n);
@@ -370,11 +371,9 @@ static int b64_write(BIO *b, const char *in, int inl)
         n -= i;
     }
 
-    // All buffered data has been written; reset buffer pointers
     ctx->buf_off = 0;
     ctx->buf_len = 0;
 
-    // If there’s no input data, return 0 (no work to do)
     if (in == NULL || inl <= 0)
         return 0;
 
@@ -390,16 +389,13 @@ static int b64_write(BIO *b, const char *in, int inl)
     return -1;
     }
 
-    // Main encoding loop
-        // n is how many bytes is left
     n = inl;
+    int n_bytes_enc =0;
 
     if ((BIO_get_flags(b) & BIO_FLAGS_BASE64_NO_NL) != 0) {
-        // Encoding with no newlines (single line Base64 output)
 
         // Fill leftover tmp buffer from previous call until we reach 3 bytes and dump them in ctx->buf
         if (ctx->tmp_len > 0) {
-            // there should only be 0, 1 or 2 bytes in tmp buffer
             if (!ossl_assert(ctx->tmp_len <= 3)) {
                 ERR_raise(ERR_LIB_BIO, ERR_R_INTERNAL_ERROR);
                 OPENSSL_free(encoded); 
@@ -418,11 +414,8 @@ static int b64_write(BIO *b, const char *in, int inl)
                     return ret;  // Total bytes consumed from input
             }
 
-            // Encode full 3-byte tmp buffer
-            // the args are : (output, input, length)...
             ctx->buf_len = EVP_EncodeBlock(encoded, ctx->tmp, ctx->tmp_len); 
-
-            ctx->tmp_len = 0;  // Done with tmp buffer
+            ctx->tmp_len = 0;  
         } else {
             // No leftover tmp, check if enough input for full blocks
             if (n < 3) {
@@ -440,7 +433,7 @@ static int b64_write(BIO *b, const char *in, int inl)
             ret += n;
         }
     } else {
-        // Normal Base64 encoding with newlines (via EVP API)
+        // Normal Base64 encoding with newlines
         if (!EVP_EncodeUpdate(ctx->base64, encoded, &ctx->buf_len, // TODO: figure out how to BIO write here to output directly
                                 (unsigned char *)in, n)) {
             OPENSSL_free(encoded); 
@@ -451,29 +444,21 @@ static int b64_write(BIO *b, const char *in, int inl)
     }
 
     // Move input pointer forward
-    inl -= n;
-    in += n;
+    // inl -= n;
+    // in += n;
 
     // Write newly encoded data
-    ctx->buf_off = 0;
     n = ctx->buf_len;
-    while (n > 0) {
-        i = BIO_write(next, encoded, n);
-        if (i <= 0) {
-            BIO_copy_next_retry(b);  // Propagate retry status
-            OPENSSL_free(encoded); 
-            return ret == 0 ? i : ret;
-        }
-
-        n -= i;
-        ctx->buf_off += i;
+    i = BIO_write(next, encoded, n);
+    if (i <= 0) {
+        BIO_copy_next_retry(b);  // Propagate retry status
+        OPENSSL_free(encoded); 
+        return ret == 0 ? i : ret;
     }
 
     ctx->buf_len = 0;
-    ctx->buf_off = 0;
 
     OPENSSL_free(encoded); 
-
     return ret;  // Total bytes consumed from input
 }
 
