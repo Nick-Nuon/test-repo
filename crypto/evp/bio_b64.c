@@ -41,6 +41,9 @@ typedef struct b64_struct {
     EVP_ENCODE_CTX *base64;
     unsigned char buf[EVP_ENCODE_LENGTH(B64_BLOCK_SIZE) + 10];
     unsigned char tmp[B64_BLOCK_SIZE];
+
+    unsigned char *encoded_buf;     // persistent malloc'd buffer
+    size_t encoded_buf_len;         // size of allocated buffer
 } BIO_B64_CTX;
 
 static const BIO_METHOD methods_b64 = {
@@ -72,6 +75,9 @@ static int b64_new(BIO *bi)
 
     ctx->cont = 1;
     ctx->start = 1;
+    ctx->encoded_buf = NULL;
+    ctx->encoded_buf_len = 0;
+
     ctx->base64 = EVP_ENCODE_CTX_new();
     if (ctx->base64 == NULL) {
         OPENSSL_free(ctx);
@@ -94,6 +100,10 @@ static int b64_free(BIO *a)
     ctx = BIO_get_data(a);
     if (ctx == NULL)
         return 0;
+
+    OPENSSL_free(ctx->encoded_buf);
+    ctx->encoded_buf = NULL;
+    ctx->encoded_buf_len = 0;
 
     EVP_ENCODE_CTX_free(ctx->base64);
     OPENSSL_free(ctx);
@@ -376,9 +386,25 @@ static int b64_write(BIO *b, const char *in, int inl)
     if (in == NULL || inl <= 0)
         return 0;
 
-    // TODO:EVP_ENCODE_LENGTH is defensive: for disable_newlines mode, we can use a smaller buffer
+    // Previous fx START
+    // int encoded_length = EVP_ENCODE_LENGTH(inl);
+    // unsigned char *encoded = OPENSSL_malloc(encoded_length);
+    // END
+
     int encoded_length = EVP_ENCODE_LENGTH(inl);
-    unsigned char *encoded = OPENSSL_malloc(encoded_length);
+
+    if (ctx->encoded_buf == NULL || (size_t)encoded_length > ctx->encoded_buf_len) {
+        OPENSSL_free(ctx->encoded_buf);  // safe even if NULL
+        ctx->encoded_buf = OPENSSL_malloc(encoded_length);
+        if (ctx->encoded_buf == NULL) {
+            ERR_raise(ERR_LIB_BIO, ERR_R_MALLOC_FAILURE);
+            return -1;
+        }
+        ctx->encoded_buf_len = encoded_length;
+    }
+
+    unsigned char *encoded = ctx->encoded_buf;
+
 
     if (encoded == NULL) {
        ERR_raise(ERR_LIB_BIO, ERR_R_MALLOC_FAILURE);
@@ -389,7 +415,7 @@ static int b64_write(BIO *b, const char *in, int inl)
 
     if (!EVP_EncodeUpdate(ctx->base64, encoded, &n_bytes_enc,
                             (unsigned char *)in, inl)) {
-        OPENSSL_free(encoded); 
+        // OPENSSL_free(encoded); 
         return ret == 0 ? -1 : ret;
     }
 
@@ -398,11 +424,11 @@ static int b64_write(BIO *b, const char *in, int inl)
     i = BIO_write(next, encoded, n_bytes_enc);
     if (i <= 0) {
         BIO_copy_next_retry(b);  // Propagate retry status
-        OPENSSL_free(encoded); 
+        // OPENSSL_free(encoded); 
         return ret == 0 ? i : ret;
     }
 
-    OPENSSL_free(encoded); 
+    // OPENSSL_free(encoded); 
     return ret;  // Total bytes consumed from input
 }
 
