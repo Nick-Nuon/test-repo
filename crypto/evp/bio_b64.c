@@ -40,7 +40,7 @@ typedef struct b64_struct {
     int cont;                   /* <= 0 when finished */
     EVP_ENCODE_CTX *base64;
     unsigned char buf[EVP_ENCODE_LENGTH(B64_BLOCK_SIZE) + 10];
-    unsigned char tmp[B64_BLOCK_SIZE]; // By default, this is only 1024 bytes....
+    unsigned char tmp[B64_BLOCK_SIZE];
 } BIO_B64_CTX;
 
 static const BIO_METHOD methods_b64 = {
@@ -378,7 +378,7 @@ static int b64_write(BIO *b, const char *in, int inl)
 
     // TODO:EVP_ENCODE_LENGTH is defensive: for disable_newlines mode, we can use a smaller buffer
     int encoded_length = EVP_ENCODE_LENGTH(inl);
-    unsigned char *encoded = OPENSSL_malloc(encoded_length + 1);
+    unsigned char *encoded = OPENSSL_malloc(encoded_length);
 
     if (encoded == NULL) {
        ERR_raise(ERR_LIB_BIO, ERR_R_MALLOC_FAILURE);
