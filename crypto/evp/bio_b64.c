@@ -332,7 +332,7 @@ static int b64_read(BIO *b, char *out, int outl)
 
 static int b64_write(BIO *b, const char *in, int inl)
 {
-    int ret = 0;  // Total number of input bytes consumed
+    int ret = 0; 
     int n, i; // n = number of bytes to process in this iteration, i = number of bytes written
     BIO_B64_CTX *ctx;
     BIO *next;
@@ -351,9 +351,6 @@ static int b64_write(BIO *b, const char *in, int inl)
         ctx->tmp_len = 0;
         EVP_EncodeInit(ctx->base64);  // Reinitialize base64 encoder
     }
-
-    // We don't use the buffer anymore, but other functions/BIO probably still write to it as 
-    // removing this section break their tests. 
 
     // Internal sanity checks to prevent buffer overflows or underflows
     if (!ossl_assert(ctx->buf_off < (int)sizeof(ctx->buf)) ||
@@ -386,15 +383,10 @@ static int b64_write(BIO *b, const char *in, int inl)
     if (in == NULL || inl <= 0)
         return 0;
 
-    // Previous fx START
-    // int encoded_length = EVP_ENCODE_LENGTH(inl);
-    // unsigned char *encoded = OPENSSL_malloc(encoded_length);
-    // END
-
     int encoded_length = EVP_ENCODE_LENGTH(inl);
 
     if (ctx->encoded_buf == NULL || (size_t)encoded_length > ctx->encoded_buf_len) {
-        OPENSSL_free(ctx->encoded_buf);  // safe even if NULL
+        OPENSSL_free(ctx->encoded_buf);
         ctx->encoded_buf = OPENSSL_malloc(encoded_length);
         if (ctx->encoded_buf == NULL) {
             ERR_raise(ERR_LIB_BIO, ERR_R_MALLOC_FAILURE);
@@ -415,7 +407,6 @@ static int b64_write(BIO *b, const char *in, int inl)
 
     if (!EVP_EncodeUpdate(ctx->base64, encoded, &n_bytes_enc,
                             (unsigned char *)in, inl)) {
-        // OPENSSL_free(encoded); 
         return ret == 0 ? -1 : ret;
     }
 
@@ -424,12 +415,10 @@ static int b64_write(BIO *b, const char *in, int inl)
     i = BIO_write(next, encoded, n_bytes_enc);
     if (i <= 0) {
         BIO_copy_next_retry(b);  // Propagate retry status
-        // OPENSSL_free(encoded); 
         return ret == 0 ? i : ret;
     }
 
-    // OPENSSL_free(encoded); 
-    return ret;  // Total bytes consumed from input
+    return ret;
 }
 
 static long b64_ctrl(BIO *b, int cmd, long num, void *ptr)
