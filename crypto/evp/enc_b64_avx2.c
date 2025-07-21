@@ -21,8 +21,36 @@
         return _mm256_add_epi8(result, input);
     }
 
+    // Accepts 4 AVX2 vectors and inserts '\n' every ctx_length characters
+// output buffer must be at least 128 + (128 / ctx_length) bytes
+size_t insert_newlines_4avx2(__m256i v0, __m256i v1, __m256i v2, __m256i v3,
+                             uint8_t *output, int ctx_length)
+{
+    uint8_t input[128];
+    size_t out_idx = 0;
+    int counter = 0;
 
-    int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen, int disable_newlines) {
+    // Store the 4 vectors into a flat 128-byte array
+    _mm256_storeu_si256((__m256i *)(input +  0), v0);
+    _mm256_storeu_si256((__m256i *)(input + 32), v1);
+    _mm256_storeu_si256((__m256i *)(input + 64), v2);
+    _mm256_storeu_si256((__m256i *)(input + 96), v3);
+
+    // Scalar loop that copies input to output, inserting newlines
+    for (int i = 0; i < 128; i++) {
+        output[out_idx++] = input[i];
+        counter++;
+
+        if (counter == ctx_length) {
+            output[out_idx++] = '\n';
+            counter = 0;
+        }
+    }
+
+    return out_idx;
+}
+
+    int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen, int newlines) {
         const uint8_t *input = (const uint8_t *)src;
         uint8_t *out = (uint8_t *)dst;
         size_t i = 0;
@@ -78,12 +106,12 @@
             out += 32;
             _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input1));
             out += 32;
-            if (disable_newlines) {
+            if (newlines == 0) {
                 _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input2));
                 out += 32;
                 _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input3));
                 out += 32;
-            }  else {
+            }  else if (newlines == 48) {
                 *(out++) = '\n';
                 nl_count++;
 
@@ -96,10 +124,14 @@
                 *(out++) = '\n';
                 nl_count++;
             }
+            else {
+                insert_newlines_4avx2(input0, input1, input2, input3, out, newlines);
+                nl_count += 128 / newlines;
+            }
 
         }
 
-        if (disable_newlines) {
+        if (newlines == 0) {
             // Process remaining 24-byte chunks
             for (; i + 28 <= srclen; i += 24) {
                 // lo = [xxxx|DDDC|CCBB|BAAA]
