@@ -184,12 +184,12 @@ static int evp_encode_switch(EVP_ENCODE_CTX *ctx, unsigned char *t,
     // DEBUG_PRINT("evp_encode_switch called with dlen: %d\n", dlen);
 
     if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) == 0 && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) != 0) {
-        int disable_newlines = 1;
-        return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, disable_newlines);
+        int newlines = 0;
+        return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, newlines);
     }
     if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) == 0 && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0 && ctx->length == 48) {
-        int disable_newlines = 0;
-        return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, disable_newlines);
+        int newlines = ctx-> length;
+        return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, newlines);
     }
 
     return evp_encode_scalar_nl_int(ctx, t, f, dlen);
