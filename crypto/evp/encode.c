@@ -351,7 +351,7 @@ int EVP_EncodeUpdate_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
         *out = '\0';
     }
     while (inl >= ctx->length && total <= INT_MAX) {
-        j = evp_encode_scalar_nl_int(ctx, out, in, ctx->length);
+        j = evp_encodeblock_int_openssl(ctx, out, in, ctx->length);
         in += ctx->length;
         inl -= ctx->length;
         out += j;
@@ -532,6 +532,12 @@ end:
     *outl = ret;
     ctx->num = n;
     return rv;
+}
+
+void EVP_Set_length(EVP_ENCODE_CTX *ctx,int length)
+{
+    /* Only ctx->num and ctx->flags are used during decoding. */
+    ctx->length = length;
 }
 
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,

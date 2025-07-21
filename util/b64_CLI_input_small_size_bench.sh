@@ -8,7 +8,7 @@ fi
 
 echo "🛠️  Building OpenSSL with -march=native -mtune=native..."
 
-LOGFILE="./util/benchmark_results/input_size_vs_time_$(date +'%Y-%m-%d_%H-%M-%S').csv"
+LOGFILE="./util/benchmark_results/small_input_size_vs_time_$(date +'%Y-%m-%d_%H-%M-%S').csv"
 mkdir -p "$(dirname "$LOGFILE")"
 echo "input_size_bytes,time_ms" > "$LOGFILE"
 
@@ -24,8 +24,7 @@ TEST_DIR="./util/benchmark_data/scaling_test"
 mkdir -p "$TEST_DIR"
 
 echo "🧪 Generating test files with increasing sizes..."
-# Linear sizes: generate files from 1 byte up to 1000000 bytes in steps of 1000
-for size in $(seq 1 500000 100000000); do
+for size in $(seq 1 10000 2000000); do
     head -c "$size" /dev/urandom > "$TEST_DIR/file_${size}.bin"
 done
 

@@ -916,6 +916,9 @@ OPENSSL_EXPORT int EVP_EncodeUpdate_openssl(EVP_ENCODE_CTX *ctx, unsigned char *
     const unsigned char *in, int inl);
 OPENSSL_EXPORT void EVP_EncodeFinal_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl);
 OPENSSL_EXPORT void evp_encode_ctx_set_flags(EVP_ENCODE_CTX *ctx, unsigned int flags);
+// TODO: This is a workaround for the fact that EVP_ENCODE_CTX is opaque for testing purposes
+void EVP_Set_length(EVP_ENCODE_CTX *ctx,int length);
+
 // ****************************************************************************************
 int EVP_EncodeBlock(unsigned char *t, const unsigned char *f, int n);
 
