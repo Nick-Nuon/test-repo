@@ -85,7 +85,7 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
         unsigned char *file_content = malloc(st.st_size);
         // --- NO_NL mode -- this is very defensive, but I got tired of eating segfaults
         size_t encoded_len = 4 * ((st.st_size + 2) / 3);
-        size_t line_breaks = (encoded_len)/ 48 * 2;  // PEM line :1 newline per 48 bytes by default, but the insertion length might be anything up to 80 bytes
+        size_t line_breaks = (encoded_len)/ 3 * 2;  // PEM line :1 newline per 48 bytes by default, but the insertion length might be anything up to 80 bytes
         size_t encoded_total = encoded_len + line_breaks + 64;  // final block overhead, the +64 is rather defensive
 
         
@@ -139,7 +139,8 @@ size_t base64_encode_custom(unsigned char *dst, size_t dstlen,
     const unsigned char *src, size_t srclen,
     encode_update_fn update_fn,
     encode_final_fn final_fn,
-    int disable_newlines) {
+    int disable_newlines,
+    int ctx_length) {
     EVP_ENCODE_CTX *ctx = EVP_ENCODE_CTX_new();
     if (!ctx) {
         fprintf(stderr, "Failed to allocate EVP_ENCODE_CTX\n");
@@ -153,6 +154,7 @@ size_t base64_encode_custom(unsigned char *dst, size_t dstlen,
     if (disable_newlines) {
         evp_encode_ctx_set_flags(ctx, EVP_ENCODE_CTX_NO_NEWLINES);
     }
+    EVP_Set_length(ctx, ctx_length);
 
     if (update_fn(ctx, dst, &outlen, src, (int)srclen) < 0) {
         fprintf(stderr, "Error: Custom base64 encoding failed.\n");
@@ -168,7 +170,7 @@ size_t base64_encode_custom(unsigned char *dst, size_t dstlen,
     typedef int (*encode_benchmark_fn)(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                                   const unsigned char *in, int inl);
 void run_benchmark(const char *name, int fd_cycles, FileData *files, size_t file_count,
-                    encode_update_fn update_fn, encode_final_fn final_fn, int NO_NL) {
+                    encode_update_fn update_fn, encode_final_fn final_fn, int NO_NL, int ctx_length) {
     uint64_t total_cycles = 0, total_instructions = 0, total_elapsed_ns = 0;
     size_t N = min_repeats;
     if (N == 0) N = 1;
@@ -194,7 +196,8 @@ void run_benchmark(const char *name, int fd_cycles, FileData *files, size_t file
                                 files[f].size,
                                 update_fn,
                                 final_fn,
-                                NO_NL);
+                                NO_NL,
+                                ctx_length);
         }
 
         ioctl(fd_cycles, PERF_EVENT_IOC_DISABLE, PERF_IOC_FLAG_GROUP);
@@ -276,18 +279,28 @@ int main(int argc, char **argv) {
 
     printf ("-----------------------DISABLE NEWLINES/NO_NL mode---------------------------");
     run_benchmark("EVP_EncodeUpdate", fd_cycles, files, file_count, 
-                EVP_EncodeUpdate, EVP_EncodeFinal, 1);
+                EVP_EncodeUpdate, EVP_EncodeFinal, 1,48);
     run_benchmark("EVP_EncodeUpdate_openssl", fd_cycles, files, file_count,
-                    EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 1);
+                    EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 1,48);
 
     // A newline is inserted after every 47 bytes. 
     printf ("-----------------------PEM mode---------------------------");
     // Main benchmarking calls
     run_benchmark("EVP_EncodeUpdate", fd_cycles, files, file_count, 
-                 EVP_EncodeUpdate, EVP_EncodeFinal, 0);
+                 EVP_EncodeUpdate, EVP_EncodeFinal, 0,48);
     run_benchmark("EVP_EncodeUpdate_openssl", fd_cycles, files, file_count,
-                 EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 0);
+                 EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 0,48);
 
+
+    printf ("-----------------------Custom ctx->lengths mode---------------------------");
+
+        // A newline is inserted after every 47 bytes. 
+    printf ("-----------------------PEM mode---------------------------");
+    // Main benchmarking calls
+    run_benchmark("EVP_EncodeUpdate", fd_cycles, files, file_count, 
+                 EVP_EncodeUpdate, EVP_EncodeFinal, 0,3);
+    run_benchmark("EVP_EncodeUpdate_openssl", fd_cycles, files, file_count,
+                 EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 0,3);
 
     printf("\n\nProcessed files:\n");
 
