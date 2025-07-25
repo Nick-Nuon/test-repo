@@ -23,6 +23,17 @@
         return _mm256_add_epi8(result, input);
     }
 
+static void dump_bytes(const char *label, const uint8_t *buf, size_t len) {
+    printf("%s:\n", label);
+    for (size_t i = 0; i < len; i++) {
+        printf("%02x ", buf[i]);
+        if ((i + 1) % 16 == 0)
+            printf("\n");
+    }
+    if (len % 16 != 0)
+        printf("\n");
+}
+
     // Accepts 4 AVX2 vectors and inserts '\n' every ctx_length characters
 // output buffer must be at least 128 + (128 / ctx_length) bytes
 size_t insert_newlines_4avx2(__m256i v0, __m256i v1, __m256i v2, __m256i v3,
@@ -38,16 +49,20 @@ size_t insert_newlines_4avx2(__m256i v0, __m256i v1, __m256i v2, __m256i v3,
     _mm256_storeu_si256((__m256i *)(input + 64), v2);
     _mm256_storeu_si256((__m256i *)(input + 96), v3);
 
+    // dump_bytes("Input to insert_newlines_4avx2", input, 128);
+
     // Scalar loop that copies input to output, inserting newlines
     for (int i = 0; i < 128; i++) {
         output[out_idx++] = input[i];
         counter++;
 
-        if (counter == ctx_length) {
+        if (counter == ctx_length/3 * 4) {
             output[out_idx++] = '\n';
             counter = 0;
         }
     }
+
+    // dump_bytes("output to insert_newlines_4avx2", output, 128);
 
     return out_idx;
 }
@@ -187,16 +202,21 @@ size_t insert_newlines_simd_block_from_input(
             const __m256i input2 = _mm256_or_si256(t1_2, t3_2);
             const __m256i input3 = _mm256_or_si256(t1_3, t3_3);
 
-            _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input0));
-            out += 32;
-            _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input1));
-            out += 32;
+
             if (newlines == 0) {
+                _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input0));
+                out += 32;
+                _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input1));
+                out += 32;
                 _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input2));
                 out += 32;
                 _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input3));
                 out += 32;
             }  else if (newlines == 48) {
+                _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input0));
+                out += 32;
+                _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input1));
+                out += 32;
                 *(out++) = '\n';
                 nl_count++;
 
@@ -210,6 +230,7 @@ size_t insert_newlines_simd_block_from_input(
                 nl_count++;
             }
             else {
+                printf("newlines arg is: %d\n", newlines);
                 // ctx->length == 3
                 // ***** Benchmarking EVP_EncodeUpdate *****:
                 // Benchmark ran 50000 iterations (40000 used after warmup)
@@ -228,8 +249,11 @@ size_t insert_newlines_simd_block_from_input(
                 // Instructions per cycle:   5.5912
                 // Throughput:              1.07 GB/s
 
-
-                // insert_newlines_4avx2(input0, input1, input2, input3, out, newlines);
+                int out_idx = 0;
+                out_idx = insert_newlines_4avx2(lookup_pshufb_improved_std(input0), 
+                                    lookup_pshufb_improved_std(input1), 
+                                    lookup_pshufb_improved_std(input2), 
+                                    lookup_pshufb_improved_std(input3), out, newlines);
 
 
                 //                  ***** Benchmarking EVP_EncodeUpdate *****:
@@ -248,13 +272,14 @@ size_t insert_newlines_simd_block_from_input(
                 // Instructions (avg):       15855604
                 // Instructions per cycle:   5.6070
                 // Throughput:              1.08 GB/s
-                int simd_offset = 0;
-                simd_offset += insert_newlines_simd_block_from_input(input0, out + simd_offset);
-                simd_offset += insert_newlines_simd_block_from_input(input1, out + simd_offset);
-                simd_offset += insert_newlines_simd_block_from_input(input2, out + simd_offset);
-                simd_offset += insert_newlines_simd_block_from_input(input3, out + simd_offset);
+                // int simd_offset = 0;
+                // simd_offset += insert_newlines_simd_block_from_input(input0, out + simd_offset);
+                // simd_offset += insert_newlines_simd_block_from_input(input1, out + simd_offset);
+                // simd_offset += insert_newlines_simd_block_from_input(input2, out + simd_offset);
+                // simd_offset += insert_newlines_simd_block_from_input(input3, out + simd_offset);
 
-                nl_count += 128 / newlines;
+                out += out_idx; 
+                nl_count += 128 / (newlines /3 * 4); // 128 bytes / 3 bytes per base64 character * 4 characters per base64 block
             }
 
         }
