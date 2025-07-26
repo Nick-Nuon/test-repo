@@ -230,53 +230,52 @@ size_t insert_newlines_simd_block_from_input(
                 nl_count++;
             }
             else {
-                printf("newlines arg is: %d\n", newlines);
-                // ctx->length == 3
+                // Mula files
                 // ***** Benchmarking EVP_EncodeUpdate *****:
                 // Benchmark ran 50000 iterations (40000 used after warmup)
-                // Total elapsed (wall):     10.798309 s
-                // CPU cycles (avg):         1174880
-                // Instructions (avg):       5372610
-                // Instructions per cycle:   4.5729
-                // Throughput:              1.36 GB/s
+                // Total elapsed (wall):     8.876706 s
+                // CPU cycles (avg):         921862
+                // Instructions (avg):       4606748
+                // Instructions per cycle:   4.9972
+                // Throughput:              1.65 GB/s
 
 
                 // ***** Benchmarking EVP_EncodeUpdate_openssl *****:
                 // Benchmark ran 50000 iterations (40000 used after warmup)
-                // Total elapsed (wall):     13.697718 s
-                // CPU cycles (avg):         1484743
+                // Total elapsed (wall):     14.980089 s
+                // CPU cycles (avg):         1611686
                 // Instructions (avg):       8301569
-                // Instructions per cycle:   5.5912
-                // Throughput:              1.07 GB/s
+                // Instructions per cycle:   5.1509
+                // Throughput:              0.98 GB/s
 
                 int out_idx = 0;
-                out_idx = insert_newlines_4avx2(lookup_pshufb_improved_std(input0), 
-                                    lookup_pshufb_improved_std(input1), 
-                                    lookup_pshufb_improved_std(input2), 
-                                    lookup_pshufb_improved_std(input3), out, newlines);
+                // out_idx = insert_newlines_4avx2(lookup_pshufb_improved_std(input0), 
+                //                     lookup_pshufb_improved_std(input1), 
+                //                     lookup_pshufb_improved_std(input2), 
+                //                     lookup_pshufb_improved_std(input3), out, newlines);
 
-
-                //                  ***** Benchmarking EVP_EncodeUpdate *****:
+                // Mula files
+                //  ***** Benchmarking EVP_EncodeUpdate *****:
                 // Benchmark ran 50000 iterations (40000 used after warmup)
-                // Total elapsed (wall):     19.690114 s
-                // CPU cycles (avg):         2137631
-                // Instructions (avg):       10261216
-                // Instructions per cycle:   4.8003
-                // Throughput:              1.42 GB/s
+                // Total elapsed (wall):     1.532642 s
+                // CPU cycles (avg):         144214
+                // Instructions (avg):       558339
+                // Instructions per cycle:   3.8716
+                // Throughput:              9.56 GB/s
 
 
                 //  ***** Benchmarking EVP_EncodeUpdate_openssl *****:
                 // Benchmark ran 50000 iterations (40000 used after warmup)
-                // Total elapsed (wall):     25.883906 s
-                // CPU cycles (avg):         2827800
-                // Instructions (avg):       15855604
-                // Instructions per cycle:   5.6070
-                // Throughput:              1.08 GB/s
-                // int simd_offset = 0;
-                // simd_offset += insert_newlines_simd_block_from_input(input0, out + simd_offset);
-                // simd_offset += insert_newlines_simd_block_from_input(input1, out + simd_offset);
-                // simd_offset += insert_newlines_simd_block_from_input(input2, out + simd_offset);
-                // simd_offset += insert_newlines_simd_block_from_input(input3, out + simd_offset);
+                // Total elapsed (wall):     14.830337 s
+                // CPU cycles (avg):         1606042
+                // Instructions (avg):       8301569
+                // Instructions per cycle:   5.1690
+                // Throughput:              0.99 GB/s
+
+                // out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input0), out + out_idx);
+                // out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input1), out + out_idx);
+                // out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input2), out + out_idx);
+                // out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input3), out + out_idx);
 
                 out += out_idx; 
                 nl_count += 128 / (newlines /3 * 4); // 128 bytes / 3 bytes per base64 character * 4 characters per base64 block
