@@ -37,11 +37,11 @@ static void dump_bytes(const char *label, const uint8_t *buf, size_t len) {
     // Accepts 4 AVX2 vectors and inserts '\n' every ctx_length characters
 // output buffer must be at least 128 + (128 / ctx_length) bytes
 size_t insert_newlines_4avx2(__m256i v0, __m256i v1, __m256i v2, __m256i v3,
-                             uint8_t *output, int ctx_length)
+                             uint8_t *output, int ctx_length, int *offset) 
 {
     uint8_t input[128];
     size_t out_idx = 0;
-    int counter = 0;
+    int counter = *offset;
 
     // Store the 4 vectors into a flat 128-byte array
     _mm256_storeu_si256((__m256i *)(input +  0), v0);
@@ -62,6 +62,7 @@ size_t insert_newlines_4avx2(__m256i v0, __m256i v1, __m256i v2, __m256i v3,
         }
     }
 
+    *offset = counter;  // Save updated counter state for next call
     // dump_bytes("output to insert_newlines_4avx2", output, 128);
 
     return out_idx;
@@ -229,6 +230,35 @@ size_t insert_newlines_simd_block_from_input(
                 *(out++) = '\n';
                 nl_count++;
             }
+            else if (newlines == 3) {
+
+                // Mula files
+                //  ***** Benchmarking EVP_EncodeUpdate *****:
+                // Benchmark ran 50000 iterations (40000 used after warmup)
+                // Total elapsed (wall):     1.532642 s
+                // CPU cycles (avg):         144214
+                // Instructions (avg):       558339
+                // Instructions per cycle:   3.8716
+                // Throughput:              9.56 GB/s
+
+
+                //  ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+                // Benchmark ran 50000 iterations (40000 used after warmup)
+                // Total elapsed (wall):     14.830337 s
+                // CPU cycles (avg):         1606042
+                // Instructions (avg):       8301569
+                // Instructions per cycle:   5.1690
+                // Throughput:              0.99 GB/s
+
+                int out_idx = 0;
+                out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input0), out + out_idx);
+                out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input1), out + out_idx);
+                out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input2), out + out_idx);
+                out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input3), out + out_idx);
+
+                out += out_idx; 
+                nl_count += 128 / (newlines /3 * 4); // 128 bytes / 3 bytes per base64 character * 4 characters per base64 block
+            }
             else {
                 // Mula files
                 // ***** Benchmarking EVP_EncodeUpdate *****:
@@ -249,33 +279,11 @@ size_t insert_newlines_simd_block_from_input(
                 // Throughput:              0.98 GB/s
 
                 int out_idx = 0;
-                // out_idx = insert_newlines_4avx2(lookup_pshufb_improved_std(input0), 
-                //                     lookup_pshufb_improved_std(input1), 
-                //                     lookup_pshufb_improved_std(input2), 
-                //                     lookup_pshufb_improved_std(input3), out, newlines);
-
-                // Mula files
-                //  ***** Benchmarking EVP_EncodeUpdate *****:
-                // Benchmark ran 50000 iterations (40000 used after warmup)
-                // Total elapsed (wall):     1.532642 s
-                // CPU cycles (avg):         144214
-                // Instructions (avg):       558339
-                // Instructions per cycle:   3.8716
-                // Throughput:              9.56 GB/s
-
-
-                //  ***** Benchmarking EVP_EncodeUpdate_openssl *****:
-                // Benchmark ran 50000 iterations (40000 used after warmup)
-                // Total elapsed (wall):     14.830337 s
-                // CPU cycles (avg):         1606042
-                // Instructions (avg):       8301569
-                // Instructions per cycle:   5.1690
-                // Throughput:              0.99 GB/s
-
-                // out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input0), out + out_idx);
-                // out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input1), out + out_idx);
-                // out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input2), out + out_idx);
-                // out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input3), out + out_idx);
+                int newlines_inserted = 0;
+                out_idx = insert_newlines_4avx2(lookup_pshufb_improved_std(input0), 
+                                    lookup_pshufb_improved_std(input1), 
+                                    lookup_pshufb_improved_std(input2), 
+                                    lookup_pshufb_improved_std(input3), out, newlines, &newlines_inserted);
 
                 out += out_idx; 
                 nl_count += 128 / (newlines /3 * 4); // 128 bytes / 3 bytes per base64 character * 4 characters per base64 block
