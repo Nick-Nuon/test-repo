@@ -36,12 +36,13 @@ static void dump_bytes(const char *label, const uint8_t *buf, size_t len) {
 
     // Accepts 4 AVX2 vectors and inserts '\n' every ctx_length characters
 // output buffer must be at least 128 + (128 / ctx_length) bytes
+//written_so_far is what has been written so far
 size_t insert_newlines_4avx2(__m256i v0, __m256i v1, __m256i v2, __m256i v3,
-                             uint8_t *output, int ctx_length, int *offset) 
+                             uint8_t *output, int ctx_length, int *written_so_far) 
 {
     uint8_t input[128];
     size_t out_idx = 0;
-    int counter = *offset;
+    int counter = *written_so_far;
 
     // Store the 4 vectors into a flat 128-byte array
     _mm256_storeu_si256((__m256i *)(input +  0), v0);
@@ -62,7 +63,7 @@ size_t insert_newlines_4avx2(__m256i v0, __m256i v1, __m256i v2, __m256i v3,
         }
     }
 
-    *offset = counter;  // Save updated counter state for next call
+    *written_so_far = counter;  // Save updated counter state for next call
     // dump_bytes("output to insert_newlines_4avx2", output, 128);
 
     return out_idx;
@@ -151,11 +152,12 @@ size_t insert_newlines_simd_block_from_input(
     return written;
 }
 
-    int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen, int newlines) {
+    int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen, int ctx_length) {
         const uint8_t *input = (const uint8_t *)src;
         uint8_t *out = (uint8_t *)dst;
         size_t i = 0;
         size_t nl_count = 0;
+        int stride = ctx_length / 3 * 4; 
 
         // Define shuffle mask for AVX2
         const __m256i shuf = _mm256_set_epi8(
@@ -204,7 +206,8 @@ size_t insert_newlines_simd_block_from_input(
             const __m256i input3 = _mm256_or_si256(t1_3, t3_3);
 
 
-            if (newlines == 0) {
+
+            if (stride == 0) {
                 _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input0));
                 out += 32;
                 _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input1));
@@ -213,7 +216,7 @@ size_t insert_newlines_simd_block_from_input(
                 out += 32;
                 _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input3));
                 out += 32;
-            }  else if (newlines == 48) {
+            }  else if (stride == 64) {
                 _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input0));
                 out += 32;
                 _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input1));
@@ -230,7 +233,7 @@ size_t insert_newlines_simd_block_from_input(
                 *(out++) = '\n';
                 nl_count++;
             }
-            else if (newlines == 3) {
+            else if (stride == 4) {
 
                 // Mula files
                 //  ***** Benchmarking EVP_EncodeUpdate *****:
@@ -257,7 +260,7 @@ size_t insert_newlines_simd_block_from_input(
                 out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input3), out + out_idx);
 
                 out += out_idx; 
-                nl_count += 128 / (newlines /3 * 4); // 128 bytes / 3 bytes per base64 character * 4 characters per base64 block
+                nl_count += 128 / stride; // 128 bytes / 3 bytes per base64 character * 4 characters per base64 block
             }
             else {
                 // Mula files
@@ -283,15 +286,15 @@ size_t insert_newlines_simd_block_from_input(
                 out_idx = insert_newlines_4avx2(lookup_pshufb_improved_std(input0), 
                                     lookup_pshufb_improved_std(input1), 
                                     lookup_pshufb_improved_std(input2), 
-                                    lookup_pshufb_improved_std(input3), out, newlines, &newlines_inserted);
+                                    lookup_pshufb_improved_std(input3), out, ctx_length, &newlines_inserted);
 
                 out += out_idx; 
-                nl_count += 128 / (newlines /3 * 4); // 128 bytes / 3 bytes per base64 character * 4 characters per base64 block
+                nl_count += 128 / stride; // 128 bytes / 3 bytes per base64 character * 4 characters per base64 block
             }
 
         }
 
-        if (newlines == 0) {
+        if (stride == 0) {
             // Process remaining 24-byte chunks
             for (; i + 28 <= srclen; i += 24) {
                 // lo = [xxxx|DDDC|CCBB|BAAA]
