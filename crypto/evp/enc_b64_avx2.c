@@ -34,11 +34,183 @@ static void dump_bytes(const char *label, const uint8_t *buf, size_t len) {
         printf("\n");
 }
 
-    // Accepts 4 AVX2 vectors and inserts '\n' every ctx_length characters
-// output buffer must be at least 128 + (128 / ctx_length) bytes
+
+// these particular intrinsics requires immediate values, this is arguably a hack , but 
+// it works and it beats using macros.
+static inline __m256i shift_right_zeros(__m256i v, int n) {
+    switch (n) {
+        case 0:  return v;
+        case 1:  return _mm256_srli_si256(v, 1);
+        case 2:  return _mm256_srli_si256(v, 2);
+        case 3:  return _mm256_srli_si256(v, 3);
+        case 4:  return _mm256_srli_si256(v, 4);
+        case 5:  return _mm256_srli_si256(v, 5);
+        case 6:  return _mm256_srli_si256(v, 6);
+        case 7:  return _mm256_srli_si256(v, 7);
+        case 8:  return _mm256_srli_si256(v, 8);
+        case 9:  return _mm256_srli_si256(v, 9);
+        case 10: return _mm256_srli_si256(v, 10);
+        case 11: return _mm256_srli_si256(v, 11);
+        case 12: return _mm256_srli_si256(v, 12);
+        case 13: return _mm256_srli_si256(v, 13);
+        case 14: return _mm256_srli_si256(v, 14);
+        case 15: return _mm256_srli_si256(v, 15);
+        default: return _mm256_setzero_si256(); // fallback
+    }
+}
+
+static inline __m256i shift_left_zeros(__m256i v, int n) {
+    switch (n) {
+        case 0:  return v;
+        case 1:  return _mm256_slli_si256(v, 1);
+        case 2:  return _mm256_slli_si256(v, 2);
+        case 3:  return _mm256_slli_si256(v, 3);
+        case 4:  return _mm256_slli_si256(v, 4);
+        case 5:  return _mm256_slli_si256(v, 5);
+        case 6:  return _mm256_slli_si256(v, 6);
+        case 7:  return _mm256_slli_si256(v, 7);
+        case 8:  return _mm256_slli_si256(v, 8);
+        case 9:  return _mm256_slli_si256(v, 9);
+        case 10: return _mm256_slli_si256(v, 10);
+        case 11: return _mm256_slli_si256(v, 11);
+        case 12: return _mm256_slli_si256(v, 12);
+        case 13: return _mm256_slli_si256(v, 13);
+        case 14: return _mm256_slli_si256(v, 14);
+        case 15: return _mm256_slli_si256(v, 15);
+        case 16: return _mm256_setzero_si256(); // all bytes shifted out
+        default: return _mm256_setzero_si256(); // fallback for invalid shift
+    }
+}
+
+size_t insert_newlines_simd_block_gt32_stride(
+    const __m256i v0,
+    uint8_t* output,
+    int steps_per_lap, // I use the analogy of a racing track where the length of a "lap" is the number of bytes between newlines
+    int *steps_mod_lap // these are the numbers of steps that have been done so far in the current lap, this is used to determine where to insert the newline
+) {
+
+    // printf("--------------------------------------------------\n");
+    // Handle cross-lane remainder logic
+    int b_lane =  16; // bytes per lane
+    uint8_t* out = output;
+
+    int steps_until_nl = steps_per_lap - *steps_mod_lap; 
+
+    // if (steps_until_nl < 0) {
+    //     printf("steps_until_nl < 0!!!!!");
+    //     printf("\033[1;31msteps_until_nl: %d\033[0m\n", steps_until_nl);
+    //     return -1;
+    // }
+
+    // printf("steps_until_nl: %d\n", steps_until_nl);
+    // printf("steps_mod_lap: %d\n", *steps_mod_lap);
+
+    _mm256_storeu_si256((__m256i*)(output),  v0);  
+
+    if (steps_until_nl > 32) { 
+        *steps_mod_lap += 32 ; 
+        return 32; 
+    } 
+
+    __m256i all_ff_mask = _mm256_set1_epi8((char)0xFF);
+    __m256i mask_first_lane  = _mm256_setr_epi8(
+        0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+        0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+        0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0
+    );
+
+    __m256i mask_second_lane = _mm256_setr_epi8(
+        0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,
+        0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+        0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF
+    );
+
+    __m256i blended_0L = v0;
+    // we first check how much surplus bytes due to inserting "\n" in both lanes
+    int surplus_0 =  steps_until_nl < 16 ? 1 : 0;
+    
+    if (surplus_0 == 1) {
+        // printf("newline in first lane!: %d\n", surplus_0);
+        __m256i shifted_0_L = shift_left_zeros(shift_right_zeros(v0,steps_until_nl), steps_until_nl + surplus_0);   
+        __m256i mask_shifted_0_L = shift_left_zeros(all_ff_mask, steps_until_nl + surplus_0);
+
+        __m256i mask = _mm256_or_si256(mask_shifted_0_L, mask_second_lane);
+
+        __m256i shifted_1_L = shift_left_zeros(v0, 1);
+
+        // Blend the second lane of shifted_1_L into shifted_0_L using mask_1_l
+        __m256i shifted = _mm256_blendv_epi8(shifted_0_L, shifted_1_L, mask);
+        blended_0L = _mm256_blendv_epi8(v0, shifted, mask);
+
+        _mm256_storeu_si256((__m256i*)(output), blended_0L);
+        steps_until_nl += steps_per_lap; 
+    }  
+
+    // printf("steps_until_nl after adding steps_per_lap: %d\n", steps_until_nl);
+    int surplus_1 = (16 <= steps_until_nl && steps_until_nl < 32) ? 1 : 0;
+
+
+    int last_of_1L = _mm256_extract_epi8(v0, 31); 
+
+    if (surplus_1 == 1){
+        // printf("Newline in second lane!: %d\n", surplus_1);
+
+        uint16_t sec_last_of_1L = _mm256_extract_epi8(v0, 30);
+
+        int steps_until_nl_1 = steps_until_nl - 16; // we have already written 16 bytes from input
+
+        __m256i shifted_1_L = shift_left_zeros(shift_right_zeros(v0,steps_until_nl_1), steps_until_nl_1 + surplus_0 + surplus_1);   
+        __m256i mask_shifted_1_L = shift_left_zeros(all_ff_mask, steps_until_nl_1 + surplus_0 + surplus_1);
+
+        __m256i mask = _mm256_and_si256(mask_second_lane, mask_shifted_1_L);
+
+        // printf("shifted_1_L:"); print_avx2_bytes(shifted_1_L);
+
+        // printf("mask 1L:"); print_avx2_bytes(mask);
+
+        __m256i blended_1L = _mm256_blendv_epi8(blended_0L, shifted_1_L, mask);
+
+        // printf("blended 1L:"); print_avx2_bytes(blended_1L);
+
+        _mm256_storeu_si256((__m256i*)(output), blended_1L);
+        
+        output[steps_until_nl + surplus_0] = '\n';
+
+        output[31 + surplus_0] = sec_last_of_1L; 
+        output[31 + surplus_0 + surplus_1] = last_of_1L; 
+
+    }
+
+    if (surplus_0 == 1) {
+        output[steps_until_nl - steps_per_lap] = '\n';
+        output[16] = _mm256_extract_epi8(v0, 15);
+        output[31 + surplus_0 + surplus_1] = last_of_1L; 
+    }
+
+    *steps_mod_lap =  steps_until_nl >32 ? 32 - (steps_until_nl - steps_per_lap): 32 - steps_until_nl;
+    // printf("\033[1;34msteps_mod_lap (after): %d\033[0m\n", *steps_mod_lap);
+
+    int nl_at_end = 0;
+    if (*steps_mod_lap == steps_per_lap || *steps_mod_lap == 0 )  {
+        *steps_mod_lap = 0; 
+        output[32 + surplus_0 + surplus_1] = '\n';
+        nl_at_end = 1;
+    }
+
+    out += 32 + surplus_0 + surplus_1 + nl_at_end; 
+
+    size_t written = (size_t)(out - output);
+
+    return written;
+}
+
+    // Accepts 4 AVX2 vectors and inserts '\n' every stride characters
+// output buffer must be at least 128 + (128 / stride) bytes
 //written_so_far is what has been written so far
 size_t insert_newlines_4avx2(__m256i v0, __m256i v1, __m256i v2, __m256i v3,
-                             uint8_t *output, int ctx_length, int *written_so_far) 
+                             uint8_t *output, int stride, int *written_so_far) 
 {
     uint8_t input[128];
     size_t out_idx = 0;
@@ -57,7 +229,7 @@ size_t insert_newlines_4avx2(__m256i v0, __m256i v1, __m256i v2, __m256i v3,
         output[out_idx++] = input[i];
         counter++;
 
-        if (counter == ctx_length/3 * 4) {
+        if (counter == stride) {
             output[out_idx++] = '\n';
             counter = 0;
         }
@@ -286,7 +458,7 @@ size_t insert_newlines_simd_block_from_input(
                 out_idx = insert_newlines_4avx2(lookup_pshufb_improved_std(input0), 
                                     lookup_pshufb_improved_std(input1), 
                                     lookup_pshufb_improved_std(input2), 
-                                    lookup_pshufb_improved_std(input3), out, ctx_length, &newlines_inserted);
+                                    lookup_pshufb_improved_std(input3), out, stride, &newlines_inserted);
 
                 out += out_idx; 
                 nl_count += 128 / stride; // 128 bytes / 3 bytes per base64 character * 4 characters per base64 block
