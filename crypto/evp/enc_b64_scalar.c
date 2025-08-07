@@ -124,12 +124,15 @@ const char base64_std_bin2ascii_0[256] = {
 
 // this now optionally take care of newlines insertion also!
 int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
-  const unsigned char *f, int dlen)
+  const unsigned char *f, int dlen, int *steps_mod_lap)
 {
     int i, ret = 0;
     uint8_t t1, t2, t3;
     const unsigned char *e0, *e1, *e2;
     int srp = (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0);
+    int steps_mod_lap_by_input = *steps_mod_lap / 4 * 3;
+    // if (steps_mod_lap_by_input < 0)
+    //   steps_mod_lap_by_input = 0;
 
     if (srp) {
         e0 = base64_srp_bin2ascii_0;
@@ -141,7 +144,10 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
         e2 = base64_std_bin2ascii_2;
     }
 
-    for (i = 0; i + 2 < dlen && ret <= INT_MAX; i += 3) {
+    // for (i = 0; i + 2 < dlen && ret <= INT_MAX; i += 3) {
+      for (i = 0; i + 2 < dlen && ret <= INT_MAX; i += 3) {
+        // printf("scalar loop");
+
         t1 = f[i];
         t2 = f[i + 1];
         t3 = f[i + 2];
@@ -150,14 +156,20 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
         *(t++) = e1[((t2 & 0x0F) << 2) | ((t3 >> 6) & 0x03)];
         *(t++) = e2[t3];
         ret += 4;
+        // steps_mod_lap_by_input += 4;
+
+        printf("i: %d, t1: %02x, t2: %02x, t3: %02x, ret: %02x, steps_mod_lap_by_input: %d\n", i, t1, t2, t3, ret, steps_mod_lap_by_input);
         
         if (ctx != NULL){
-            if ((i + 3) % ctx->length == 0 && ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
+            if ((i + 3 + steps_mod_lap_by_input) % ctx->length == 0 && ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
+                printf("newline added\n");
                 *(t++) = '\n';
                 ret++;
             }
         }
     }
+
+    // *steps_mod_lap = steps_mod_lap_by_input; // Update steps_mod_lap for the next call
 
     switch (dlen - i) {
     case 0:
@@ -182,6 +194,49 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
         break;
     }
 
-  *t = '\0';
-  return ret;
+  // if (ctx != NULL && (*steps_mod_lap + ret) % ctx->length == 0 &&
+  //     ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
+  //     *(t++) = '\n';
+  //     ret++;
+  // }
+
+
+  // *t = '\0';
+
+  printf("Final i: %d, ret: %d, steps_mod_lap_by_input: %d, trigger: %d \n", i, ret, steps_mod_lap_by_input, (i + 3 + steps_mod_lap_by_input) % ctx->length);
+  // if (ctx != NULL){
+  //     if ((i + steps_mod_lap_by_input) % ctx->length == 0 && ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
+  //         printf("Final newline added\n");
+  //         *(t++) = '\n';  // write newline AND advance t
+  //         ret++;
+  //         *t = '\0';      // now safe to write null terminator AFTER the data
+  //     }
+  // }
+
+//   if (ctx != NULL && ((ret + steps_mod_lap_by_input) % ctx->length == 0) &&
+//     ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
+//     printf("Final newline added\n");
+//     *(t++) = '\n';
+//     ret++;
+// }
+
+// int steps_mod_lap_after = (ret + steps_mod_lap_by_input) % ctx->length;
+// if (ctx != NULL && steps_mod_lap_after != 0 &&
+//     ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
+//     *(t++) = '\n';
+//     ret++;
+// }
+
+*t = '\0'; // Null-terminate after everything
+
+printf("Encoded output (hex):\n");
+for (int idx = 0; idx < ret; idx++) {
+  printf("%02x ", (unsigned char)*(t - ret + idx));
+  if ((idx + 1) % 16 == 0)
+    printf("\n");
+}
+if (ret % 16 != 0)
+  printf("\n");
+
+return ret;
 }
