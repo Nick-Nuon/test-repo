@@ -89,7 +89,7 @@ size_t insert_newlines_simd_block_gt32_stride(
     int *steps_mod_lap // these are the numbers of steps that have been done so far in the current lap, this is used to determine where to insert the newline
 ) {
 
-    // printf("--------------------------------------------------\n");
+    printf("--------------------------------------------------\n");
     // Handle cross-lane remainder logic
     int b_lane =  16; // bytes per lane
     uint8_t* out = output;
@@ -102,8 +102,8 @@ size_t insert_newlines_simd_block_gt32_stride(
     //     return -1;
     // }
 
-    // printf("steps_until_nl: %d\n", steps_until_nl);
-    // printf("steps_mod_lap: %d\n", *steps_mod_lap);
+    printf("steps_until_nl: %d\n", steps_until_nl);
+    printf("steps_mod_lap: %d\n", *steps_mod_lap);
 
     _mm256_storeu_si256((__m256i*)(output),  v0);  
 
@@ -132,7 +132,7 @@ size_t insert_newlines_simd_block_gt32_stride(
     int surplus_0 =  steps_until_nl < 16 ? 1 : 0;
     
     if (surplus_0 == 1) {
-        // printf("newline in first lane!: %d\n", surplus_0);
+        printf("newline in first lane!: %d\n", surplus_0);
         __m256i shifted_0_L = shift_left_zeros(shift_right_zeros(v0,steps_until_nl), steps_until_nl + surplus_0);   
         __m256i mask_shifted_0_L = shift_left_zeros(all_ff_mask, steps_until_nl + surplus_0);
 
@@ -155,7 +155,7 @@ size_t insert_newlines_simd_block_gt32_stride(
     int last_of_1L = _mm256_extract_epi8(v0, 31); 
 
     if (surplus_1 == 1){
-        // printf("Newline in second lane!: %d\n", surplus_1);
+        printf("Newline in second lane!: %d\n", surplus_1);
 
         uint16_t sec_last_of_1L = _mm256_extract_epi8(v0, 30);
 
@@ -184,6 +184,7 @@ size_t insert_newlines_simd_block_gt32_stride(
     }
 
     if (surplus_0 == 1) {
+        printf("Inserting newline due to first lane!\n");
         output[steps_until_nl - steps_per_lap] = '\n';
         output[16] = _mm256_extract_epi8(v0, 15);
         output[31 + surplus_0 + surplus_1] = last_of_1L; 
@@ -194,15 +195,57 @@ size_t insert_newlines_simd_block_gt32_stride(
 
     int nl_at_end = 0;
     if (*steps_mod_lap == steps_per_lap || *steps_mod_lap == 0 )  {
+        printf("Inserting newline at the end!\n");
         *steps_mod_lap = 0; 
         output[32 + surplus_0 + surplus_1] = '\n';
         nl_at_end = 1;
     }
 
+
+
     out += 32 + surplus_0 + surplus_1 + nl_at_end; 
 
-    size_t written = (size_t)(out - output);
+    // Print the output buffer in hex and ASCII for debugging
+    dump_bytes("hasbeen output", output, out - output);
 
+    size_t written = (size_t)(out - output);
+    printf("written: %zu\n", written);
+
+    return written;
+}
+
+
+
+size_t insert_nl_2nd_avx2_stride_12(
+    const __m256i v0,
+    uint8_t* output         // at least 160 bytes to be safe
+) {
+    // mask for inserting newlines every 4 bytes and shuffling
+  __m256i shuffling_mask = _mm256_setr_epi8(
+      0, 1, 2, 3, 0xFF, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0xFF, // 14, 15
+      0xFF, 0xFF, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0xFF, 12 //, 13 , 14, 15
+  );
+
+  // Prepare mask and shuffle
+    __m256i shuffled = _mm256_shuffle_epi8(v0, shuffling_mask);
+
+    _mm256_storeu_si256((__m256i*)(output + 0),  shuffled);
+
+    int16_t rem_1_L_ext = _mm256_extract_epi16(v0, 7);
+    int8_t rem_2_L_ext_P1 = _mm256_extract_epi8(v0, 29);
+    int16_t rem_2_L_ext_P2 = _mm256_extract_epi16(v0, 15);
+
+    uint8_t* out = output;
+    out[4] = '\n';
+    memcpy(out + 15, &rem_1_L_ext, sizeof(rem_1_L_ext));
+    out[16 + 1] = '\n';
+    memcpy(out + 15 + 17, &rem_2_L_ext_P1, sizeof(rem_2_L_ext_P1));
+    out[16 + 14] = '\n';
+    memcpy(out + 15 + 17 +1, &rem_2_L_ext_P2, sizeof(rem_2_L_ext_P2));
+
+    out += 32 + 3;
+    
+    size_t written = (out - output);  // At the end of function
     return written;
 }
 
@@ -324,12 +367,13 @@ size_t insert_newlines_simd_block_from_input(
     return written;
 }
 
-    int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen, int ctx_length) {
+    int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen, int ctx_length, int *final_steps_mod_lap) {
         const uint8_t *input = (const uint8_t *)src;
         uint8_t *out = (uint8_t *)dst;
         size_t i = 0;
         size_t nl_count = 0;
         int stride = ctx_length / 3 * 4; 
+        int steps_mod_lap = 0;
 
         // Define shuffle mask for AVX2
         const __m256i shuf = _mm256_set_epi8(
@@ -377,7 +421,7 @@ size_t insert_newlines_simd_block_from_input(
             const __m256i input2 = _mm256_or_si256(t1_2, t3_2);
             const __m256i input3 = _mm256_or_si256(t1_3, t3_3);
 
-
+            printf("*** New 4x block! ***\n");
 
             if (stride == 0) {
                 _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input0));
@@ -432,7 +476,34 @@ size_t insert_newlines_simd_block_from_input(
                 out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input3), out + out_idx);
 
                 out += out_idx; 
-                nl_count += 128 / stride; // 128 bytes / 3 bytes per base64 character * 4 characters per base64 block
+                // nl_count += 128 / stride; // 128 bytes / 3 bytes per base64 character * 4 characters per base64 block
+                nl_count += (128 + stride - 1) / stride;
+
+            }
+
+
+            else if (stride == 12) {                
+                out += insert_newlines_simd_block_gt32_stride(
+                    lookup_pshufb_improved_std(input0), out, stride, &steps_mod_lap);
+                out += insert_nl_2nd_avx2_stride_12(
+                    lookup_pshufb_improved_std(input1), out);
+                
+                steps_mod_lap = 4;
+                out += insert_newlines_simd_block_gt32_stride(
+                    lookup_pshufb_improved_std(input2), out, stride, &steps_mod_lap);
+                out += insert_newlines_simd_block_gt32_stride(
+                    lookup_pshufb_improved_std(input3), out, stride, &steps_mod_lap);
+                nl_count += 128 / stride;            }
+            else if ( 16 <= stride   ){
+                out += insert_newlines_simd_block_gt32_stride(
+                    lookup_pshufb_improved_std(input0), out, stride, &steps_mod_lap);
+                out += insert_newlines_simd_block_gt32_stride(
+                    lookup_pshufb_improved_std(input1), out, stride, &steps_mod_lap);
+                out += insert_newlines_simd_block_gt32_stride(
+                    lookup_pshufb_improved_std(input2), out, stride, &steps_mod_lap);
+                out += insert_newlines_simd_block_gt32_stride(
+                    lookup_pshufb_improved_std(input3), out, stride, &steps_mod_lap);
+                nl_count += (128 + stride - 1) / stride;
             }
             else {
                 // Mula files
@@ -461,7 +532,7 @@ size_t insert_newlines_simd_block_from_input(
                                     lookup_pshufb_improved_std(input3), out, stride, &newlines_inserted);
 
                 out += out_idx; 
-                nl_count += 128 / stride; // 128 bytes / 3 bytes per base64 character * 4 characters per base64 block
+                nl_count += 128 / stride;
             }
 
         }
@@ -490,9 +561,11 @@ size_t insert_newlines_simd_block_from_input(
             }
         }
 
+        *final_steps_mod_lap = steps_mod_lap;
+
         // Return number of bytes written
         return i / 3 * 4 + nl_count + 
-                + evp_encode_scalar_nl_int(ctx, out, src + i, srclen - i);
+                + evp_encode_scalar_nl_int(ctx, out, src + i, srclen - i, final_steps_mod_lap);
     }
 
 #endif

@@ -23,7 +23,7 @@
 static unsigned char conv_ascii2bin(unsigned char a,
                                     const unsigned char *table);
 static int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
-                               const unsigned char *f, int dlen);
+                               const unsigned char *f, int dlen,int *steps_mod_lap);
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n, int eof);
 
@@ -180,25 +180,25 @@ void EVP_EncodeInit(EVP_ENCODE_CTX *ctx)
 }
 
 static int evp_encode_switch(EVP_ENCODE_CTX *ctx, unsigned char *t,
-    const unsigned char *f, int dlen) {
+    const unsigned char *f, int dlen,    int *steps_mod_lap) {
     // DEBUG_PRINT("evp_encode_switch called with dlen: %d\n", dlen);
 
     if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) == 0 && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) != 0) {
         int newlines = 0;
-        return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, newlines);
+        return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, newlines,steps_mod_lap);
     }
-    // if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) == 0 && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0 && (ctx->length == 48 || ctx->length == 3)) {
-    //     int newlines = ctx-> length;
-    //     return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, newlines);
-    // }
+    if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) == 0 && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0 && (ctx->length == 48 || ctx->length == 3 || 12 <= ctx->length )) {
+        int newlines = ctx-> length;
+        return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, newlines,steps_mod_lap);
+    }
 
     if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) == 0 && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
         int newlines = ctx-> length;
-        return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, newlines);
+        return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, newlines, steps_mod_lap);
     }
 
 
-    return evp_encode_scalar_nl_int(ctx, t, f, dlen);
+    return evp_encode_scalar_nl_int(ctx, t, f, dlen, steps_mod_lap);
 }
 
 int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,  
@@ -206,6 +206,7 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
 {
     int i, j;
     size_t total = 0;
+    int in_start = *in;
 
     // OPENSSL_assert(ctx->length == 48);
 
@@ -236,7 +237,8 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
         // a difference between this and the OpenSSL version is that
         // the responsability for adding a newline is handled insede tho 
         // evp_encode_scalar_nl_int function instead of here. 
-        j = evp_encode_scalar_nl_int(ctx, out, ctx->enc_data, ctx->length);
+        int steps_mod_lap = 0; // Reset steps_mod_lap before encoding
+        j = evp_encode_scalar_nl_int(ctx, out, ctx->enc_data, ctx->length,&steps_mod_lap);
         ctx->num = 0;
         out += j;
         total = j;
@@ -244,19 +246,37 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
         *out = '\0';
     }
 
+    int steps_mod_lap = 0; // Reset steps_mod_lap before encoding
 
     #if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
-        j = evp_encode_switch(ctx, out, in, inl - (inl % ctx->length));
+        j = evp_encode_switch(ctx, out, in, inl - (inl % ctx->length), &steps_mod_lap);
     #else
-        j = evp_encode_scalar_nl_int(ctx, out, in, inl - (inl % ctx->length));
+        j = evp_encode_scalar_nl_int(ctx, out, in, inl - (inl % ctx->length), &steps_mod_lap);
     #endif
     in += inl - (inl % ctx->length);
     inl -= inl - (inl % ctx->length);
     out += j;
     total += j;
 
-    *out = '\0';
-    
+    printf("After main loop: total: %zu, inl: %d, steps_mod_lap: %d\n", total, inl, steps_mod_lap);
+
+    int steps_mod_lap_by_input = steps_mod_lap / 4 * 3; // Adjust steps_mod_lap for the next call
+    // int steps_mod_lap_after = (j + steps_mod_lap_by_input) % ctx->length;
+    printf("trigger: %d\n", ( j/4*3 -1 + steps_mod_lap_by_input) % ctx->length);
+
+    if (ctx != NULL &&
+        ( j/4*3 -1 + steps_mod_lap_by_input) % ctx->length == 0 &&
+        ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
+            printf("Final nl insertion triggered\n");
+        // *(out++) = '\n';
+        // *(out++);
+        *(++out) = '\0';
+        total++;}
+    // }else {    
+        *out = '\0';
+    // }
+
+    // total++;
     // Check for output overflow
     if (total > INT_MAX) {
         *outl = 0;
@@ -275,9 +295,10 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
 void EVP_EncodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
 {
     unsigned int ret = 0;
-
+    
+    int steps_mod_lap = 0; // Reset steps_mod_lap before final encoding
     if (ctx->num != 0) {
-        ret = evp_encode_scalar_nl_int(ctx, out, ctx->enc_data, ctx->num);
+        ret = evp_encode_scalar_nl_int(ctx, out, ctx->enc_data, ctx->num, &steps_mod_lap);
         if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)
             out[ret++] = '\n';
         out[ret] = '\0';
@@ -398,7 +419,8 @@ void EVP_EncodeFinal_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
 
 int EVP_EncodeBlock(unsigned char *t, const unsigned char *f, int dlen)
 {
-    return evp_encode_scalar_nl_int(NULL, t, f, dlen);
+    int steps_mod_lap = 0; // Reset steps_mod_lap before encoding
+    return evp_encode_scalar_nl_int(NULL, t, f, dlen, &steps_mod_lap);
 }
 
 void EVP_DecodeInit(EVP_ENCODE_CTX *ctx)
