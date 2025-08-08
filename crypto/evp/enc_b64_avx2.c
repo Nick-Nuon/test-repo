@@ -87,6 +87,7 @@ size_t insert_newlines_simd_block_gt32_stride(
     uint8_t* output,
     int steps_per_lap, // I use the analogy of a racing track where the length of a "lap" is the number of bytes between newlines
     int *steps_mod_lap // these are the numbers of steps that have been done so far in the current lap, this is used to determine where to insert the newline
+    
 ) {
 
     printf("--------------------------------------------------\n");
@@ -206,7 +207,7 @@ size_t insert_newlines_simd_block_gt32_stride(
     out += 32 + surplus_0 + surplus_1 + nl_at_end; 
 
     // Print the output buffer in hex and ASCII for debugging
-    dump_bytes("hasbeen output", output, out - output);
+    // dump_bytes("hasbeen output", output, out - output);
 
     size_t written = (size_t)(out - output);
     printf("written: %zu\n", written);
@@ -519,9 +520,7 @@ size_t insert_newlines_simd_stride_8(
                 out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input3), out + out_idx);
 
                 out += out_idx; 
-                // nl_count += 128 / stride; // 128 bytes / 3 bytes per base64 character * 4 characters per base64 block
-                nl_count += (128 + stride - 1) / stride;
-
+                nl_count += 128 / stride; // 128 bytes / 3 bytes per base64 character * 4 characters per base64 block
             }
             else if (stride == 8) {          
 
@@ -533,7 +532,7 @@ size_t insert_newlines_simd_stride_8(
                     lookup_pshufb_improved_std(input2), out );
                 out += insert_newlines_simd_stride_8(
                     lookup_pshufb_improved_std(input3), out );
-                nl_count += (128 + stride - 1) / stride;
+                nl_count += 128 / stride;
 
             }
             else if (stride == 12) {          
@@ -553,7 +552,9 @@ size_t insert_newlines_simd_stride_8(
                 out += insert_fns[(base + 2) % 3](lookup_pshufb_improved_std(input2), out, stride, &steps_mod_lap);
                 out += insert_fns[(base + 3) % 3](lookup_pshufb_improved_std(input3), out, stride, &steps_mod_lap);
 
+                // nl_count += 128 / stride;
                 nl_count += (128 + stride - 1) / stride;
+                // nl_count += 12;
 
                      }
             else if ( 16 <= stride   ){
@@ -595,6 +596,8 @@ size_t insert_newlines_simd_stride_8(
 
                 out += out_idx; 
                 nl_count += 128 / stride;
+                // nl_count += (128 + stride - 1) / stride;
+
             }
 
         }
@@ -622,6 +625,8 @@ size_t insert_newlines_simd_stride_8(
                 out += 32;
             }
         }
+
+        printf("Final nl_count: %zu\n", nl_count);
 
         *final_steps_mod_lap = steps_mod_lap;
 

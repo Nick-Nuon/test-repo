@@ -180,8 +180,20 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
         *(t++) = e1[(t1 & 0x03) << 4];
         *(t++) = '=';
         *(t++) = '=';
-      
+
         ret += 4;
+
+        printf("i: %d, t1: %02x, ret: %02x, steps_mod_lap_by_input: %d\n", i, t1, ret, steps_mod_lap_by_input);
+        printf("Trigger value: %d\n", (i + 1 + steps_mod_lap_by_input + 3) % ctx->length);
+
+        if (ctx != NULL){
+            if ((i + 1 + steps_mod_lap_by_input) % ctx->length == 0 && ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
+                printf("newline added\n");
+                *(t++) = '\n';
+                ret++;
+            }
+        }
+
         break;
     case 2:
         t1 = f[i];
@@ -191,6 +203,18 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
         *(t++) = e2[(t2 & 0x0F) << 2];
         *(t++) = '=';
         ret += 4;
+
+
+        printf("i: %d, t1: %02x, ret: %02x, steps_mod_lap_by_input: %d\n", i, t1, ret, steps_mod_lap_by_input);
+        printf("Trigger value: %d\n", (i + 2 + steps_mod_lap_by_input) % ctx->length);
+
+        if (ctx != NULL){
+            if ((i + 2 + steps_mod_lap_by_input) % ctx->length == 0 && ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
+                printf("newline added\n");
+                *(t++) = '\n';
+                ret++;
+            }
+        }
         break;
     }
 
@@ -203,6 +227,7 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
 
   // *t = '\0';
 
+  // this line causes a segfault
   printf("Final i: %d, ret: %d, steps_mod_lap_by_input: %d, trigger: %d \n", i, ret, steps_mod_lap_by_input, (i + 3 + steps_mod_lap_by_input) % ctx->length);
   // if (ctx != NULL){
   //     if ((i + steps_mod_lap_by_input) % ctx->length == 0 && ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
