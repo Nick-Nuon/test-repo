@@ -86,8 +86,8 @@ size_t insert_newlines_simd_block_gt32_stride(
     const __m256i v0,
     uint8_t* output,
     int steps_per_lap, // I use the analogy of a racing track where the length of a "lap" is the number of bytes between newlines
-    int *steps_mod_lap // these are the numbers of steps that have been done so far in the current lap, this is used to determine where to insert the newline
-    
+    int *steps_mod_lap, // these are the numbers of steps that have been done so far in the current lap, this is used to determine where to insert the newline
+    size_t *fin_nl_cnt
 ) {
 
     printf("--------------------------------------------------\n");
@@ -102,6 +102,8 @@ size_t insert_newlines_simd_block_gt32_stride(
     //     printf("\033[1;31msteps_until_nl: %d\033[0m\n", steps_until_nl);
     //     return -1;
     // }
+
+    int nl_cnt = *fin_nl_cnt; // count of newlines inserted in this block
 
     printf("steps_until_nl: %d\n", steps_until_nl);
     printf("steps_mod_lap: %d\n", *steps_mod_lap);
@@ -147,6 +149,7 @@ size_t insert_newlines_simd_block_gt32_stride(
 
         _mm256_storeu_si256((__m256i*)(output), blended_0L);
         steps_until_nl += steps_per_lap; 
+        nl_cnt++;
     }  
 
     // printf("steps_until_nl after adding steps_per_lap: %d\n", steps_until_nl);
@@ -178,9 +181,9 @@ size_t insert_newlines_simd_block_gt32_stride(
         _mm256_storeu_si256((__m256i*)(output), blended_1L);
         
         output[steps_until_nl + surplus_0] = '\n';
-
         output[31 + surplus_0] = sec_last_of_1L; 
         output[31 + surplus_0 + surplus_1] = last_of_1L; 
+        nl_cnt++;
 
     }
 
@@ -189,6 +192,7 @@ size_t insert_newlines_simd_block_gt32_stride(
         output[steps_until_nl - steps_per_lap] = '\n';
         output[16] = _mm256_extract_epi8(v0, 15);
         output[31 + surplus_0 + surplus_1] = last_of_1L; 
+        nl_cnt++;
     }
 
     *steps_mod_lap =  steps_until_nl >32 ? 32 - (steps_until_nl - steps_per_lap): 32 - steps_until_nl;
@@ -200,14 +204,14 @@ size_t insert_newlines_simd_block_gt32_stride(
         *steps_mod_lap = 0; 
         output[32 + surplus_0 + surplus_1] = '\n';
         nl_at_end = 1;
+        nl_cnt++;
     }
 
-
-
     out += 32 + surplus_0 + surplus_1 + nl_at_end; 
+    *fin_nl_cnt = nl_cnt;
 
     // Print the output buffer in hex and ASCII for debugging
-    // dump_bytes("hasbeen output", output, out - output);
+    dump_bytes("output:", output, out - output);
 
     size_t written = (size_t)(out - output);
     printf("written: %zu\n", written);
@@ -221,7 +225,8 @@ size_t insert_nl_2nd_avx2_stride_12(
     const __m256i v0,
     uint8_t* output ,
     int dummy_stride,
-    int *steps_mod_lap
+    int *steps_mod_lap,
+    size_t *nl_count
 ) {
     // mask for inserting newlines every 4 bytes and shuffling
   __m256i shuffling_mask = _mm256_setr_epi8(
@@ -248,7 +253,7 @@ size_t insert_nl_2nd_avx2_stride_12(
 
     out += 32 + 3;
     *steps_mod_lap = 4;
-
+    *nl_count += 3;
 
     size_t written = (out - output);  // At the end of function
     return written;
@@ -536,7 +541,7 @@ size_t insert_newlines_simd_stride_8(
 
             }
             else if (stride == 12) {          
-                typedef size_t (*InsertFn)(__m256i vec, uint8_t* out, int stride, int* steps_mod_lap);
+                typedef size_t (*InsertFn)(__m256i vec, uint8_t* out, int stride, int* steps_mod_lap, size_t* nl_count);
 
                 InsertFn insert_fns[3] = {
                     insert_newlines_simd_block_gt32_stride,
@@ -547,26 +552,26 @@ size_t insert_newlines_simd_stride_8(
 
                 int base = (i /96) % 3;
 
-                out += insert_fns[(base + 0) % 3](lookup_pshufb_improved_std(input0), out, stride, &steps_mod_lap);
-                out += insert_fns[(base + 1) % 3](lookup_pshufb_improved_std(input1), out, stride, &steps_mod_lap);
-                out += insert_fns[(base + 2) % 3](lookup_pshufb_improved_std(input2), out, stride, &steps_mod_lap);
-                out += insert_fns[(base + 3) % 3](lookup_pshufb_improved_std(input3), out, stride, &steps_mod_lap);
+                out += insert_fns[(base + 0) % 3](lookup_pshufb_improved_std(input0), out, stride, &steps_mod_lap, &nl_count);
+                out += insert_fns[(base + 1) % 3](lookup_pshufb_improved_std(input1), out, stride, &steps_mod_lap, &nl_count);
+                out += insert_fns[(base + 2) % 3](lookup_pshufb_improved_std(input2), out, stride, &steps_mod_lap, &nl_count);
+                out += insert_fns[(base + 3) % 3](lookup_pshufb_improved_std(input3), out, stride, &steps_mod_lap, &nl_count);
 
                 // nl_count += 128 / stride;
-                nl_count += (128 + stride - 1) / stride;
+                // nl_count += (128 + stride - 1) / stride;
                 // nl_count += 12;
 
                      }
             else if ( 16 <= stride   ){
                 out += insert_newlines_simd_block_gt32_stride(
-                    lookup_pshufb_improved_std(input0), out, stride, &steps_mod_lap);
+                    lookup_pshufb_improved_std(input0), out, stride, &steps_mod_lap, &nl_count);
                 out += insert_newlines_simd_block_gt32_stride(
-                    lookup_pshufb_improved_std(input1), out, stride, &steps_mod_lap);
+                    lookup_pshufb_improved_std(input1), out, stride, &steps_mod_lap, &nl_count);
                 out += insert_newlines_simd_block_gt32_stride(
-                    lookup_pshufb_improved_std(input2), out, stride, &steps_mod_lap);
+                    lookup_pshufb_improved_std(input2), out, stride, &steps_mod_lap, &nl_count);
                 out += insert_newlines_simd_block_gt32_stride(
-                    lookup_pshufb_improved_std(input3), out, stride, &steps_mod_lap);
-                nl_count += (128 + stride - 1) / stride;
+                    lookup_pshufb_improved_std(input3), out, stride, &steps_mod_lap, &nl_count);
+                // nl_count += (128 + stride - 1) / stride;
             }
             else {
                 // Mula files
