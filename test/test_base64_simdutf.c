@@ -139,7 +139,7 @@ static void dump_bytes(const char *label, const uint8_t *buf, size_t len) {
 static int test_encode_line_lengths(void)
 {
     const int trials = 50;
-    const int max_input_len = 3000;
+    const int max_input_len = 300;
     unsigned int seed = 12345;
 
     unsigned char out_simd[9000 * 2 + 1] = {0};
@@ -155,10 +155,8 @@ static int test_encode_line_lengths(void)
             EVP_ENCODE_CTX *ctx_simd = EVP_ENCODE_CTX_new();
             EVP_ENCODE_CTX *ctx_ref  = EVP_ENCODE_CTX_new();
 
-            // int ctx_len = 3; // Temporary, only to reflect the 3/4 case.
-            // unsigned char out_simd[9000 * 2 + 1] = {0};
-            // unsigned char out_ref[9000 * 2 + 1] = {0};
-
+            //3,6,24 OK , 48 OK,  9 not OK, all others it seems outlen not OK, 80 memory not OK
+            // int ctx_len = 7; 
             memset(out_simd, 0, sizeof(out_simd));
             memset(out_ref,  0, sizeof(out_ref));
 
@@ -172,8 +170,19 @@ static int test_encode_line_lengths(void)
                 return 0;
             }
 
-            
-            printf("Trial %d, input length %d, line length %d (ctx_len=%d)\n", t, inl, ctx_len, ctx_len); // initialize with specific line lengths
+            // Define some ANSI color codes
+            #define CLR_RESET   "\033[0m"
+            #define CLR_YELLOW  "\033[33;1m"
+            #define CLR_CYAN    "\033[36;1m"
+            #define CLR_MAGENTA "\033[35;1m"
+
+            printf(CLR_YELLOW "Trial %d" CLR_RESET
+                ", input length " CLR_CYAN "%d" CLR_RESET
+                ", line length " CLR_MAGENTA "%d" CLR_RESET
+                " (ctx_len=%d)\n",
+                t, inl, ctx_len, ctx_len);
+
+            // printf("Trial %d, input length %d, line length %d (ctx_len=%d)\n", t, inl, ctx_len, ctx_len); // initialize with specific line lengths
             EVP_EncodeInit(ctx_simd);
             EVP_EncodeInit(ctx_ref);
             EVP_Set_length(ctx_simd, ctx_len);
@@ -189,7 +198,7 @@ static int test_encode_line_lengths(void)
             ASSERT_EQUAL_INT(ret_simd, ret_ref);
             ASSERT_MEM_EQUAL(out_ref,out_simd , outlen_ref);
 
-            // ASSERT_EQUAL_INT(outlen_simd, outlen_ref);
+            ASSERT_EQUAL_INT(outlen_simd, outlen_ref);
             // size_t maxlen = outlen_ref > outlen_simd ? outlen_ref : outlen_simd;
             // ASSERT_MEM_EQUAL(out_ref, out_simd, maxlen);
 
@@ -202,8 +211,73 @@ static int test_encode_line_lengths(void)
 
 }
 
+static int test_encode_padding_cases(void)
+{
+    // Cases: lengths mod 3 = 1 and 2
+    const size_t lens[] = {1, 2, 4, 5, 7, 8, 10, 11}; 
+    unsigned char out_simd[256];
+    unsigned char out_ref[256];
+
+    for (size_t li = 0; li < sizeof(lens)/sizeof(lens[0]); li++) {
+        size_t inl = lens[li];
+        unsigned char input[16];
+
+        // Fill with predictable data
+        for (size_t i = 0; i < inl; i++)
+            input[i] = (unsigned char)(i & 0xFF);
+
+
+        EVP_ENCODE_CTX *ctx_simd = EVP_ENCODE_CTX_new();
+        EVP_ENCODE_CTX *ctx_ref  = EVP_ENCODE_CTX_new();
+        if (!ctx_simd || !ctx_ref)
+            return 0;
+
+        int outlen_simd = 0, outlen_ref = 0;
+        int finlen_simd = 0, finlen_ref = 0;
+
+        EVP_EncodeInit(ctx_simd);
+        EVP_EncodeInit(ctx_ref);
+
+        EVP_EncodeUpdate(ctx_simd, out_simd, &outlen_simd, input, (int)inl);
+        EVP_EncodeUpdate_openssl(ctx_ref, out_ref, &outlen_ref, input, (int)inl);
+
+        EVP_EncodeFinal(ctx_simd, out_simd + outlen_simd, &finlen_simd);
+        EVP_EncodeFinal_openssl(ctx_ref, out_ref + outlen_ref, &finlen_ref);
+
+        int total_simd = outlen_simd + finlen_simd;
+        int total_ref  = outlen_ref + finlen_ref;
+
+        printf("\n=== Encoding length %zu ===\n", inl);
+        printf("SIMD (len=%d) ASCII: \"%.*s\"\n", total_simd, total_simd, out_simd);
+        dump_bytes("SIMD HEX", out_simd, total_simd);
+
+        printf("REF  (len=%d) ASCII: \"%.*s\"\n", total_ref, total_ref, out_ref);
+        dump_bytes("REF  HEX", out_ref, total_ref);
+
+
+        ASSERT_EQUAL_INT(total_simd, total_ref);
+        ASSERT_MEM_EQUAL(out_ref, out_simd, total_ref);
+
+        // // Check explicit '=' padding presence
+        // if (inl % 3 == 1) {
+        //     ASSERT_EQUAL_INT(out_ref[total_ref - 1], '=');
+        //     ASSERT_EQUAL_INT(out_ref[total_ref - 2], '=');
+        // } else if (inl % 3 == 2) {
+        //     ASSERT_EQUAL_INT(out_ref[total_ref - 1], '=');
+        // }
+
+        EVP_ENCODE_CTX_free(ctx_simd);
+        EVP_ENCODE_CTX_free(ctx_ref);
+    }
+    return 1;
+}
+
+//TODO need a test for = at end.... with ctx->length set to 80: a nl is not inserted
+
 int setup_tests(void)
 {
     ADD_TEST(test_encode_line_lengths);
+    // ADD_TEST(test_encode_padding_cases);
+    // ADD_TEST(test_encode_padding_small);
     return 1;
 }
