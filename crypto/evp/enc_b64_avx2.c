@@ -636,7 +636,7 @@ size_t insert_newlines_simd_stride_8(
         *final_steps_mod_lap = steps_mod_lap;
 
         // Return number of bytes written
-        return i / 3 * 4 + nl_count + 
+        return (size_t)(out - (uint8_t *)dst) +
                 + evp_encode_scalar_nl_int(ctx, out, src + i, srclen - i, final_steps_mod_lap);
     }
 

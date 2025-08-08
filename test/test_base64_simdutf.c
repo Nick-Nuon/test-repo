@@ -151,7 +151,7 @@ static int test_encode_line_lengths(void)
         for (int i = 0; i < inl; i++)
             input[i] = (unsigned char)(rand_r(&seed) % 256);
 
-        for (int ctx_len = 12; ctx_len <= 80; ctx_len += 3) {
+        for (int ctx_len = 3; ctx_len <= 80; ctx_len += 3) {
             EVP_ENCODE_CTX *ctx_simd = EVP_ENCODE_CTX_new();
             EVP_ENCODE_CTX *ctx_ref  = EVP_ENCODE_CTX_new();
 
