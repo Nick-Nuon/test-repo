@@ -260,14 +260,14 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     // int steps_mod_lap_after = (j + steps_mod_lap_by_input) % ctx->length;
     printf("trigger: %d\n", ( j/4*3 -1 + steps_mod_lap_by_input) % ctx->length);
 
-    if (ctx != NULL &&
-        ( j/4*3 -1 + steps_mod_lap_by_input) % ctx->length == 0 &&
-        ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
-            printf("Final nl insertion triggered\n");
-        // *(out++) = '\n';
-        // *(out++);
-        *(++out) = '\0';
-        total++;}
+    // if (ctx != NULL &&
+    //     ( j/4*3 -1 + steps_mod_lap_by_input) % ctx->length == 0 &&
+    //     ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
+    //         printf("Final nl insertion triggered\n");
+    //     // *(out++) = '\n';
+    //     // *(out++);
+    //     *(++out) = '\0';
+    //     total++;}
     // }else {    
         *out = '\0';
     // }
