@@ -218,7 +218,9 @@ size_t insert_newlines_simd_block_gt32_stride(
 
 size_t insert_nl_2nd_avx2_stride_12(
     const __m256i v0,
-    uint8_t* output         // at least 160 bytes to be safe
+    uint8_t* output ,
+    int dummy_stride,
+    int *steps_mod_lap
 ) {
     // mask for inserting newlines every 4 bytes and shuffling
   __m256i shuffling_mask = _mm256_setr_epi8(
@@ -244,7 +246,9 @@ size_t insert_nl_2nd_avx2_stride_12(
     memcpy(out + 15 + 17 +1, &rem_2_L_ext_P2, sizeof(rem_2_L_ext_P2));
 
     out += 32 + 3;
-    
+    *steps_mod_lap = 4;
+
+
     size_t written = (out - output);  // At the end of function
     return written;
 }
@@ -482,18 +486,26 @@ size_t insert_newlines_simd_block_from_input(
             }
 
 
-            else if (stride == 12) {                
-                out += insert_newlines_simd_block_gt32_stride(
-                    lookup_pshufb_improved_std(input0), out, stride, &steps_mod_lap);
-                out += insert_nl_2nd_avx2_stride_12(
-                    lookup_pshufb_improved_std(input1), out);
-                
-                steps_mod_lap = 4;
-                out += insert_newlines_simd_block_gt32_stride(
-                    lookup_pshufb_improved_std(input2), out, stride, &steps_mod_lap);
-                out += insert_newlines_simd_block_gt32_stride(
-                    lookup_pshufb_improved_std(input3), out, stride, &steps_mod_lap);
-                nl_count += 128 / stride;            }
+            else if (stride == 12) {          
+                typedef size_t (*InsertFn)(__m256i vec, uint8_t* out, int stride, int* steps_mod_lap);
+
+                InsertFn insert_fns[3] = {
+                    insert_newlines_simd_block_gt32_stride,
+                    insert_nl_2nd_avx2_stride_12,
+                    insert_newlines_simd_block_gt32_stride,
+                    insert_newlines_simd_block_gt32_stride
+                };
+
+                int base = (i /96) % 3;
+
+                out += insert_fns[(base + 0) % 3](lookup_pshufb_improved_std(input0), out, stride, &steps_mod_lap);
+                out += insert_fns[(base + 1) % 3](lookup_pshufb_improved_std(input1), out, stride, &steps_mod_lap);
+                out += insert_fns[(base + 2) % 3](lookup_pshufb_improved_std(input2), out, stride, &steps_mod_lap);
+                out += insert_fns[(base + 3) % 3](lookup_pshufb_improved_std(input3), out, stride, &steps_mod_lap);
+
+                nl_count += (128 + stride - 1) / stride;
+
+                     }
             else if ( 16 <= stride   ){
                 out += insert_newlines_simd_block_gt32_stride(
                     lookup_pshufb_improved_std(input0), out, stride, &steps_mod_lap);
