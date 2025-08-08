@@ -371,6 +371,45 @@ size_t insert_newlines_simd_block_from_input(
     return written;
 }
 
+
+size_t insert_newlines_simd_stride_8(
+    const __m256i v0,
+    uint8_t* output         // at least 160 bytes to be safe
+) {
+    // mask for inserting newlines every 4 bytes and shuffling
+  __m256i shuffling_mask = _mm256_setr_epi8(
+      0, 1, 2, 3, 4, 5, 6, 7, 0xFF,
+      8, 9, 10, 11, 12, 13, 14, // 15,
+      0xFF, 0xFF, 0, 1, 2, 3, 4, 5, 6,
+      7, 0xFF,8, 9 , 10, 11,  12 
+      //,13 ,14, 15 , 0xFF <-- Excess bytes that are memcopied later on
+  );
+
+  // Prepare mask and shuffle
+    __m256i shuffled_4_bytes = _mm256_shuffle_epi8(v0, shuffling_mask);
+
+    _mm256_storeu_si256((__m256i*)(output),  shuffled_4_bytes);
+
+    int8_t rem_1_L = _mm256_extract_epi8(v0, 15);
+    int8_t rem_2_L_P1 = _mm256_extract_epi8(v0, 29);
+    int16_t rem_2_L_P2 = _mm256_extract_epi16(v0, 15);
+
+    uint8_t* out = output;
+    memcpy(out + 16, &rem_1_L, sizeof(rem_1_L));
+    memcpy(out + 32, &rem_2_L_P1, sizeof(rem_2_L_P1));
+    memcpy(out + 32+1, &rem_2_L_P2, sizeof(rem_2_L_P2));
+
+    output[8] = '\n';
+    output[17] = '\n';
+    output[26] = '\n';
+    output[35] = '\n';
+    
+    out += 32 + 4;
+
+    size_t written = (out - output);  // At the end of function
+    return written;
+}
+
     int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen, int ctx_length, int *final_steps_mod_lap) {
         const uint8_t *input = (const uint8_t *)src;
         uint8_t *out = (uint8_t *)dst;
@@ -484,8 +523,19 @@ size_t insert_newlines_simd_block_from_input(
                 nl_count += (128 + stride - 1) / stride;
 
             }
+            else if (stride == 8) {          
 
+                out += insert_newlines_simd_stride_8(
+                    lookup_pshufb_improved_std(input0), out );
+                out += insert_newlines_simd_stride_8(
+                    lookup_pshufb_improved_std(input1), out );
+                out += insert_newlines_simd_stride_8(
+                    lookup_pshufb_improved_std(input2), out );
+                out += insert_newlines_simd_stride_8(
+                    lookup_pshufb_improved_std(input3), out );
+                nl_count += (128 + stride - 1) / stride;
 
+            }
             else if (stride == 12) {          
                 typedef size_t (*InsertFn)(__m256i vec, uint8_t* out, int stride, int* steps_mod_lap);
 
