@@ -204,7 +204,8 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     size_t total = 0;
     int in_start = *in;
 
-    // OPENSSL_assert(ctx->length == 48);
+    // OPENSSL_assert(ctx->length == 48); <- this doesn't fail the OpenSSL thus indicating that OpenSSL expects a specific length for the encoding context.
+    // this is in spite that the code allows for different lengths
 
     // Initialize output length
     *outl = 0;
@@ -254,11 +255,11 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     out += j;
     total += j;
 
-    printf("After main loop: total: %zu, inl: %d, steps_mod_lap: %d\n", total, inl, steps_mod_lap);
+    // printf("After main loop: total: %zu, inl: %d, steps_mod_lap: %d\n", total, inl, steps_mod_lap);
 
     int steps_mod_lap_by_input = steps_mod_lap / 4 * 3; // Adjust steps_mod_lap for the next call
     // int steps_mod_lap_after = (j + steps_mod_lap_by_input) % ctx->length;
-    printf("trigger: %d\n", ( j/4*3 -1 + steps_mod_lap_by_input) % ctx->length);
+    // printf("trigger: %d\n", ( j/4*3 -1 + steps_mod_lap_by_input) % ctx->length);
 
     // if (ctx != NULL &&
     //     ( j/4*3 -1 + steps_mod_lap_by_input) % ctx->length == 0 &&
@@ -563,6 +564,33 @@ void EVP_Set_length(EVP_ENCODE_CTX *ctx,int length)
     /* Only ctx->num and ctx->flags are used during decoding. */
     ctx->length = length;
 }
+
+// Fill ctx with a random partial state
+void fuzz_fill_encode_ctx(EVP_ENCODE_CTX *ctx, int max_fill)
+{
+    // Seed RNG (if not seeded elsewhere)
+    static int seeded = 0;
+    if (!seeded) { srand((unsigned)time(NULL)); seeded = 1; }
+
+    // Pick how many bytes are "already in the buffer" (0..max_fill)
+    int num = rand() % (max_fill + 1);
+    ctx->num = num;
+
+    // Fill enc_data[0..num-1] with random junk
+    for (int i = 0; i < num; i++) {
+        ctx->enc_data[i] = (unsigned char)(rand() & 0xFF);
+    }
+
+    // Random line length (multiple of 4 makes sense for base64, but we can fuzz)
+    ctx->length = (rand() % 80) + 1;
+
+    // Random current line num (bytes already output in current line)
+    ctx->line_num = rand() % (ctx->length + 1);
+
+    // Random flags
+    // ctx->flags = (unsigned int)rand();
+}
+
 
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n,

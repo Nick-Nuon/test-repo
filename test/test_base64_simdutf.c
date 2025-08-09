@@ -156,7 +156,7 @@ static int test_encode_line_lengths(void)
             EVP_ENCODE_CTX *ctx_ref  = EVP_ENCODE_CTX_new();
 
             //3,6,24 OK , 48 OK,  9 not OK, all others it seems outlen not OK, 80 memory not OK
-            // int ctx_len = 7; 
+            // int ctx_len = 65; 
             memset(out_simd, 0, sizeof(out_simd));
             memset(out_ref,  0, sizeof(out_ref));
 
@@ -171,16 +171,16 @@ static int test_encode_line_lengths(void)
             }
 
             // Define some ANSI color codes
-            #define CLR_RESET   "\033[0m"
-            #define CLR_YELLOW  "\033[33;1m"
-            #define CLR_CYAN    "\033[36;1m"
-            #define CLR_MAGENTA "\033[35;1m"
+            // #define CLR_RESET   "\033[0m"
+            // #define CLR_YELLOW  "\033[33;1m"
+            // #define CLR_CYAN    "\033[36;1m"
+            // #define CLR_MAGENTA "\033[35;1m"
 
-            printf(CLR_YELLOW "Trial %d" CLR_RESET
-                ", input length " CLR_CYAN "%d" CLR_RESET
-                ", line length " CLR_MAGENTA "%d" CLR_RESET
-                " (ctx_len=%d)\n",
-                t, inl, ctx_len, ctx_len);
+            // printf(CLR_YELLOW "Trial %d" CLR_RESET
+            //     ", input length " CLR_CYAN "%d" CLR_RESET
+            //     ", line length " CLR_MAGENTA "%d" CLR_RESET
+            //     " (ctx_len=%d)\n",
+            //     t, inl, ctx_len, ctx_len);
 
             // printf("Trial %d, input length %d, line length %d (ctx_len=%d)\n", t, inl, ctx_len, ctx_len); // initialize with specific line lengths
             EVP_EncodeInit(ctx_simd);
@@ -190,7 +190,6 @@ static int test_encode_line_lengths(void)
 
             int ret_simd = EVP_EncodeUpdate(ctx_simd, out_simd, &outlen_simd, input, inl);
             int ret_ref  = EVP_EncodeUpdate_openssl(ctx_ref, out_ref, &outlen_ref, input, inl);
-
 
             // dump_bytes("Output SIMD", out_simd, outlen_simd);
             // dump_bytes("Output REF", out_ref, outlen_ref);
@@ -211,73 +210,93 @@ static int test_encode_line_lengths(void)
 
 }
 
-static int test_encode_padding_cases(void)
+static int test_encode_line_lengths_reinforced(void)
 {
-    // Cases: lengths mod 3 = 1 and 2
-    const size_t lens[] = {1, 2, 4, 5, 7, 8, 10, 11}; 
-    unsigned char out_simd[256];
-    unsigned char out_ref[256];
+    const int trials = 50;
+    const int max_input_len = 3000;
+    unsigned int seed = 12345;
 
-    for (size_t li = 0; li < sizeof(lens)/sizeof(lens[0]); li++) {
-        size_t inl = lens[li];
-        unsigned char input[16];
+    // Generous output buffers (Update + Final + newlines), plus a guard byte
+    unsigned char out_simd[9000 * 2 + 1] = {0};
+    unsigned char out_ref [9000 * 2 + 1] = {0};
 
-        // Fill with predictable data
-        for (size_t i = 0; i < inl; i++)
-            input[i] = (unsigned char)(i & 0xFF);
+    for (int t = 0; t < trials; t++) {
+        int inl = rand_r(&seed) % max_input_len;
+
+        // Fresh random input
+        unsigned char input[max_input_len];
+        for (int i = 0; i < inl; i++)
+            input[i] = (unsigned char)(rand_r(&seed) % 256);
+
+        // NOTE: Use multiples of 4 for Base64 line length. If you want to
+        // deliberately stress bad lengths, keep your step=3 loop in a separate test.
+            for (int partial_ctx_fill = 0; partial_ctx_fill <= 80; partial_ctx_fill += 1) {
+                for (int ctx_len = 3; ctx_len <= 80; ctx_len += 3) {
+                    EVP_ENCODE_CTX *ctx_simd = EVP_ENCODE_CTX_new();
+                    EVP_ENCODE_CTX *ctx_ref  = EVP_ENCODE_CTX_new();
+
+                    fuzz_fill_encode_ctx(ctx_simd, partial_ctx_fill);
+
+                    memset(out_simd, 0xCC, sizeof(out_simd)); // poison to catch short writes
+                    memset(out_ref,  0xDD, sizeof(out_ref));
+
+                    int outlen_simd = 0, outlen_ref = 0;   // bytes produced by Update
+                    int finlen_simd = 0, finlen_ref = 0;   // bytes produced by Final
+
+                    if (!ctx_simd || !ctx_ref) {
+                        EVP_ENCODE_CTX_free(ctx_simd);
+                        EVP_ENCODE_CTX_free(ctx_ref);
+                        TEST_error("Out of memory for contexts");
+                        return 0;
+                    }
+
+                    // ANSI colors (purely cosmetic for the log)
+                    // #define CLR_RESET   "\033[0m"
+                    // #define CLR_YELLOW  "\033[33;1m"
+                    // #define CLR_CYAN    "\033[36;1m"
+                    // #define CLR_MAGENTA "\033[35;1m"
+
+                    // printf(CLR_YELLOW "Trial %d" CLR_RESET
+                    //     ", input length " CLR_CYAN "%d" CLR_RESET
+                    //     ", line length "  CLR_MAGENTA "%d" CLR_RESET "\n",
+                    //     t, inl, ctx_len);
+
+                    // Initialize both contexts and set identical line lengths
+                    EVP_EncodeInit(ctx_simd);
+                    EVP_EncodeInit(ctx_ref);
+                    EVP_Set_length(ctx_simd, ctx_len);
+                    EVP_Set_length(ctx_ref,  ctx_len);
+
+                    int ret_simd = EVP_EncodeUpdate(ctx_simd, out_simd, &outlen_simd, input, (int)inl);
+                    int ret_ref = EVP_EncodeUpdate_openssl(ctx_ref, out_ref, &outlen_ref, input, (int)inl);
 
 
-        EVP_ENCODE_CTX *ctx_simd = EVP_ENCODE_CTX_new();
-        EVP_ENCODE_CTX *ctx_ref  = EVP_ENCODE_CTX_new();
-        if (!ctx_simd || !ctx_ref)
-            return 0;
+                    ASSERT_EQUAL_INT(ret_simd, ret_ref);
+                    ASSERT_MEM_EQUAL(out_ref,out_simd , outlen_ref);
+                    ASSERT_EQUAL_INT(outlen_simd, outlen_ref);
 
-        int outlen_simd = 0, outlen_ref = 0;
-        int finlen_simd = 0, finlen_ref = 0;
+                    EVP_EncodeFinal(ctx_simd, out_simd + outlen_simd, &finlen_simd);
+                    EVP_EncodeFinal_openssl(ctx_ref, out_ref + outlen_ref, &finlen_ref);
 
-        EVP_EncodeInit(ctx_simd);
-        EVP_EncodeInit(ctx_ref);
+                    int total_simd = outlen_simd + finlen_simd;
+                    int total_ref  = outlen_ref + finlen_ref;
 
-        EVP_EncodeUpdate(ctx_simd, out_simd, &outlen_simd, input, (int)inl);
-        EVP_EncodeUpdate_openssl(ctx_ref, out_ref, &outlen_ref, input, (int)inl);
+                    ASSERT_EQUAL_INT(finlen_simd, finlen_ref);
+                    ASSERT_MEM_EQUAL(out_ref, out_simd, total_ref);
 
-        EVP_EncodeFinal(ctx_simd, out_simd + outlen_simd, &finlen_simd);
-        EVP_EncodeFinal_openssl(ctx_ref, out_ref + outlen_ref, &finlen_ref);
-
-        int total_simd = outlen_simd + finlen_simd;
-        int total_ref  = outlen_ref + finlen_ref;
-
-        printf("\n=== Encoding length %zu ===\n", inl);
-        printf("SIMD (len=%d) ASCII: \"%.*s\"\n", total_simd, total_simd, out_simd);
-        dump_bytes("SIMD HEX", out_simd, total_simd);
-
-        printf("REF  (len=%d) ASCII: \"%.*s\"\n", total_ref, total_ref, out_ref);
-        dump_bytes("REF  HEX", out_ref, total_ref);
-
-
-        ASSERT_EQUAL_INT(total_simd, total_ref);
-        ASSERT_MEM_EQUAL(out_ref, out_simd, total_ref);
-
-        // // Check explicit '=' padding presence
-        // if (inl % 3 == 1) {
-        //     ASSERT_EQUAL_INT(out_ref[total_ref - 1], '=');
-        //     ASSERT_EQUAL_INT(out_ref[total_ref - 2], '=');
-        // } else if (inl % 3 == 2) {
-        //     ASSERT_EQUAL_INT(out_ref[total_ref - 1], '=');
-        // }
-
-        EVP_ENCODE_CTX_free(ctx_simd);
-        EVP_ENCODE_CTX_free(ctx_ref);
+                    EVP_ENCODE_CTX_free(ctx_simd);
+                    EVP_ENCODE_CTX_free(ctx_ref);
+                }
+            }
     }
+
     return 1;
 }
 
-//TODO need a test for = at end.... with ctx->length set to 80: a nl is not inserted
-
 int setup_tests(void)
 {
-    ADD_TEST(test_encode_line_lengths);
-    // ADD_TEST(test_encode_padding_cases);
-    // ADD_TEST(test_encode_padding_small);
+    // ADD_TEST(test_encode_line_lengths);
+    ADD_TEST(test_encode_line_lengths_reinforced);
+    
     return 1;
 }
