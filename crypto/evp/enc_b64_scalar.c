@@ -152,13 +152,9 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
         *(t++) = e1[((t2 & 0x0F) << 2) | ((t3 >> 6) & 0x03)];
         *(t++) = e2[t3];
         ret += 4;
-        // steps_mod_lap_by_input += 4;
 
-        // printf("i: %d, t1: %02x, t2: %02x, t3: %02x, ret: %02x, steps_mod_lap_by_input: %d\n", i, t1, t2, t3, ret, steps_mod_lap_by_input);
-        
         if (ctx != NULL){
             if ((i + 3 + steps_mod_lap_by_input) % ctx->length == 0 && ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
-                // printf("newline added\n");
                 *(t++) = '\n';
                 ret++;
             }
@@ -179,12 +175,8 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
 
         ret += 4;
 
-        // printf("i: %d, t1: %02x, ret: %02x, steps_mod_lap_by_input: %d\n", i, t1, ret, steps_mod_lap_by_input);
-        // printf("Trigger value: %d\n", (i + 1 + steps_mod_lap_by_input + 3) % ctx->length);
-
         if (ctx != NULL){
             if ((i + 1 + steps_mod_lap_by_input) % ctx->length == 0 && ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
-                // printf("newline added\n");
                 *(t++) = '\n';
                 ret++;
             }
@@ -200,13 +192,8 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
         *(t++) = '=';
         ret += 4;
 
-
-        // printf("i: %d, t1: %02x, ret: %02x, steps_mod_lap_by_input: %d\n", i, t1, ret, steps_mod_lap_by_input);
-        // printf("Trigger value: %d\n", (i + 2 + steps_mod_lap_by_input) % ctx->length);
-
         if (ctx != NULL){
             if ((i + 2 + steps_mod_lap_by_input) % ctx->length == 0 && ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
-                // printf("newline added\n");
                 *(t++) = '\n';
                 ret++;
             }
@@ -215,15 +202,6 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
     }
 
 *t = '\0'; // Null-terminate after everything
-
-// printf("Encoded output (hex):\n");
-// for (int idx = 0; idx < ret; idx++) {
-//   printf("%02x ", (unsigned char)*(t - ret + idx));
-//   if ((idx + 1) % 16 == 0)
-//     printf("\n");
-// }
-// if (ret % 16 != 0)
-//   printf("\n");
 
 return ret;
 }
