@@ -89,22 +89,15 @@ size_t insert_nl_gt16(
     int *steps_mod_lap // these are the numbers of steps that have been done so far in the current lap, this is used to determine where to insert the newline
 ) {
 
-    printf("--------------------------------------------------\n");
+    // printf("--------------------------------------------------\n");
     // Handle cross-lane remainder logic
     int b_lane =  16; // bytes per lane
     uint8_t* out = output;
 
     int steps_until_nl = steps_per_lap - *steps_mod_lap; 
 
-    // if (steps_until_nl < 0) {
-    //     printf("steps_until_nl < 0!!!!!");
-    //     printf("\033[1;31msteps_until_nl: %d\033[0m\n", steps_until_nl);
-    //     return -1;
-    // }
-
-
-    printf("steps_until_nl: %d\n", steps_until_nl);
-    printf("steps_mod_lap: %d\n", *steps_mod_lap);
+    // printf("steps_until_nl: %d\n", steps_until_nl);
+    // printf("steps_mod_lap: %d\n", *steps_mod_lap);
 
     _mm256_storeu_si256((__m256i*)(output),  v0);  
 
@@ -133,7 +126,7 @@ size_t insert_nl_gt16(
     int surplus_0 =  steps_until_nl < 16 ? 1 : 0;
     
     if (surplus_0 == 1) {
-        printf("newline in first lane!: %d\n", surplus_0);
+        // printf("newline in first lane!: %d\n", surplus_0);
         __m256i shifted_0_L = shift_left_zeros(shift_right_zeros(v0,steps_until_nl), steps_until_nl + surplus_0);   
         __m256i mask_shifted_0_L = shift_left_zeros(all_ff_mask, steps_until_nl + surplus_0);
 
@@ -156,7 +149,7 @@ size_t insert_nl_gt16(
     int last_of_1L = _mm256_extract_epi8(v0, 31); 
 
     if (surplus_1 == 1){
-        printf("Newline in second lane!: %d\n", surplus_1);
+        // printf("Newline in second lane!: %d\n", surplus_1);
 
         uint16_t sec_last_of_1L = _mm256_extract_epi8(v0, 30);
 
@@ -184,7 +177,7 @@ size_t insert_nl_gt16(
     }
 
     if (surplus_0 == 1) {
-        printf("Inserting newline due to first lane!\n");
+        // printf("Inserting newline due to first lane!\n");
         output[steps_until_nl - steps_per_lap] = '\n';
         output[16] = _mm256_extract_epi8(v0, 15);
         output[31 + surplus_0 + surplus_1] = last_of_1L; 
@@ -195,7 +188,7 @@ size_t insert_nl_gt16(
 
     int nl_at_end = 0;
     if (*steps_mod_lap == steps_per_lap || *steps_mod_lap == 0 )  {
-        printf("Inserting newline at the end!\n");
+        // printf("Inserting newline at the end!\n");
         *steps_mod_lap = 0; 
         output[32 + surplus_0 + surplus_1] = '\n';
         nl_at_end = 1;
@@ -204,10 +197,10 @@ size_t insert_nl_gt16(
     out += 32 + surplus_0 + surplus_1 + nl_at_end; 
 
     // Print the output buffer in hex and ASCII for debugging
-    dump_bytes("output:", output, out - output);
+    // dump_bytes("output:", output, out - output);
 
     size_t written = (size_t)(out - output);
-    printf("written: %zu\n", written);
+    // printf("written: %zu\n", written);
 
     return written;
 }
@@ -280,7 +273,6 @@ size_t insert_newlines_4avx2(__m256i v0, __m256i v1, __m256i v2, __m256i v3,
     }
 
     *written_so_far = counter;  // Save updated counter state for next call
-    // dump_bytes("output to insert_newlines_4avx2", output, 128);
 
     return out_idx;
 }
@@ -412,6 +404,7 @@ size_t insert_newlines_simd_stride_8(
         uint8_t *out = (uint8_t *)dst;
         size_t i = 0;
         int stride = ctx_length / 3 * 4; 
+
         int steps_mod_lap = 0;
 
         // Define shuffle mask for AVX2
@@ -460,7 +453,7 @@ size_t insert_newlines_simd_stride_8(
             const __m256i input2 = _mm256_or_si256(t1_2, t3_2);
             const __m256i input3 = _mm256_or_si256(t1_3, t3_3);
 
-            printf("*** New 4x block! ***\n");
+            // printf("*** New 4x block! ***\n");
 
             if (stride == 0) {
                 _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input0));
@@ -557,7 +550,6 @@ size_t insert_newlines_simd_stride_8(
                     lookup_pshufb_improved_std(input2), out, stride, &steps_mod_lap);
                 out += insert_nl_gt16(
                     lookup_pshufb_improved_std(input3), out, stride, &steps_mod_lap);
-                // nl_count += (128 + stride - 1) / stride;
             }
             else {
                 // Mula files
@@ -615,6 +607,8 @@ size_t insert_newlines_simd_stride_8(
             }
         }
         *final_steps_mod_lap = steps_mod_lap;
+
+        // printf("rounded_len: %d\n", rounded_len);
 
         // Return number of bytes written
         return (size_t)(out - (uint8_t *)dst) +
