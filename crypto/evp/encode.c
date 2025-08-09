@@ -258,22 +258,8 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     // printf("After main loop: total: %zu, inl: %d, steps_mod_lap: %d\n", total, inl, steps_mod_lap);
 
     int steps_mod_lap_by_input = steps_mod_lap / 4 * 3; // Adjust steps_mod_lap for the next call
-    // int steps_mod_lap_after = (j + steps_mod_lap_by_input) % ctx->length;
-    // printf("trigger: %d\n", ( j/4*3 -1 + steps_mod_lap_by_input) % ctx->length);
+    *out = '\0';
 
-    // if (ctx != NULL &&
-    //     ( j/4*3 -1 + steps_mod_lap_by_input) % ctx->length == 0 &&
-    //     ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
-    //         printf("Final nl insertion triggered\n");
-    //     // *(out++) = '\n';
-    //     // *(out++);
-    //     *(++out) = '\0';
-    //     total++;}
-    // }else {    
-        *out = '\0';
-    // }
-
-    // total++;
     // Check for output overflow
     if (total > INT_MAX) {
         *outl = 0;

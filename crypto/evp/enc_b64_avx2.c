@@ -96,9 +96,6 @@ size_t insert_nl_gt16(
 
     int steps_until_nl = steps_per_lap - *steps_mod_lap; 
 
-    // printf("steps_until_nl: %d\n", steps_until_nl);
-    // printf("steps_mod_lap: %d\n", *steps_mod_lap);
-
     _mm256_storeu_si256((__m256i*)(output),  v0);  
 
     if (steps_until_nl > 32) { 
@@ -126,7 +123,6 @@ size_t insert_nl_gt16(
     int surplus_0 =  steps_until_nl < 16 ? 1 : 0;
     
     if (surplus_0 == 1) {
-        // printf("newline in first lane!: %d\n", surplus_0);
         __m256i shifted_0_L = shift_left_zeros(shift_right_zeros(v0,steps_until_nl), steps_until_nl + surplus_0);   
         __m256i mask_shifted_0_L = shift_left_zeros(all_ff_mask, steps_until_nl + surplus_0);
 
@@ -142,31 +138,18 @@ size_t insert_nl_gt16(
         steps_until_nl += steps_per_lap; 
     }  
 
-    // printf("steps_until_nl after adding steps_per_lap: %d\n", steps_until_nl);
     int surplus_1 = (16 <= steps_until_nl && steps_until_nl < 32) ? 1 : 0;
-
-
     int last_of_1L = _mm256_extract_epi8(v0, 31); 
 
     if (surplus_1 == 1){
-        // printf("Newline in second lane!: %d\n", surplus_1);
-
         uint16_t sec_last_of_1L = _mm256_extract_epi8(v0, 30);
 
         int steps_until_nl_1 = steps_until_nl - 16; // we have already written 16 bytes from input
 
         __m256i shifted_1_L = shift_left_zeros(shift_right_zeros(v0,steps_until_nl_1), steps_until_nl_1 + surplus_0 + surplus_1);   
         __m256i mask_shifted_1_L = shift_left_zeros(all_ff_mask, steps_until_nl_1 + surplus_0 + surplus_1);
-
         __m256i mask = _mm256_and_si256(mask_second_lane, mask_shifted_1_L);
-
-        // printf("shifted_1_L:"); print_avx2_bytes(shifted_1_L);
-
-        // printf("mask 1L:"); print_avx2_bytes(mask);
-
         __m256i blended_1L = _mm256_blendv_epi8(blended_0L, shifted_1_L, mask);
-
-        // printf("blended 1L:"); print_avx2_bytes(blended_1L);
 
         _mm256_storeu_si256((__m256i*)(output), blended_1L);
         
@@ -177,30 +160,22 @@ size_t insert_nl_gt16(
     }
 
     if (surplus_0 == 1) {
-        // printf("Inserting newline due to first lane!\n");
         output[steps_until_nl - steps_per_lap] = '\n';
         output[16] = _mm256_extract_epi8(v0, 15);
         output[31 + surplus_0 + surplus_1] = last_of_1L; 
     }
 
     *steps_mod_lap =  steps_until_nl >32 ? 32 - (steps_until_nl - steps_per_lap): 32 - steps_until_nl;
-    // printf("\033[1;34msteps_mod_lap (after): %d\033[0m\n", *steps_mod_lap);
 
     int nl_at_end = 0;
     if (*steps_mod_lap == steps_per_lap || *steps_mod_lap == 0 )  {
-        // printf("Inserting newline at the end!\n");
         *steps_mod_lap = 0; 
         output[32 + surplus_0 + surplus_1] = '\n';
         nl_at_end = 1;
     }
 
     out += 32 + surplus_0 + surplus_1 + nl_at_end; 
-
-    // Print the output buffer in hex and ASCII for debugging
-    // dump_bytes("output:", output, out - output);
-
     size_t written = (size_t)(out - output);
-    // printf("written: %zu\n", written);
 
     return written;
 }
@@ -258,8 +233,6 @@ size_t insert_newlines_4avx2(__m256i v0, __m256i v1, __m256i v2, __m256i v3,
     _mm256_storeu_si256((__m256i *)(input + 32), v1);
     _mm256_storeu_si256((__m256i *)(input + 64), v2);
     _mm256_storeu_si256((__m256i *)(input + 96), v3);
-
-    // dump_bytes("Input to insert_newlines_4avx2", input, 128);
 
     // Scalar loop that copies input to output, inserting newlines
     for (int i = 0; i < 128; i++) {
@@ -453,8 +426,6 @@ size_t insert_newlines_simd_stride_8(
             const __m256i input2 = _mm256_or_si256(t1_2, t3_2);
             const __m256i input3 = _mm256_or_si256(t1_3, t3_3);
 
-            // printf("*** New 4x block! ***\n");
-
             if (stride == 0) {
                 _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input0));
                 out += 32;
@@ -480,24 +451,6 @@ size_t insert_newlines_simd_stride_8(
                 *(out++) = '\n';
             }
             else if (stride == 4) {
-
-                // Mula files
-                //  ***** Benchmarking EVP_EncodeUpdate *****:
-                // Benchmark ran 50000 iterations (40000 used after warmup)
-                // Total elapsed (wall):     1.532642 s
-                // CPU cycles (avg):         144214
-                // Instructions (avg):       558339
-                // Instructions per cycle:   3.8716
-                // Throughput:              9.56 GB/s
-
-
-                //  ***** Benchmarking EVP_EncodeUpdate_openssl *****:
-                // Benchmark ran 50000 iterations (40000 used after warmup)
-                // Total elapsed (wall):     14.830337 s
-                // CPU cycles (avg):         1606042
-                // Instructions (avg):       8301569
-                // Instructions per cycle:   5.1690
-                // Throughput:              0.99 GB/s
 
                 int out_idx = 0;
                 out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input0), out + out_idx);
@@ -535,11 +488,6 @@ size_t insert_newlines_simd_stride_8(
                 out += insert_fns[(base + 1) % 3](lookup_pshufb_improved_std(input1), out, stride, &steps_mod_lap);
                 out += insert_fns[(base + 2) % 3](lookup_pshufb_improved_std(input2), out, stride, &steps_mod_lap);
                 out += insert_fns[(base + 3) % 3](lookup_pshufb_improved_std(input3), out, stride, &steps_mod_lap);
-
-                // nl_count += 128 / stride;
-                // nl_count += (128 + stride - 1) / stride;
-                // nl_count += 12;
-
                      }
             else if ( 16 <= stride   ){
                 out += insert_nl_gt16(
@@ -552,23 +500,6 @@ size_t insert_newlines_simd_stride_8(
                     lookup_pshufb_improved_std(input3), out, stride, &steps_mod_lap);
             }
             else {
-                // Mula files
-                // ***** Benchmarking EVP_EncodeUpdate *****:
-                // Benchmark ran 50000 iterations (40000 used after warmup)
-                // Total elapsed (wall):     8.876706 s
-                // CPU cycles (avg):         921862
-                // Instructions (avg):       4606748
-                // Instructions per cycle:   4.9972
-                // Throughput:              1.65 GB/s
-
-
-                // ***** Benchmarking EVP_EncodeUpdate_openssl *****:
-                // Benchmark ran 50000 iterations (40000 used after warmup)
-                // Total elapsed (wall):     14.980089 s
-                // CPU cycles (avg):         1611686
-                // Instructions (avg):       8301569
-                // Instructions per cycle:   5.1509
-                // Throughput:              0.98 GB/s
 
                 int out_idx = 0;
                 int newlines_inserted = 0;
@@ -607,8 +538,6 @@ size_t insert_newlines_simd_stride_8(
             }
         }
         *final_steps_mod_lap = steps_mod_lap;
-
-        // printf("rounded_len: %d\n", rounded_len);
 
         // Return number of bytes written
         return (size_t)(out - (uint8_t *)dst) +
