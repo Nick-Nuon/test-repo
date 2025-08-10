@@ -292,15 +292,22 @@ int main(int argc, char **argv) {
                  EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 0,48);
 
 
-    printf ("-----------------------Custom ctx->lengths mode---------------------------");
+    for (int ctx_len = 3; ctx_len <= 80; ctx_len += 3) {
+        printf ("-----------------------Custom ctx->lengths mode: %d---------------------------", ctx_len);
+        run_benchmark("EVP_EncodeUpdate", fd_cycles, files, file_count, 
+                    EVP_EncodeUpdate, EVP_EncodeFinal, 0,ctx_len);
+        run_benchmark("EVP_EncodeUpdate_openssl", fd_cycles, files, file_count,
+                    EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 0,ctx_len);
+    }
+    // printf ("-----------------------Custom ctx->lengths mode: %d---------------------------", );
 
-        // A newline is inserted after every 47 bytes. 
-    printf ("-----------------------PEM mode---------------------------");
-    // Main benchmarking calls
-    run_benchmark("EVP_EncodeUpdate", fd_cycles, files, file_count, 
-                 EVP_EncodeUpdate, EVP_EncodeFinal, 0,3);
-    run_benchmark("EVP_EncodeUpdate_openssl", fd_cycles, files, file_count,
-                 EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 0,3);
+    //     // A newline is inserted after every 47 bytes. 
+    // printf ("-----------------------PEM mode---------------------------");
+    // // Main benchmarking calls
+    // run_benchmark("EVP_EncodeUpdate", fd_cycles, files, file_count, 
+    //              EVP_EncodeUpdate, EVP_EncodeFinal, 0,3);
+    // run_benchmark("EVP_EncodeUpdate_openssl", fd_cycles, files, file_count,
+    //              EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 0,3);
 
     printf("\n\nProcessed files:\n");
 
