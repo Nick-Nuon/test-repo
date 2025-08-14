@@ -269,7 +269,7 @@ __m256i make_newline_every_5th_byte_mask() {
 }
 
 
-size_t insert_newlines_simd_block_from_input(
+size_t insert_nl_str4(
     const __m256i v0,
     uint8_t* output         // at least 160 bytes to be safe
 ) {
@@ -334,7 +334,7 @@ size_t insert_newlines_simd_block_from_input(
 }
 
 
-size_t insert_newlines_simd_stride_8(
+size_t insert_nl_str8(
     const __m256i v0,
     uint8_t* output         // at least 160 bytes to be safe
 ) {
@@ -426,26 +426,31 @@ size_t insert_newlines_simd_stride_8(
             const __m256i input2 = _mm256_or_si256(t1_2, t3_2);
             const __m256i input3 = _mm256_or_si256(t1_3, t3_3);
 
+            const __m256i vec0 = lookup_pshufb_improved_std(input0);
+            const __m256i vec1 = lookup_pshufb_improved_std(input1);
+            const __m256i vec2 = lookup_pshufb_improved_std(input2);
+            const __m256i vec3 = lookup_pshufb_improved_std(input3);
+
             if (stride == 0) {
-                _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input0));
+                _mm256_storeu_si256((__m256i *)out, vec0);
                 out += 32;
-                _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input1));
+                _mm256_storeu_si256((__m256i *)out, vec1);
                 out += 32;
-                _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input2));
+                _mm256_storeu_si256((__m256i *)out, vec2);
                 out += 32;
-                _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input3));
+                _mm256_storeu_si256((__m256i *)out, vec3);
                 out += 32;
             }  else if (stride == 64) {
-                _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input0));
+                _mm256_storeu_si256((__m256i *)out, vec0);
                 out += 32;
-                _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input1));
+                _mm256_storeu_si256((__m256i *)out, vec1);
                 out += 32;
                 *(out++) = '\n';
 
-                _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input2));
+                _mm256_storeu_si256((__m256i *)out, vec2);
                 out += 32;
 
-                _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(input3));
+                _mm256_storeu_si256((__m256i *)out, vec3);
                 out += 32;
 
                 *(out++) = '\n';
@@ -453,27 +458,63 @@ size_t insert_newlines_simd_stride_8(
             else if (stride == 4) {
 
                 int out_idx = 0;
-                out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input0), out + out_idx);
-                out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input1), out + out_idx);
-                out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input2), out + out_idx);
-                out_idx += insert_newlines_simd_block_from_input(lookup_pshufb_improved_std(input3), out + out_idx);
+                out_idx += insert_nl_str4(vec0, out + out_idx);
+                out_idx += insert_nl_str4(vec1, out + out_idx);
+                out_idx += insert_nl_str4(vec2, out + out_idx);
+                out_idx += insert_nl_str4(vec3, out + out_idx);
 
                 out += out_idx; 
             }
             else if (stride == 8) {          
 
-                out += insert_newlines_simd_stride_8(
-                    lookup_pshufb_improved_std(input0), out );
-                out += insert_newlines_simd_stride_8(
-                    lookup_pshufb_improved_std(input1), out );
-                out += insert_newlines_simd_stride_8(
-                    lookup_pshufb_improved_std(input2), out );
-                out += insert_newlines_simd_stride_8(
-                    lookup_pshufb_improved_std(input3), out );
+                out += insert_nl_str8(
+                    vec0, out );
+                out += insert_nl_str8(
+                    vec1, out );
+                out += insert_nl_str8(
+                    vec2, out );
+                out += insert_nl_str8(
+                    vec3, out );
 
             }
             else if (stride == 12) {          
                 typedef size_t (*InsertFn)(__m256i vec, uint8_t* out, int stride, int* steps_mod_lap);
+
+                int base = (i /96) % 3;
+
+                // Benchmark ran 50000 iterations (40000 used after warmup)
+                // Total elapsed (wall):     7.510144 s
+                // CPU cycles (avg):         759968
+                // Instructions (avg):       2792014
+                // Instructions per cycle:   3.6739
+                // Throughput:              3.72 GB/s
+
+                //  ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+                //     Benchmark ran 50000 iterations (40000 used after warmup)
+                //     Total elapsed (wall):     16.884286 s
+                //     CPU cycles (avg):         1800592
+                //     Instructions (avg):       10105065
+                //     Instructions per cycle:   5.6121
+                //     Throughput:              1.66 GB/s
+
+                // static const uint8_t seq[3][4] = {
+                //     {0,1,2,0},
+                //     {1,2,0,1},
+                //     {2,0,1,2}
+                // };
+
+                // InsertFn fns[3] = {
+                //     insert_nl_gt16,
+                //     insert_nl_2nd_vec_stride_12,
+                //     insert_nl_gt16
+                // };
+
+                // out += fns[ seq[base][0] ](vec0, out, stride, &steps_mod_lap);
+                // out += fns[ seq[base][1] ](vec1, out, stride, &steps_mod_lap);
+                // out += fns[ seq[base][2] ](vec2, out, stride, &steps_mod_lap);
+                // out += fns[ seq[base][3] ](vec3, out, stride, &steps_mod_lap);
+
+
 
                 InsertFn insert_fns[3] = {
                     insert_nl_gt16,
@@ -482,33 +523,35 @@ size_t insert_newlines_simd_stride_8(
                     insert_nl_gt16
                 };
 
-                int base = (i /96) % 3;
 
-                out += insert_fns[(base + 0) % 3](lookup_pshufb_improved_std(input0), out, stride, &steps_mod_lap);
-                out += insert_fns[(base + 1) % 3](lookup_pshufb_improved_std(input1), out, stride, &steps_mod_lap);
-                out += insert_fns[(base + 2) % 3](lookup_pshufb_improved_std(input2), out, stride, &steps_mod_lap);
-                out += insert_fns[(base + 3) % 3](lookup_pshufb_improved_std(input3), out, stride, &steps_mod_lap);
-                     }
+                out += insert_fns[(base + 0) % 3](vec0, out, stride, &steps_mod_lap);
+                out += insert_fns[(base + 1) % 3](vec1, out, stride, &steps_mod_lap);
+                out += insert_fns[(base + 2) % 3](vec2, out, stride, &steps_mod_lap);
+                out += insert_fns[(base + 3) % 3](vec3, out, stride, &steps_mod_lap);
+            
+                
+            }
             else if ( 16 <= stride   ){
                 out += insert_nl_gt16(
-                    lookup_pshufb_improved_std(input0), out, stride, &steps_mod_lap);
+                    vec0, out, stride, &steps_mod_lap);
                 out += insert_nl_gt16(
-                    lookup_pshufb_improved_std(input1), out, stride, &steps_mod_lap);
+                    vec1, out, stride, &steps_mod_lap);
                 out += insert_nl_gt16(
-                    lookup_pshufb_improved_std(input2), out, stride, &steps_mod_lap);
+                    vec2, out, stride, &steps_mod_lap);
                 out += insert_nl_gt16(
-                    lookup_pshufb_improved_std(input3), out, stride, &steps_mod_lap);
+                    vec3, out, stride, &steps_mod_lap);
             }
             else {
+                printf("Unsupported stride: %d\n", stride);
 
-                int out_idx = 0;
-                int newlines_inserted = 0;
-                out_idx = insert_newlines_4avx2(lookup_pshufb_improved_std(input0), 
-                                    lookup_pshufb_improved_std(input1), 
-                                    lookup_pshufb_improved_std(input2), 
-                                    lookup_pshufb_improved_std(input3), out, stride, &newlines_inserted);
+                // int out_idx = 0;
+                // int newlines_inserted = 0;
+                // out_idx = insert_newlines_4avx2(vec0, 
+                //                     vec1, 
+                //                     vec2, 
+                //                     vec3, out, stride, &newlines_inserted);
 
-                out += out_idx; 
+                // out += out_idx; 
 
             }
 
