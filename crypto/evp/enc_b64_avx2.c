@@ -1,3 +1,4 @@
+
 #include <string.h>
 
 #if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
@@ -8,7 +9,27 @@
     #include <stdint.h>
     #include "enc_b64_scalar.h"
 
-    static __m256i lookup_pshufb_improved_std(__m256i input) {
+    #include "internal/cryptlib.h"
+    #include "crypto/evp.h"
+    #include "evp_local.h"
+
+
+
+     //example : when index = 0 (lowercase class).
+    // For input in [26..51], you want ASCII = 'a' (97) + (input-26).
+    // That equals input + ('a' - 26).
+    // Example: input=26 → 26+('a'-26)=97='a'; input=27→98='b'.
+    // static __m256i lookup_pshufb_std(__m256i input, int is_srp) {
+
+    // }
+
+    typedef __m256i (*lookup_fn)(__m256i v);
+    
+     //example : when index = 0 (lowercase class).
+    // For input in [26..51], you want ASCII = 'a' (97) + (input-26).
+    // That equals input + ('a' - 26).
+    // Example: input=26 → 26+('a'-26)=97='a'; input=27→98='b'.
+    static __m256i lookup_pshufb_std(__m256i input) {
         __m256i result = _mm256_subs_epu8(input, _mm256_set1_epi8(51));
         const __m256i less = _mm256_cmpgt_epi8(_mm256_set1_epi8(26), input);
         result = _mm256_or_si256(result, _mm256_and_si256(less, _mm256_set1_epi8(13)));
@@ -22,6 +43,176 @@
         result = _mm256_shuffle_epi8(shift_LUT, result);
         return _mm256_add_epi8(result, input);
     }
+
+
+    
+
+
+// // Normal Base64 alphabet
+// static const unsigned char data_bin2ascii[65] =
+//     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+// /* SRP uses a different base64 alphabet */
+// static const unsigned char srpdata_bin2ascii[65] =
+//     "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz./";
+
+// Map 6-bit values (0..63) into ASCII Base64 chars using AVX2, branchless.
+// This assumes the input vector contains only values in the range [0..63].
+//
+// Normal Base64 alphabet:
+//   0..25  → 'A'..'Z'
+//   26..51 → 'a'..'z'
+//   52..61 → '0'..'9'
+//   62     → '+'
+//   63     → '/'
+
+// SRP Base64 alphabet:
+//   0..9   → '0'..'9'
+//   10..35 → 'A'..'Z'
+//   36..61 → 'a'..'z'
+//   62     → '.'
+//   63     → '/'
+
+static __m256i lookup_pshufb_model(__m256i input) {
+    // this targets alphanumerical characters
+    // Step 1: For inputs >= 51, produce a small number (input - 51), else 0.
+    //   - _mm256_subs_epu8 = unsigned saturating subtract (never below 0).
+    //   - Example: input=55 → 55-51=4; input=40 → saturates to 0.
+    __m256i result = _mm256_subs_epu8(input, _mm256_set1_epi8(51));
+    
+    // Step 2: Mask where input < 26 (i.e., the 'A'..'Z' range).
+    //   - cmpgt_epi8(26, input) produces 0xFF where 26 > input, else 0x00.
+    const __m256i less = _mm256_cmpgt_epi8(_mm256_set1_epi8(26), input);
+
+    // Step 3: For input < 26, force result index = 13.
+    //   - less & 13 → byte=13 where input < 26, else 0.
+    //   - OR into result so those inputs get class index 13.
+    //     (All other ranges keep the earlier "input-51" or 0.)
+    result = _mm256_or_si256(result, _mm256_and_si256(less, _mm256_set1_epi8(13)));
+
+    // Step 4: Lookup table of additive ASCII offsets for each "class".
+    // Indexed by `result` (0..15 possible, but only certain values used):
+    //   index 0  : 'a' - 26  → lowercase start
+    //   index 1..10 : '0' - 52 → digits start
+    //   index 11 : '+' - 62   → plus sign
+    //   index 12 : '/' - 63   → slash
+    //   index 13 : 'A'        → uppercase start
+    //   rest are 0 or unused.
+    // Duplicated twice for both 128-bit halves (because pshufb works per lane).
+    __m256i shift_LUT = _mm256_setr_epi8(
+        // 0,          1         2,       3,       4,        5,        6,
+        'a' - 26, '0' - 52, '0' - 52, '0' - 52, '0' - 52, '0' - 52, '0' - 52,
+        //                                                             'A' at index 13
+        '0' - 52, '0' - 52, '0' - 52, '0' - 52, '+' - 62, '/' - 63,     'A',      0,       0,
+        'a' - 26, '0' - 52, '0' - 52, '0' - 52, '0' - 52, '0' - 52, '0' - 52,
+        '0' - 52, '0' - 52, '0' - 52, '0' - 52, '+' - 62, '/' - 63,     'A',      0,       0
+    );
+
+    // Step 5: Shuffle the LUT so each byte in `result` picks its offset.
+    //   - For example, if result=13 → shift='A' (65 decimal).
+    //   - If result=0 → shift=('a'-26) = 71 decimal.
+    result = _mm256_shuffle_epi8(shift_LUT, result);
+
+    // Step 6: Add the shift to the original input to get the ASCII char code.
+    //   - For uppercase: 'A' + input (0..25)
+    //   - For lowercase: ('a'-26) + input (26..51)
+    //   - For digits: ('0'-52) + input (52..61)
+    //   - For '+': ('+'-62) + 62
+    //   - For '/': ('/'-63) + 63
+    return _mm256_add_epi8(result, input);
+}
+
+
+// SRP Base64 alphabet:
+//   0..9   → '0'..'9'
+//   10..35 → 'A'..'Z'
+//   36..61 → 'a'..'z'
+//   62     → '.'
+//   63     → '/'
+
+// static __m256i lookup_pshufb_srp(__m256i input) {
+//     // === Build a small per-byte class index (0..4) ===
+//     // idx = 0 for  0..9    (digits)
+//     // idx = 1 for 10..35   (uppercase)
+//     // idx = 2 for 36..61   (lowercase)
+//     // idx = 3 for 62       ('.')
+//     // idx = 4 for 63       ('/')
+
+//     __m256i idx = _mm256_setzero_si256();
+
+//     // if (input >= 10) idx += 1
+//     __m256i ge10 = _mm256_cmpgt_epi8(input, _mm256_set1_epi8(9));
+//     idx = _mm256_sub_epi8(idx, ge10); // subtract 0xFF = add 1 where true
+
+//     // if (input >= 36) idx += 1
+//     __m256i ge36 = _mm256_cmpgt_epi8(input, _mm256_set1_epi8(35));
+//     idx = _mm256_sub_epi8(idx, ge36);
+
+//     // if (input == 62) idx = 3
+//     __m256i eq62 = _mm256_cmpeq_epi8(input, _mm256_set1_epi8(62));
+//     idx = _mm256_blendv_epi8(idx, _mm256_set1_epi8(3), eq62);
+
+//     // if (input == 63) idx = 4
+//     __m256i eq63 = _mm256_cmpeq_epi8(input, _mm256_set1_epi8(63));
+//     idx = _mm256_blendv_epi8(idx, _mm256_set1_epi8(4), eq63);
+
+//     // === LUT of additive ASCII shifts selected by idx ===
+//     // For each class, we store (ASCII_base - class_start_value), so that:
+//     //   final_char = input + shift[idx]
+//     //
+//     // idx 0 (digits 0..9):      shift = '0' - 0
+//     // idx 1 (A..Z, 10..35):     shift = 'A' - 10
+//     // idx 2 (a..z, 36..61):     shift = 'a' - 36
+//     // idx 3 ('.', 62):          shift = '.' - 62
+//     // idx 4 ('/', 63):          shift = '/' - 63
+//     //
+//     // Duplicate per 128-bit lane because pshufb is lane-local.
+//     const __m256i shift_LUT = _mm256_setr_epi8(
+//         '0' - 0,    'A' - 10,   'a' - 36,   '.' - 62,   '/' - 63,  0,0,0,0,0,0,0,0,0,0,0,
+//         '0' - 0,    'A' - 10,   'a' - 36,   '.' - 62,   '/' - 63,  0,0,0,0,0,0,0,0,0,0,0
+//     );
+
+//     // Select the shift per byte
+//     __m256i shift = _mm256_shuffle_epi8(shift_LUT, idx);
+
+//     // Add the shift to get ASCII codes in SRP alphabet
+//     return _mm256_add_epi8(shift, input);
+// }
+
+static inline __m256i lookup_pshufb_srp(__m256i input) {
+    const __m256i zero = _mm256_setzero_si256();
+    const __m256i hi   = _mm256_set1_epi8((char)0x80);
+
+    // invalid if input < 0  or  input > 63
+    __m256i invalid = _mm256_or_si256(
+        _mm256_cmpgt_epi8(zero, input),                 // input < 0  (e.g., 0xFF sentinel)
+        _mm256_cmpgt_epi8(input, _mm256_set1_epi8(63))  // input > 63
+    );
+
+    // Build class 0..4
+    __m256i idx = _mm256_setzero_si256();
+    idx = _mm256_sub_epi8(idx, _mm256_cmpgt_epi8(input, _mm256_set1_epi8(9)));   // >=10
+    idx = _mm256_sub_epi8(idx, _mm256_cmpgt_epi8(input, _mm256_set1_epi8(35)));  // >=36
+    idx = _mm256_blendv_epi8(idx, _mm256_set1_epi8(3), _mm256_cmpeq_epi8(input, _mm256_set1_epi8(62)));
+    idx = _mm256_blendv_epi8(idx, _mm256_set1_epi8(4), _mm256_cmpeq_epi8(input, _mm256_set1_epi8(63)));
+
+    // Zero-out invalid lanes via PSHUFB’s high-bit mechanism
+    idx = _mm256_or_si256(idx, _mm256_and_si256(invalid, hi));
+
+    const __m256i shift_LUT = _mm256_setr_epi8(
+        '0' - 0, 'A' - 10, 'a' - 36, '.' - 62, '/' - 63, 0,0,0,0,0,0,0,0,0,0,0,
+        '0' - 0, 'A' - 10, 'a' - 36, '.' - 62, '/' - 63, 0,0,0,0,0,0,0,0,0,0,0
+    );
+
+    __m256i shift = _mm256_shuffle_epi8(shift_LUT, idx);
+    __m256i ascii = _mm256_add_epi8(shift, input);
+
+    // Optional (if downstream expects zeros on invalid lanes):
+    // ascii = _mm256_blendv_epi8(ascii, zero, invalid);
+
+    return ascii;
+}
+
 
 static void dump_bytes(const char *label, const uint8_t *buf, size_t len) {
     printf("%s:\n", label);
@@ -377,8 +568,9 @@ size_t insert_nl_str8(
         uint8_t *out = (uint8_t *)dst;
         size_t i = 0;
         int stride = ctx_length / 3 * 4; 
+        int steps_mod_lap = 0;  
+        const int use_srp = ctx && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET);
 
-        int steps_mod_lap = 0;
 
         // Define shuffle mask for AVX2
         const __m256i shuf = _mm256_set_epi8(
@@ -387,6 +579,7 @@ size_t insert_nl_str8(
 
         // Process 96 bytes at a time
         for (; i + 100 <= srclen; i += 96) {
+            // We shave off 4 bytes from the beginning and the end
             const __m128i lo0 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 0));
             const __m128i hi0 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 1));
             const __m128i lo1 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 2));
@@ -396,6 +589,8 @@ size_t insert_nl_str8(
             const __m128i lo3 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 6));
             const __m128i hi3 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 7));
 
+
+            // ******************* EXPANDING 6 bits to more bits***************************
             __m256i in0 = _mm256_shuffle_epi8(_mm256_set_m128i(hi0, lo0), shuf);
             __m256i in1 = _mm256_shuffle_epi8(_mm256_set_m128i(hi1, lo1), shuf);
             __m256i in2 = _mm256_shuffle_epi8(_mm256_set_m128i(hi2, lo2), shuf);
@@ -426,10 +621,31 @@ size_t insert_nl_str8(
             const __m256i input2 = _mm256_or_si256(t1_2, t3_2);
             const __m256i input3 = _mm256_or_si256(t1_3, t3_3);
 
-            const __m256i vec0 = lookup_pshufb_improved_std(input0);
-            const __m256i vec1 = lookup_pshufb_improved_std(input1);
-            const __m256i vec2 = lookup_pshufb_improved_std(input2);
-            const __m256i vec3 = lookup_pshufb_improved_std(input3);
+            lookup_fn lookup_pshufb = use_srp ? lookup_pshufb_srp : lookup_pshufb_std;
+
+            // ******************* END EXPANDING 6 bits to more bits***************************
+            const __m256i vec0 = lookup_pshufb(input0);
+            const __m256i vec1 = lookup_pshufb(input1);
+            const __m256i vec2 = lookup_pshufb(input2);
+            const __m256i vec3 = lookup_pshufb(input3);
+
+            // __m256i vec0;
+            // __m256i vec1;
+            // __m256i vec2;
+            // __m256i vec3;
+
+            // if (use_srp){
+            //     vec0 = lookup_pshufb_srp(input0);
+            //     vec1 = lookup_pshufb_srp(input1);
+            //     vec2 = lookup_pshufb_srp(input2);
+            //     vec3 = lookup_pshufb_srp(input3);
+            // } else {
+            //     vec0 = lookup_pshufb_std(input0);
+            //     vec1 = lookup_pshufb_std(input1);
+            //     vec2 = lookup_pshufb_std(input2);
+            //     vec3 = lookup_pshufb_std(input3);
+            // }
+
 
             if (stride == 0) {
                 _mm256_storeu_si256((__m256i *)out, vec0);
@@ -576,7 +792,11 @@ size_t insert_nl_str8(
                 const __m256i t3 = _mm256_mullo_epi16(t2, _mm256_set1_epi32(0x01000010));
                 const __m256i indices = _mm256_or_si256(t1, t3);
 
-                _mm256_storeu_si256((__m256i *)out, lookup_pshufb_improved_std(indices));
+                // _mm256_storeu_si256((__m256i *)out, lookup_pshufb_std(indices));
+                _mm256_storeu_si256(
+                    (__m256i *)out,
+                    (use_srp ? lookup_pshufb_srp : lookup_pshufb_std)(indices)
+                );
                 out += 32;
             }
         }
