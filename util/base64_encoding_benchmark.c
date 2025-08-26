@@ -299,15 +299,18 @@ int main(int argc, char **argv) {
         run_benchmark("EVP_EncodeUpdate_openssl", fd_cycles, files, file_count,
                     EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 0,ctx_len);
     }
-    // printf ("-----------------------Custom ctx->lengths mode: %d---------------------------", );
+
+
+    // int ctx_len = 75;
+    // printf ("-----------------------Custom ctx->lengths mode: %d---------------------------",ctx_len );
 
     //     // A newline is inserted after every 47 bytes. 
     // printf ("-----------------------PEM mode---------------------------");
-    // // Main benchmarking calls
+    // // // Main benchmarking calls
     // run_benchmark("EVP_EncodeUpdate", fd_cycles, files, file_count, 
-    //              EVP_EncodeUpdate, EVP_EncodeFinal, 0,3);
+    //              EVP_EncodeUpdate, EVP_EncodeFinal, 0,ctx_len);
     // run_benchmark("EVP_EncodeUpdate_openssl", fd_cycles, files, file_count,
-    //              EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 0,3);
+    //              EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 0, ctx_len);
 
     printf("\n\nProcessed files:\n");
 
