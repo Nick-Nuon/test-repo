@@ -7,8 +7,8 @@ int encode_base64_avx2(EVP_ENCODE_CTX *ctx,
                        unsigned char *out, const unsigned char *src, int srclen, int disable_newlines, int *steps_mod_lap);
 
                        // temporary function only for benchmarking/testing purposes
-int encode_base64_avx2_alt(EVP_ENCODE_CTX *ctx,
-unsigned char *out, const unsigned char *src, int srclen, int disable_newlines, int *steps_mod_lap);
+// int encode_base64_avx2_alt(EVP_ENCODE_CTX *ctx,
+// unsigned char *out, const unsigned char *src, int srclen, int disable_newlines, int *steps_mod_lap);
 
 
 #endif
