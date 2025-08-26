@@ -951,11 +951,28 @@ size_t insert_nl_str8(
             const __m256i input3 = _mm256_or_si256(t1_3, t3_3);
 
             // ******************* END EXPANDING 6 bits to more bits***************************
+            __m256i vec0;
+            __m256i vec1;
+            __m256i vec2;
+            __m256i vec3;
 
-            const __m256i vec0 = lookup_pshufb(input0);
-            const __m256i vec1 = lookup_pshufb(input1);
-            const __m256i vec2 = lookup_pshufb(input2);
-            const __m256i vec3 = lookup_pshufb(input3);
+            if (use_srp){
+                vec0 = lookup_pshufb_srp(input0);
+                vec1 = lookup_pshufb_srp(input1);
+                vec2 = lookup_pshufb_srp(input2);
+                vec3 = lookup_pshufb_srp(input3);
+                
+            } else 
+            {
+                vec0 = lookup_pshufb_std(input0);
+                vec1 = lookup_pshufb_std(input1);
+                vec2 = lookup_pshufb_std(input2);
+                vec3 = lookup_pshufb_std(input3);
+            }
+            // const __m256i vec0 = lookup_pshufb(input0);
+            // const __m256i vec1 = lookup_pshufb(input1);
+            // const __m256i vec2 = lookup_pshufb(input2);
+            // const __m256i vec3 = lookup_pshufb(input3);
 
             if (stride == 0) {
                 _mm256_storeu_si256((__m256i *)out, vec0);
