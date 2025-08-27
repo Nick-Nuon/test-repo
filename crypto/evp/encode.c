@@ -181,8 +181,8 @@ void EVP_EncodeInit(EVP_ENCODE_CTX *ctx)
 
 static int evp_encode_switch(EVP_ENCODE_CTX *ctx, unsigned char *t,
     const unsigned char *f, int dlen,    int *steps_mod_lap) {
-    // DEBUG_PRINT("evp_encode_switch called with dlen: %d\n", dlen);
-
+    
+    // uncommenting this will drop performance by 3 GB/s!
     // if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0 && 75 == ctx->length) {
     //     int newlines = ctx-> length;
     //     // printf("ctx length: %d\n", ctx->length);
