@@ -254,7 +254,6 @@ static inline __m256i shift_right_zeros(__m256i v, int n) {
 
 static inline __m256i shift_left_zeros(__m256i v, int n) {
     switch (n) {
-        // return _mm256_slli_si256(v, 1);
         case 0:  return v;
         case 1:  return _mm256_slli_si256(v, 1);
         case 2:  return _mm256_slli_si256(v, 2);
@@ -567,8 +566,10 @@ size_t insert_nl_str8(
 }
 
 
-// This is one benchmark but the ones for ctx->lengths = 12 and 27 are similarly bad
-// -----------------------Custom ctx->lengths mode: 75--------------------------------------------------PEM mode---------------------------
+// This is one benchmark for  encode_base64_avx2_alt for ctx-> length = 75
+// The ctx->lengths = 12 and 27 are similarly bad
+// The code is correct for these lengths but buggy for others. 
+// Due to poor performance, I decided against using this approach.
 
 //  ***** Benchmarking EVP_EncodeUpdate *****:
 // Benchmark ran 50000 iterations (40000 used after warmup)
@@ -588,307 +589,270 @@ size_t insert_nl_str8(
 // Throughput:              2.23 GB/s
 
 
-// size_t static inline off_nl_in(
-//     int steps_per_lap_in,
-//     int *steps_mod_lap_in
-// ) {
-//     int b_lane = 24;
-//     int steps_until_nl = steps_per_lap_in - *steps_mod_lap_in;
+size_t static inline off_nl_in(
+    int steps_per_lap_in,
+    int *steps_mod_lap_in
+) {
+    int b_lane = 24;
+    int steps_until_nl = steps_per_lap_in - *steps_mod_lap_in;
 
-//     if (steps_until_nl >= b_lane) {
-//         *steps_mod_lap_in += b_lane;
-//         return 0;
-//     }
+    if (steps_until_nl >= b_lane) {
+        *steps_mod_lap_in += b_lane;
+        return 0;
+    }
 
-//     *steps_mod_lap_in = 0; 
+    *steps_mod_lap_in = 0; 
     
-//     return b_lane - steps_until_nl; 
-// }
+    return b_lane - steps_until_nl; 
+}
 
-// size_t static inline off_nl_out(
-//     uint8_t* output,
-//     int steps_per_lap_out,
-//     int *steps_mod_lap_out
-// ) {
-//     int b_lane = 32;
-//     int steps_until_nl = steps_per_lap_out - *steps_mod_lap_out;
-//     int whitespace = 1;
+size_t static inline off_nl_out(
+    uint8_t* output,
+    int steps_per_lap_out,
+    int *steps_mod_lap_out
+) {
+    int b_lane = 32;
+    int steps_until_nl = steps_per_lap_out - *steps_mod_lap_out;
+    int whitespace = 1;
 
-//     if (steps_until_nl > b_lane) {
-//         *steps_mod_lap_out += b_lane;
-//         return 0;
-//     }
+    if (steps_until_nl > b_lane) {
+        *steps_mod_lap_out += b_lane;
+        return 0;
+    }
 
-//     *steps_mod_lap_out = 0; 
+    *steps_mod_lap_out = 0; 
     
-//     output[steps_until_nl] = '\n';
-//     int remaining = b_lane - (steps_until_nl + whitespace);
+    output[steps_until_nl] = '\n';
+    int remaining = b_lane - (steps_until_nl + whitespace);
 
-//     return remaining; 
-// }
+    return remaining; 
+}
 
     // same as its brethren but has nl insertion at the beginning
-    // int encode_base64_avx2_alt(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen, int *final_steps_mod_lap) {
-    //     const uint8_t *input = (const uint8_t *)src;
-    //     uint8_t *out = (uint8_t *)dst;
-    //     size_t i = 0;
-    //     int stride_in = ctx->length;
-    //     int stride_out = ctx->length / 3 * 4; 
-    //     int steps_mod_lap_in = 0;  
-    //     int steps_mod_lap_out = 0;  
-    //     const int use_srp = ctx && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET);
+    int encode_base64_avx2_alt(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen, int *final_steps_mod_lap) {
+        const uint8_t *input = (const uint8_t *)src;
+        uint8_t *out = (uint8_t *)dst;
+        size_t i = 0;
+        int stride_in = ctx->length;
+        int stride_out = ctx->length / 3 * 4; 
+        int steps_mod_lap_in = 0;  
+        int steps_mod_lap_out = 0;  
+        const int use_srp = ctx && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET);
 
-    //     // printf("********************************************************");
-    //     // printf("stride_out: %d\n", stride_out);
+        // Define shuffle mask for AVX2
+        const __m256i shuf = _mm256_set_epi8(
+            10, 11, 9, 10, 7, 8, 6, 7, 4, 5, 3, 4, 1, 2, 0, 1,
+            10, 11, 9, 10, 7, 8, 6, 7, 4, 5, 3, 4, 1, 2, 0, 1);
 
-    //     // Define shuffle mask for AVX2
-    //     const __m256i shuf = _mm256_set_epi8(
-    //         10, 11, 9, 10, 7, 8, 6, 7, 4, 5, 3, 4, 1, 2, 0, 1,
-    //         10, 11, 9, 10, 7, 8, 6, 7, 4, 5, 3, 4, 1, 2, 0, 1);
+        int off_in = 0; // offset for newline insertion in input
+        int off_out = 0; // offset for newline insertion in output
 
-    //     // int offset[] = (0,0,0,0,0,0,0,0); 
-    //     int off_in = 0; // offset for newline insertion in input
-    //     int off_out = 0; // offset for newline insertion in output
-
-    //     // Process 96 bytes at a time
-    //     for (; i + 100 <= srclen; i += 96 - off_in) {
-    //         // printf("--------------------------------------------------\n");
-    //         // printf("***loop i: %zu**********\n", i);
-    //         // We shave off 4 bytes from the beginning and the end
-    //         off_in = 0;
-    //         off_out = 0;
+        // Process 96 bytes at a time
+        for (; i + 100 <= srclen; i += 96 - off_in) {
+            off_in = 0;
+            off_out = 0;
             
-    //         const __m128i lo0 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 0 - off_in));
-    //         // printf("lo0: "); dump_bytes("lo0", (const uint8_t*)&lo0, 16);
-    //         // off_in = off_nl_in(stride_in, &steps_mod_lap_in);
-    //         // printf("off_in after: %d\n", off_in);
+            const __m128i lo0 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 0 - off_in));
 
-    //         const __m128i hi0 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 1 - off_in));
-    //         // printf("hi0: "); dump_bytes("hi0", (const uint8_t*)&hi0, 16);
-    //         off_in += off_nl_in(stride_in, &steps_mod_lap_in);
-    //         // printf("off_in after: %d\n", off_in);
 
-    //         const __m128i lo1 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 2 - off_in));
-    //         // printf("lo1: "); dump_bytes("lo1", (const uint8_t*)&lo1, 16);
-    //         // off_in = off_nl_in(stride_in, &steps_mod_lap_in);
-    //         // printf("off_in after: %d\n", off_in);
+            const __m128i hi0 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 1 - off_in));
+            off_in += off_nl_in(stride_in, &steps_mod_lap_in);
 
-    //         const __m128i hi1 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 3 - off_in));
-    //         // printf("hi1: "); dump_bytes("hi1", (const uint8_t*)&hi1, 16);
-    //         off_in += off_nl_in(stride_in, &steps_mod_lap_in);
-    //         // printf("off_in after: %d\n", off_in);
+            const __m128i lo1 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 2 - off_in));
 
-    //         const __m128i lo2 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 4 - off_in));
-    //         // printf("lo2: "); dump_bytes("lo2", (const uint8_t*)&lo2, 16);
-    //         // off_in = off_nl_in(stride_in, &steps_mod_lap_in);
-    //         // printf("off_in after: %d\n", off_in);
 
-    //         const __m128i hi2 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 5 - off_in));
-    //         // printf("hi2: "); dump_bytes("hi2", (const uint8_t*)&hi2, 16);
-    //         off_in += off_nl_in(stride_in, &steps_mod_lap_in);
-    //         // printf("off_in after: %d\n", off_in);
+            const __m128i hi1 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 3 - off_in));
+            off_in += off_nl_in(stride_in, &steps_mod_lap_in);
 
-    //         const __m128i lo3 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 6 - off_in));
-    //         // printf("lo3: "); dump_bytes("lo3", (const uint8_t*)&lo3, 16);
-    //         // off_in = off_nl_in(stride_in, &steps_mod_lap_in);
-    //         // printf("off_in after: %d\n", off_in);
+            const __m128i lo2 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 4 - off_in));
 
-    //         const __m128i hi3 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 7 - off_in));
-    //         // printf("hi3: "); dump_bytes("hi3", (const uint8_t*)&hi3, 16);
-    //         // printf("off_in after: %d\n", off_in);
-    //         off_in += off_nl_in(stride_in, &steps_mod_lap_in);
+            const __m128i hi2 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 5 - off_in));
+            off_in += off_nl_in(stride_in, &steps_mod_lap_in);
+
+            const __m128i lo3 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 6 - off_in));
+
+            const __m128i hi3 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 7 - off_in));
+            off_in += off_nl_in(stride_in, &steps_mod_lap_in);
 
 
 
 
-    //         // ******************* EXPANDING 6 bits to more bits***************************
-    //         // Fig . 1 in the paper
-    //         __m256i in0 = _mm256_shuffle_epi8(_mm256_set_m128i(hi0, lo0), shuf);
-    //         __m256i in1 = _mm256_shuffle_epi8(_mm256_set_m128i(hi1, lo1), shuf);
-    //         __m256i in2 = _mm256_shuffle_epi8(_mm256_set_m128i(hi2, lo2), shuf);
-    //         __m256i in3 = _mm256_shuffle_epi8(_mm256_set_m128i(hi3, lo3), shuf);
+            // ******************* EXPANDING 6 bits to more bits***************************
+            // Fig . 1 in the paper
+            __m256i in0 = _mm256_shuffle_epi8(_mm256_set_m128i(hi0, lo0), shuf);
+            __m256i in1 = _mm256_shuffle_epi8(_mm256_set_m128i(hi1, lo1), shuf);
+            __m256i in2 = _mm256_shuffle_epi8(_mm256_set_m128i(hi2, lo2), shuf);
+            __m256i in3 = _mm256_shuffle_epi8(_mm256_set_m128i(hi3, lo3), shuf);
 
 
-    //         const __m256i t0_0 = _mm256_and_si256(in0, _mm256_set1_epi32(0x0fc0fc00));
-    //         const __m256i t0_1 = _mm256_and_si256(in1, _mm256_set1_epi32(0x0fc0fc00));
-    //         const __m256i t0_2 = _mm256_and_si256(in2, _mm256_set1_epi32(0x0fc0fc00));
-    //         const __m256i t0_3 = _mm256_and_si256(in3, _mm256_set1_epi32(0x0fc0fc00));
+            const __m256i t0_0 = _mm256_and_si256(in0, _mm256_set1_epi32(0x0fc0fc00));
+            const __m256i t0_1 = _mm256_and_si256(in1, _mm256_set1_epi32(0x0fc0fc00));
+            const __m256i t0_2 = _mm256_and_si256(in2, _mm256_set1_epi32(0x0fc0fc00));
+            const __m256i t0_3 = _mm256_and_si256(in3, _mm256_set1_epi32(0x0fc0fc00));
 
-    //         const __m256i t1_0 = _mm256_mulhi_epu16(t0_0, _mm256_set1_epi32(0x04000040));
-    //         const __m256i t1_1 = _mm256_mulhi_epu16(t0_1, _mm256_set1_epi32(0x04000040));
-    //         const __m256i t1_2 = _mm256_mulhi_epu16(t0_2, _mm256_set1_epi32(0x04000040));
-    //         const __m256i t1_3 = _mm256_mulhi_epu16(t0_3, _mm256_set1_epi32(0x04000040));
+            const __m256i t1_0 = _mm256_mulhi_epu16(t0_0, _mm256_set1_epi32(0x04000040));
+            const __m256i t1_1 = _mm256_mulhi_epu16(t0_1, _mm256_set1_epi32(0x04000040));
+            const __m256i t1_2 = _mm256_mulhi_epu16(t0_2, _mm256_set1_epi32(0x04000040));
+            const __m256i t1_3 = _mm256_mulhi_epu16(t0_3, _mm256_set1_epi32(0x04000040));
 
-    //         const __m256i t2_0 = _mm256_and_si256(in0, _mm256_set1_epi32(0x003f03f0));
-    //         const __m256i t2_1 = _mm256_and_si256(in1, _mm256_set1_epi32(0x003f03f0));
-    //         const __m256i t2_2 = _mm256_and_si256(in2, _mm256_set1_epi32(0x003f03f0));
-    //         const __m256i t2_3 = _mm256_and_si256(in3, _mm256_set1_epi32(0x003f03f0));
+            const __m256i t2_0 = _mm256_and_si256(in0, _mm256_set1_epi32(0x003f03f0));
+            const __m256i t2_1 = _mm256_and_si256(in1, _mm256_set1_epi32(0x003f03f0));
+            const __m256i t2_2 = _mm256_and_si256(in2, _mm256_set1_epi32(0x003f03f0));
+            const __m256i t2_3 = _mm256_and_si256(in3, _mm256_set1_epi32(0x003f03f0));
 
-    //         const __m256i t3_0 = _mm256_mullo_epi16(t2_0, _mm256_set1_epi32(0x01000010));
-    //         const __m256i t3_1 = _mm256_mullo_epi16(t2_1, _mm256_set1_epi32(0x01000010));
-    //         const __m256i t3_2 = _mm256_mullo_epi16(t2_2, _mm256_set1_epi32(0x01000010));
-    //         const __m256i t3_3 = _mm256_mullo_epi16(t2_3, _mm256_set1_epi32(0x01000010));
+            const __m256i t3_0 = _mm256_mullo_epi16(t2_0, _mm256_set1_epi32(0x01000010));
+            const __m256i t3_1 = _mm256_mullo_epi16(t2_1, _mm256_set1_epi32(0x01000010));
+            const __m256i t3_2 = _mm256_mullo_epi16(t2_2, _mm256_set1_epi32(0x01000010));
+            const __m256i t3_3 = _mm256_mullo_epi16(t2_3, _mm256_set1_epi32(0x01000010));
 
-    //         const __m256i input0 = _mm256_or_si256(t1_0, t3_0);
-    //         const __m256i input1 = _mm256_or_si256(t1_1, t3_1);
-    //         const __m256i input2 = _mm256_or_si256(t1_2, t3_2);
-    //         const __m256i input3 = _mm256_or_si256(t1_3, t3_3);
-
-
-
-    //         // ******************* END EXPANDING 6 bits to more bits***************************
-    //         lookup_fn lookup_pshufb = use_srp ? lookup_pshufb_srp : lookup_pshufb_std;
-
-    //         const __m256i vec0 = lookup_pshufb(input0);
-    //         const __m256i vec1 = lookup_pshufb(input1);
-    //         const __m256i vec2 = lookup_pshufb(input2);
-    //         const __m256i vec3 = lookup_pshufb(input3);
-
-    //         if (stride_out == 0) {
-    //             _mm256_storeu_si256((__m256i *)out, vec0);
-    //             out += 32;
-    //             _mm256_storeu_si256((__m256i *)out, vec1);
-    //             out += 32;
-    //             _mm256_storeu_si256((__m256i *)out, vec2);
-    //             out += 32;
-    //             _mm256_storeu_si256((__m256i *)out, vec3);
-    //             out += 32;
-    //         }  else if (stride_out == 64) {
-    //             _mm256_storeu_si256((__m256i *)out, vec0);
-    //             out += 32;
-    //             _mm256_storeu_si256((__m256i *)out, vec1);
-    //             out += 32;
-    //             *(out++) = '\n';
-
-    //             _mm256_storeu_si256((__m256i *)out, vec2);
-    //             out += 32;
-
-    //             _mm256_storeu_si256((__m256i *)out, vec3);
-    //             out += 32;
-
-    //             *(out++) = '\n';
-    //         }
-    //         else if (stride_out == 4) {
-
-    //             int out_idx = 0;
-    //             out_idx += insert_nl_str4(vec0, out + out_idx);
-    //             out_idx += insert_nl_str4(vec1, out + out_idx);
-    //             out_idx += insert_nl_str4(vec2, out + out_idx);
-    //             out_idx += insert_nl_str4(vec3, out + out_idx);
-
-    //             out += out_idx; 
-    //         }
-    //         else if (stride_out == 8) {          
-
-    //             out += insert_nl_str8(
-    //                 vec0, out );
-    //             out += insert_nl_str8(
-    //                 vec1, out );
-    //             out += insert_nl_str8(
-    //                 vec2, out );
-    //             out += insert_nl_str8(
-    //                 vec3, out );
-
-    //         }
-    //         else if (stride_out == 12) {          
-    //             typedef size_t (*InsertFn)(__m256i vec, uint8_t* out, int stride, int* steps_mod_lap);
-
-    //             int base = (i /96) % 3;
-
-    //             InsertFn insert_fns[3] = {
-    //                 insert_nl_gt16,
-    //                 insert_nl_2nd_vec_stride_12,
-    //                 insert_nl_gt16,
-    //                 insert_nl_gt16
-    //             };
+            const __m256i input0 = _mm256_or_si256(t1_0, t3_0);
+            const __m256i input1 = _mm256_or_si256(t1_1, t3_1);
+            const __m256i input2 = _mm256_or_si256(t1_2, t3_2);
+            const __m256i input3 = _mm256_or_si256(t1_3, t3_3);
 
 
-    //             out += insert_fns[(base + 0) % 3](vec0, out, stride_out, &steps_mod_lap_out);
-    //             out += insert_fns[(base + 1) % 3](vec1, out, stride_out, &steps_mod_lap_out);
-    //             out += insert_fns[(base + 2) % 3](vec2, out, stride_out, &steps_mod_lap_out);
-    //             out += insert_fns[(base + 3) % 3](vec3, out, stride_out, &steps_mod_lap_out);
+
+            // ******************* END EXPANDING 6 bits to more bits***************************
+            lookup_fn lookup_pshufb = use_srp ? lookup_pshufb_srp : lookup_pshufb_std;
+
+            const __m256i vec0 = lookup_pshufb(input0);
+            const __m256i vec1 = lookup_pshufb(input1);
+            const __m256i vec2 = lookup_pshufb(input2);
+            const __m256i vec3 = lookup_pshufb(input3);
+
+            if (stride_out == 0) {
+                _mm256_storeu_si256((__m256i *)out, vec0);
+                out += 32;
+                _mm256_storeu_si256((__m256i *)out, vec1);
+                out += 32;
+                _mm256_storeu_si256((__m256i *)out, vec2);
+                out += 32;
+                _mm256_storeu_si256((__m256i *)out, vec3);
+                out += 32;
+            }  else if (stride_out == 64) {
+                _mm256_storeu_si256((__m256i *)out, vec0);
+                out += 32;
+                _mm256_storeu_si256((__m256i *)out, vec1);
+                out += 32;
+                *(out++) = '\n';
+
+                _mm256_storeu_si256((__m256i *)out, vec2);
+                out += 32;
+
+                _mm256_storeu_si256((__m256i *)out, vec3);
+                out += 32;
+
+                *(out++) = '\n';
+            }
+            else if (stride_out == 4) {
+
+                int out_idx = 0;
+                out_idx += insert_nl_str4(vec0, out + out_idx);
+                out_idx += insert_nl_str4(vec1, out + out_idx);
+                out_idx += insert_nl_str4(vec2, out + out_idx);
+                out_idx += insert_nl_str4(vec3, out + out_idx);
+
+                out += out_idx; 
+            }
+            else if (stride_out == 8) {          
+
+                out += insert_nl_str8(
+                    vec0, out );
+                out += insert_nl_str8(
+                    vec1, out );
+                out += insert_nl_str8(
+                    vec2, out );
+                out += insert_nl_str8(
+                    vec3, out );
+
+            }
+            else if (stride_out == 12) {          
+                typedef size_t (*InsertFn)(__m256i vec, uint8_t* out, int stride, int* steps_mod_lap);
+
+                int base = (i /96) % 3;
+
+                InsertFn insert_fns[3] = {
+                    insert_nl_gt16,
+                    insert_nl_2nd_vec_stride_12,
+                    insert_nl_gt16,
+                    insert_nl_gt16
+                };
+
+
+                out += insert_fns[(base + 0) % 3](vec0, out, stride_out, &steps_mod_lap_out);
+                out += insert_fns[(base + 1) % 3](vec1, out, stride_out, &steps_mod_lap_out);
+                out += insert_fns[(base + 2) % 3](vec2, out, stride_out, &steps_mod_lap_out);
+                out += insert_fns[(base + 3) % 3](vec3, out, stride_out, &steps_mod_lap_out);
             
                 
-    //         }
-    //         else if ( 16<= stride_out   ){
-    //             // dump_bytes("input0", (const uint8_t*)&input0, 32);
-    //             // dump_bytes("input1", (const uint8_t*)&input1, 32);
-    //             // dump_bytes("input2", (const uint8_t*)&input2, 32);
-    //             // dump_bytes("input3", (const uint8_t*)&input3, 32);
+            }
+            else if ( 16<= stride_out   ){
+                _mm256_storeu_si256((__m256i *)out, vec0);
+                out += 32 - off_nl_out(out, stride_out, &steps_mod_lap_out);
+                _mm256_storeu_si256((__m256i *)out, vec1);
+                out += 32 - off_nl_out(out, stride_out, &steps_mod_lap_out);
+                _mm256_storeu_si256((__m256i *)out, vec2);
+                out += 32 - off_nl_out(out, stride_out, &steps_mod_lap_out);
+                _mm256_storeu_si256((__m256i *)out, vec3);
+                out += 32 - off_nl_out(out, stride_out, &steps_mod_lap_out);
+            }
+            else if ( 16 < stride_out   ){
+                out += insert_nl_gt16(
+                    vec0, out, stride_out, &steps_mod_lap_out);
+                out += insert_nl_gt16(
+                    vec1, out, stride_out, &steps_mod_lap_out);
+                out += insert_nl_gt16(
+                    vec2, out, stride_out, &steps_mod_lap_out);
+                out += insert_nl_gt16(
+                    vec3, out, stride_out, &steps_mod_lap_out);
+            }
+            else {
+                printf("Unsupported stride: %d\n", stride_out);
 
+                // int out_idx = 0;
+                // int newlines_inserted = 0;
+                // out_idx = insert_newlines_4avx2(vec0, 
+                //                     vec1, 
+                //                     vec2, 
+                //                     vec3, out, stride, &newlines_inserted);
+
+                // out += out_idx; 
+
+            }
+
+        }
+
+        if (stride_out == 0) {
+            // Process remaining 24-byte chunks
+            for (; i + 28 <= srclen; i += 24) {
+                // lo = [xxxx|DDDC|CCBB|BAAA]
+                // hi = [xxxx|HHHG|GGFF|FEEE]
+                const __m128i lo = _mm_loadu_si128((const __m128i *)(input + i));
+                const __m128i hi = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3));
                 
-    //             // // printf("stride 16\n");
-    //             // dump_bytes("vec0", (const uint8_t*)&vec0, 32);
-    //             // dump_bytes("vec1", (const uint8_t*)&vec1, 32);
-    //             // dump_bytes("vec2", (const uint8_t*)&vec2, 32);
-    //             // dump_bytes("vec3", (const uint8_t*)&vec3, 32);
-    //             _mm256_storeu_si256((__m256i *)out, vec0);
-    //             out += 32 - off_nl_out(out, stride_out, &steps_mod_lap_out);
-    //             _mm256_storeu_si256((__m256i *)out, vec1);
-    //             out += 32 - off_nl_out(out, stride_out, &steps_mod_lap_out);
-    //             _mm256_storeu_si256((__m256i *)out, vec2);
-    //             out += 32 - off_nl_out(out, stride_out, &steps_mod_lap_out);
-    //             _mm256_storeu_si256((__m256i *)out, vec3);
-    //             out += 32 - off_nl_out(out, stride_out, &steps_mod_lap_out);
-    //         }
-    //         else if ( 16 < stride_out   ){
-    //             out += insert_nl_gt16(
-    //                 vec0, out, stride_out, &steps_mod_lap_out);
-    //             out += insert_nl_gt16(
-    //                 vec1, out, stride_out, &steps_mod_lap_out);
-    //             out += insert_nl_gt16(
-    //                 vec2, out, stride_out, &steps_mod_lap_out);
-    //             out += insert_nl_gt16(
-    //                 vec3, out, stride_out, &steps_mod_lap_out);
-    //         }
-    //         else {
-    //             printf("Unsupported stride: %d\n", stride_out);
-
-    //             // int out_idx = 0;
-    //             // int newlines_inserted = 0;
-    //             // out_idx = insert_newlines_4avx2(vec0, 
-    //             //                     vec1, 
-    //             //                     vec2, 
-    //             //                     vec3, out, stride, &newlines_inserted);
-
-    //             // out += out_idx; 
-
-    //         }
-
-    //     }
-
-    //     if (stride_out == 0) {
-    //         // Process remaining 24-byte chunks
-    //         for (; i + 28 <= srclen; i += 24) {
-    //             // lo = [xxxx|DDDC|CCBB|BAAA]
-    //             // hi = [xxxx|HHHG|GGFF|FEEE]
-    //             const __m128i lo = _mm_loadu_si128((const __m128i *)(input + i));
-    //             const __m128i hi = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3));
+                // bytes from groups A, B and C are needed in separate 32-bit lanes
+                // in = [0HHH|0GGG|0FFF|0EEE[0DDD|0CCC|0BBB|0AAA]
+                __m256i in = _mm256_shuffle_epi8(_mm256_set_m128i(hi, lo), shuf);
                 
-    //             // bytes from groups A, B and C are needed in separate 32-bit lanes
-    //             // in = [0HHH|0GGG|0FFF|0EEE[0DDD|0CCC|0BBB|0AAA]
-    //             __m256i in = _mm256_shuffle_epi8(_mm256_set_m128i(hi, lo), shuf);
-                
-    //             // See comments in C++ SSE code and/or paper
-    //             const __m256i t0 = _mm256_and_si256(in, _mm256_set1_epi32(0x0fc0fc00));
-    //             const __m256i t1 = _mm256_mulhi_epu16(t0, _mm256_set1_epi32(0x04000040));
-    //             const __m256i t2 = _mm256_and_si256(in, _mm256_set1_epi32(0x003f03f0));
-    //             const __m256i t3 = _mm256_mullo_epi16(t2, _mm256_set1_epi32(0x01000010));
-    //             const __m256i indices = _mm256_or_si256(t1, t3);
+                // See comments in C++ SSE code and/or paper
+                const __m256i t0 = _mm256_and_si256(in, _mm256_set1_epi32(0x0fc0fc00));
+                const __m256i t1 = _mm256_mulhi_epu16(t0, _mm256_set1_epi32(0x04000040));
+                const __m256i t2 = _mm256_and_si256(in, _mm256_set1_epi32(0x003f03f0));
+                const __m256i t3 = _mm256_mullo_epi16(t2, _mm256_set1_epi32(0x01000010));
+                const __m256i indices = _mm256_or_si256(t1, t3);
 
-    //             _mm256_storeu_si256(
-    //                 (__m256i *)out,
-    //                 (use_srp ? lookup_pshufb_srp : lookup_pshufb_std)(indices)
-    //             );
-    //             out += 32;
-    //         }
-    //     }
-    //     // *final_steps_mod_lap = steps_mod_lap_out;
+                _mm256_storeu_si256(
+                    (__m256i *)out,
+                    (use_srp ? lookup_pshufb_srp : lookup_pshufb_std)(indices)
+                );
+                out += 32;
+            }
+        }
 
-    //     // Return number of bytes written
-    //     return (size_t)(out - (uint8_t *)dst) +
-    //             + evp_encode_scalar_nl_int(ctx, out, src + i, srclen - i, &steps_mod_lap_out);
-    // }
+        // Return number of bytes written
+        return (size_t)(out - (uint8_t *)dst) +
+                + evp_encode_scalar_nl_int(ctx, out, src + i, srclen - i, &steps_mod_lap_out);
+    }
 
 
     int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen, int ctx_length, int *final_steps_mod_lap) {
@@ -898,7 +862,7 @@ size_t insert_nl_str8(
         int stride = ctx_length / 3 * 4; 
         int steps_mod_lap = 0;  
         const int use_srp = ctx && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET);
-        lookup_fn lookup_pshufb = use_srp ? lookup_pshufb_srp : lookup_pshufb_std;
+        // lookup_fn lookup_pshufb = use_srp ? lookup_pshufb_srp : lookup_pshufb_std;
 
 
         // Define shuffle mask for AVX2
@@ -969,10 +933,6 @@ size_t insert_nl_str8(
                 vec2 = lookup_pshufb_std(input2);
                 vec3 = lookup_pshufb_std(input3);
             }
-            // const __m256i vec0 = lookup_pshufb(input0);
-            // const __m256i vec1 = lookup_pshufb(input1);
-            // const __m256i vec2 = lookup_pshufb(input2);
-            // const __m256i vec3 = lookup_pshufb(input3);
 
             if (stride == 0) {
                 _mm256_storeu_si256((__m256i *)out, vec0);
@@ -1025,6 +985,7 @@ size_t insert_nl_str8(
 
                 int base = (i /96) % 3;
 
+                // attempt #1
                 // Benchmark ran 50000 iterations (40000 used after warmup)
                 // Total elapsed (wall):     7.510144 s
                 // CPU cycles (avg):         759968
@@ -1040,38 +1001,63 @@ size_t insert_nl_str8(
                 //     Instructions per cycle:   5.6121
                 //     Throughput:              1.66 GB/s
 
-                // static const uint8_t seq[3][4] = {
-                //     {0,1,2,0},
-                //     {1,2,0,1},
-                //     {2,0,1,2}
-                // };
+                static const uint8_t seq[3][4] = {
+                    {0,1,2,0},
+                    {1,2,0,1},
+                    {2,0,1,2}
+                };
 
-                // InsertFn fns[3] = {
-                //     insert_nl_gt16,
-                //     insert_nl_2nd_vec_stride_12,
-                //     insert_nl_gt16
-                // };
-
-                // out += fns[ seq[base][0] ](vec0, out, stride, &steps_mod_lap);
-                // out += fns[ seq[base][1] ](vec1, out, stride, &steps_mod_lap);
-                // out += fns[ seq[base][2] ](vec2, out, stride, &steps_mod_lap);
-                // out += fns[ seq[base][3] ](vec3, out, stride, &steps_mod_lap);
-
-
-
-                InsertFn insert_fns[3] = {
+                InsertFn fns[3] = {
                     insert_nl_gt16,
                     insert_nl_2nd_vec_stride_12,
-                    insert_nl_gt16,
                     insert_nl_gt16
                 };
 
+                out += fns[ seq[base][0] ](vec0, out, stride, &steps_mod_lap);
+                out += fns[ seq[base][1] ](vec1, out, stride, &steps_mod_lap);
+                out += fns[ seq[base][2] ](vec2, out, stride, &steps_mod_lap);
+                out += fns[ seq[base][3] ](vec3, out, stride, &steps_mod_lap);
 
-                out += insert_fns[(base + 0) % 3](vec0, out, stride, &steps_mod_lap);
-                out += insert_fns[(base + 1) % 3](vec1, out, stride, &steps_mod_lap);
-                out += insert_fns[(base + 2) % 3](vec2, out, stride, &steps_mod_lap);
-                out += insert_fns[(base + 3) % 3](vec3, out, stride, &steps_mod_lap);
+
+                // attempt #2
+                // performance was similar to previous one with this approach:
+                // InsertFn insert_fns[3] = {
+                //     insert_nl_gt16,
+                //     insert_nl_2nd_vec_stride_12,
+                //     insert_nl_gt16,
+                //     insert_nl_gt16
+                // };
+
+                // out += insert_fns[(base + 0) % 3](vec0, out, stride, &steps_mod_lap);
+                // out += insert_fns[(base + 1) % 3](vec1, out, stride, &steps_mod_lap);
+                // out += insert_fns[(base + 2) % 3](vec2, out, stride, &steps_mod_lap);
+                // out += insert_fns[(base + 3) % 3](vec3, out, stride, &steps_mod_lap);
             
+                // attempt #3
+                // base must be 0,1,2 (e.g., carried across iterations: if (++base==3) base=0)
+                // switch (base) {
+                // case 0:
+                //     out += insert_nl_gt16(vec0, out, stride, &steps_mod_lap);
+                //     out += insert_nl_2nd_vec_stride_12(vec1, out, stride, &steps_mod_lap);
+                //     out += insert_nl_gt16(vec2, out, stride, &steps_mod_lap);
+                //     out += insert_nl_gt16(vec3, out, stride, &steps_mod_lap);
+                //     break;
+                // case 1:
+                //     out += insert_nl_2nd_vec_stride_12(vec0, out, stride, &steps_mod_lap);
+                //     out += insert_nl_gt16(vec1, out, stride, &steps_mod_lap);
+                //     out += insert_nl_gt16(vec2, out, stride, &steps_mod_lap);
+                //     out += insert_nl_2nd_vec_stride_12(vec3, out, stride, &steps_mod_lap);
+                //     break;
+                // default: /* base == 2 */
+                //     out += insert_nl_gt16(vec0, out, stride, &steps_mod_lap);
+                //     out += insert_nl_gt16(vec1, out, stride, &steps_mod_lap);
+                //     out += insert_nl_2nd_vec_stride_12(vec2, out, stride, &steps_mod_lap);
+                //     out += insert_nl_gt16(vec3, out, stride, &steps_mod_lap);
+                //     break;
+                // }
+
+                // // advance phase cheaply (avoid % 3)
+                // if (++base == 3) base = 0;
                 
             }
             else if ( 16 <= stride   ){

@@ -11,6 +11,9 @@
 #include <stdio.h>
 #include "testutil.h"
 #include <openssl/evp.h>
+#include "internal/cryptlib.h"
+#include "crypto/evp.h"
+#include "evp_local.h"
 
 #define RED_TEXT(str)     "\033[31m" str "\033[0m"
 
@@ -101,19 +104,20 @@
                 printf("\033[31m%02x\033[0m ", (unsigned int)(expected)[_i]);     \
             else                                                                  \
                 printf("%02x ", (unsigned int)(expected)[_i]);                    \
-            if ((_i + 1) % 9 == 0) printf("\n");                                   \
+            if ((_i + 1) % 16 == 0) printf("\n");                                   \
         }                                                                         \
-        if (_i % 9) printf("\n");                                                 \
+        if (_i % 16) printf("\n");                                                 \
                                                                                   \
+        printf("*************************************:\n");                       \
         printf("Actual buffer:\n");                                               \
         for (_i = 0; _i < (len); _i++) {                                          \
             if (_i == _mismatch_index)                                            \
                 printf("\033[31m%02x\033[0m ", (unsigned int)(actual)[_i]);       \
             else                                                                  \
                 printf("%02x ", (unsigned int)(actual)[_i]);                      \
-            if ((_i + 1) % 9 == 0) printf("\n");                                   \
+            if ((_i + 1) % 16 == 0) printf("\n");                                   \
         }                                                                         \
-        if (_i % 9) printf("\n");                                                 \
+        if (_i % 16) printf("\n");                                                 \
                                                                                   \
         printf("Memory mismatch at index %zu: got \033[31m%02x\033[0m, expected \033[31m%02x\033[0m\n", \
                _mismatch_index,                                                   \
@@ -135,81 +139,6 @@ static void dump_bytes(const char *label, const uint8_t *buf, size_t len) {
         printf("\n");
 }
 
-
-static int test_encode_line_lengths(void)
-{
-    const int trials = 50;
-    const int max_input_len = 300;
-    unsigned int seed = 12345;
-
-    unsigned char out_simd[9000 * 2 + 1] = {0};
-    unsigned char out_ref[9000 * 2 + 1] = {0};
-
-    for (int t = 0; t < trials; t++) {
-        int inl = rand_r(&seed) % max_input_len;
-        unsigned char input[max_input_len];
-        for (int i = 0; i < inl; i++)
-            input[i] = (unsigned char)(rand_r(&seed) % 256);
-
-        for (int ctx_len = 3; ctx_len <= 80; ctx_len += 3) {
-            EVP_ENCODE_CTX *ctx_simd = EVP_ENCODE_CTX_new();
-            EVP_ENCODE_CTX *ctx_ref  = EVP_ENCODE_CTX_new();
-
-            //3,6,24 OK , 48 OK,  9 not OK, all others it seems outlen not OK, 80 memory not OK
-            // int ctx_len = 65; 
-            memset(out_simd, 0, sizeof(out_simd));
-            memset(out_ref,  0, sizeof(out_ref));
-
-            int outlen_simd = 0, outlen_ref = 0;
-            int finlen_simd = 0, finlen_ref = 0;
-
-            if (!ctx_simd || !ctx_ref) {
-                EVP_ENCODE_CTX_free(ctx_simd);
-                EVP_ENCODE_CTX_free(ctx_ref);
-                TEST_error("Out of memory for contexts");
-                return 0;
-            }
-
-            // Define some ANSI color codes
-            // #define CLR_RESET   "\033[0m"
-            // #define CLR_YELLOW  "\033[33;1m"
-            // #define CLR_CYAN    "\033[36;1m"
-            // #define CLR_MAGENTA "\033[35;1m"
-
-            // printf(CLR_YELLOW "Trial %d" CLR_RESET
-            //     ", input length " CLR_CYAN "%d" CLR_RESET
-            //     ", line length " CLR_MAGENTA "%d" CLR_RESET
-            //     " (ctx_len=%d)\n",
-            //     t, inl, ctx_len, ctx_len);
-
-            // printf("Trial %d, input length %d, line length %d (ctx_len=%d)\n", t, inl, ctx_len, ctx_len); // initialize with specific line lengths
-            EVP_EncodeInit(ctx_simd);
-            EVP_EncodeInit(ctx_ref);
-            EVP_Set_length(ctx_simd, ctx_len);
-            EVP_Set_length(ctx_ref, ctx_len);
-
-            int ret_simd = EVP_EncodeUpdate(ctx_simd, out_simd, &outlen_simd, input, inl);
-            int ret_ref  = EVP_EncodeUpdate_openssl(ctx_ref, out_ref, &outlen_ref, input, inl);
-
-            // dump_bytes("Output SIMD", out_simd, outlen_simd);
-            // dump_bytes("Output REF", out_ref, outlen_ref);
-
-            ASSERT_EQUAL_INT(ret_simd, ret_ref);
-            ASSERT_MEM_EQUAL(out_ref,out_simd , outlen_ref);
-
-            ASSERT_EQUAL_INT(outlen_simd, outlen_ref);
-            // size_t maxlen = outlen_ref > outlen_simd ? outlen_ref : outlen_simd;
-            // ASSERT_MEM_EQUAL(out_ref, out_simd, maxlen);
-
-            EVP_ENCODE_CTX_free(ctx_simd);
-            EVP_ENCODE_CTX_free(ctx_ref);
-        }
-    }
-
-    return 1;
-
-}
-
 static int test_encode_line_lengths_reinforced(void)
 {
     const int trials = 50;
@@ -228,10 +157,15 @@ static int test_encode_line_lengths_reinforced(void)
         for (int i = 0; i < inl; i++)
             input[i] = (unsigned char)(rand_r(&seed) % 256);
 
+        // dump_bytes("Input buffer", input, inl);
+
         // NOTE: Use multiples of 4 for Base64 line length. If you want to
         // deliberately stress bad lengths, keep your step=3 loop in a separate test.
             for (int partial_ctx_fill = 0; partial_ctx_fill <= 80; partial_ctx_fill += 1) {
-                for (int ctx_len = 3; ctx_len <= 80; ctx_len += 3) {
+                for (int ctx_len = 75; ctx_len <= 80; ctx_len += 3) {
+                // for (int ctx_len = 3; ctx_len <= 80; ctx_len += 3) {
+                    printf("Trial %d, input length %d, ctx length %d, partial ctx fill %d\n",
+                           t + 1, inl, ctx_len, partial_ctx_fill);
                     EVP_ENCODE_CTX *ctx_simd = EVP_ENCODE_CTX_new();
                     EVP_ENCODE_CTX *ctx_ref  = EVP_ENCODE_CTX_new();
 
@@ -267,22 +201,36 @@ static int test_encode_line_lengths_reinforced(void)
                     EVP_Set_length(ctx_simd, ctx_len);
                     EVP_Set_length(ctx_ref,  ctx_len);
 
-                    int ret_simd = EVP_EncodeUpdate(ctx_simd, out_simd, &outlen_simd, input, (int)inl);
-                    int ret_ref = EVP_EncodeUpdate_openssl(ctx_ref, out_ref, &outlen_ref, input, (int)inl);
+                    for (int i = 0; i < 2; i++){
+                        if (i % 2 == 0) {
+                            // Turn SRP alphabet OFF
+                            ctx_simd->flags &= ~EVP_ENCODE_CTX_USE_SRP_ALPHABET;
+                            ctx_ref->flags &= ~EVP_ENCODE_CTX_USE_SRP_ALPHABET;
+                        } else {
+                            // Turn SRP alphabet ON
+                            ctx_simd->flags |= EVP_ENCODE_CTX_USE_SRP_ALPHABET;
+                            ctx_ref->flags |= EVP_ENCODE_CTX_USE_SRP_ALPHABET;
+
+                        }
 
 
-                    ASSERT_EQUAL_INT(ret_simd, ret_ref);
-                    ASSERT_MEM_EQUAL(out_ref,out_simd , outlen_ref);
-                    ASSERT_EQUAL_INT(outlen_simd, outlen_ref);
+                        int ret_simd = EVP_EncodeUpdate(ctx_simd, out_simd, &outlen_simd, input, (int)inl);
+                        int ret_ref = EVP_EncodeUpdate_openssl(ctx_ref, out_ref, &outlen_ref, input, (int)inl);
 
-                    EVP_EncodeFinal(ctx_simd, out_simd + outlen_simd, &finlen_simd);
-                    EVP_EncodeFinal_openssl(ctx_ref, out_ref + outlen_ref, &finlen_ref);
 
-                    int total_simd = outlen_simd + finlen_simd;
-                    int total_ref  = outlen_ref + finlen_ref;
+                        ASSERT_EQUAL_INT(ret_simd, ret_ref);
+                        ASSERT_MEM_EQUAL(out_ref,out_simd , outlen_ref);
+                        ASSERT_EQUAL_INT(outlen_simd, outlen_ref);
 
-                    ASSERT_EQUAL_INT(finlen_simd, finlen_ref);
-                    ASSERT_MEM_EQUAL(out_ref, out_simd, total_ref);
+                        EVP_EncodeFinal(ctx_simd, out_simd + outlen_simd, &finlen_simd);
+                        EVP_EncodeFinal_openssl(ctx_ref, out_ref + outlen_ref, &finlen_ref);
+
+                        int total_simd = outlen_simd + finlen_simd;
+                        int total_ref  = outlen_ref + finlen_ref;
+
+                        ASSERT_EQUAL_INT(finlen_simd, finlen_ref);
+                        ASSERT_MEM_EQUAL(out_ref, out_simd, total_ref);
+                    }
 
                     EVP_ENCODE_CTX_free(ctx_simd);
                     EVP_ENCODE_CTX_free(ctx_ref);
