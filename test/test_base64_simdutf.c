@@ -157,13 +157,8 @@ static int test_encode_line_lengths_reinforced(void)
         for (int i = 0; i < inl; i++)
             input[i] = (unsigned char)(rand_r(&seed) % 256);
 
-        // dump_bytes("Input buffer", input, inl);
-
-        // NOTE: Use multiples of 4 for Base64 line length. If you want to
-        // deliberately stress bad lengths, keep your step=3 loop in a separate test.
             for (int partial_ctx_fill = 0; partial_ctx_fill <= 80; partial_ctx_fill += 1) {
-                for (int ctx_len = 75; ctx_len <= 80; ctx_len += 3) {
-                // for (int ctx_len = 3; ctx_len <= 80; ctx_len += 3) {
+                for (int ctx_len = 3; ctx_len <= 80; ctx_len += 3) {
                     printf("Trial %d, input length %d, ctx length %d, partial ctx fill %d\n",
                            t + 1, inl, ctx_len, partial_ctx_fill);
                     EVP_ENCODE_CTX *ctx_simd = EVP_ENCODE_CTX_new();
@@ -184,17 +179,6 @@ static int test_encode_line_lengths_reinforced(void)
                         return 0;
                     }
 
-                    // ANSI colors (purely cosmetic for the log)
-                    // #define CLR_RESET   "\033[0m"
-                    // #define CLR_YELLOW  "\033[33;1m"
-                    // #define CLR_CYAN    "\033[36;1m"
-                    // #define CLR_MAGENTA "\033[35;1m"
-
-                    // printf(CLR_YELLOW "Trial %d" CLR_RESET
-                    //     ", input length " CLR_CYAN "%d" CLR_RESET
-                    //     ", line length "  CLR_MAGENTA "%d" CLR_RESET "\n",
-                    //     t, inl, ctx_len);
-
                     // Initialize both contexts and set identical line lengths
                     EVP_EncodeInit(ctx_simd);
                     EVP_EncodeInit(ctx_ref);
@@ -212,7 +196,6 @@ static int test_encode_line_lengths_reinforced(void)
                             ctx_ref->flags |= EVP_ENCODE_CTX_USE_SRP_ALPHABET;
 
                         }
-
 
                         int ret_simd = EVP_EncodeUpdate(ctx_simd, out_simd, &outlen_simd, input, (int)inl);
                         int ret_ref = EVP_EncodeUpdate_openssl(ctx_ref, out_ref, &outlen_ref, input, (int)inl);
@@ -243,7 +226,6 @@ static int test_encode_line_lengths_reinforced(void)
 
 int setup_tests(void)
 {
-    // ADD_TEST(test_encode_line_lengths);
     ADD_TEST(test_encode_line_lengths_reinforced);
     
     return 1;
