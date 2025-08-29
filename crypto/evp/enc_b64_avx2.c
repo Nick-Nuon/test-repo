@@ -25,10 +25,6 @@
 
     typedef __m256i (*lookup_fn)(__m256i v);
     
-     //example : when index = 0 (lowercase class).
-    // For input in [26..51], you want ASCII = 'a' (97) + (input-26).
-    // That equals input + ('a' - 26).
-    // Example: input=26 → 26+('a'-26)=97='a'; input=27→98='b'.
     static __m256i lookup_pshufb_std(__m256i input) {
         __m256i result = _mm256_subs_epu8(input, _mm256_set1_epi8(51));
         const __m256i less = _mm256_cmpgt_epi8(_mm256_set1_epi8(26), input);
@@ -226,12 +222,10 @@ static void dump_bytes(const char *label, const uint8_t *buf, size_t len) {
 }
 
 
-// these particular intrinsics requires immediate values, this is arguably a hack , but 
-// it works and it beats using macros.
+// these particular intrinsics requires immediate values, this is a hack
+// In C++, I probably would have used a template, but I'm not sure if it's worth it with branch prediction
 static inline __m256i shift_right_zeros(__m256i v, int n) {
-    // return _mm256_srli_si256(v, 1);
     switch (n) {
-        // return _mm256_srli_si256(v, 1);
         case 0:  return v;
         case 1:  return _mm256_srli_si256(v, 1);
         case 2:  return _mm256_srli_si256(v, 2);
@@ -281,9 +275,6 @@ size_t insert_nl_gt16(
     int steps_per_lap, // I use the analogy of a racing track where the length of a "lap" is the number of bytes between newlines
     int *steps_mod_lap // these are the numbers of steps that have been done so far in the current lap, this is used to determine where to insert the newline
 ) {
-
-    // printf("--------------------------------------------------\n");
-    // Handle cross-lane remainder logic
     int b_lane =  16; // bytes per lane
     uint8_t* out = output;
 
@@ -323,7 +314,6 @@ size_t insert_nl_gt16(
 
         __m256i shifted_1_L = shift_left_zeros(v0, 1);
 
-        // Blend the second lane of shifted_1_L into shifted_0_L using mask_1_l
         __m256i shifted = _mm256_blendv_epi8(shifted_0_L, shifted_1_L, mask);
         blended_0L = _mm256_blendv_epi8(v0, shifted, mask);
 
@@ -411,9 +401,8 @@ size_t insert_nl_2nd_vec_stride_12(
     return written;
 }
 
-    // Accepts 4 AVX2 vectors and inserts '\n' every stride characters
+// Accepts 4 AVX2 vectors and inserts '\n' every stride characters
 // output buffer must be at least 128 + (128 / stride) bytes
-//written_so_far is what has been written so far
 size_t insert_newlines_4avx2(__m256i v0, __m256i v1, __m256i v2, __m256i v3,
                              uint8_t *output, int stride, int *written_so_far) 
 {
@@ -568,8 +557,10 @@ size_t insert_nl_str8(
 
 // This is one benchmark for  encode_base64_avx2_alt for ctx-> length = 75
 // The ctx->lengths = 12 and 27 are similarly bad
+// This simply sets the pointer of the next AVX2 vector to right next to a newline, thus 
+// avoiding the need to shift the remainder bytes in a lane around
 // The code is correct for these lengths but buggy for others. 
-// Due to poor performance, I decided against using this approach.
+// Due to poor performance, I decided against polishing this approach.
 
 //  ***** Benchmarking EVP_EncodeUpdate *****:
 // Benchmark ran 50000 iterations (40000 used after warmup)
@@ -807,6 +798,10 @@ size_t static inline off_nl_out(
                     vec3, out, stride_out, &steps_mod_lap_out);
             }
             else {
+                // outside of multiple of threes for ctx->length, 
+                // the function doesn't seem to return correct results
+                // e.g. inserts padding too early and often. 
+                // I doubt anyone uses these lengths
                 printf("Unsupported stride: %d\n", stride_out);
 
                 // int out_idx = 0;
