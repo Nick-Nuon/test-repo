@@ -520,7 +520,6 @@ size_t insert_nl_str8(
     const __m256i v0,
     uint8_t* output         // at least 160 bytes to be safe
 ) {
-    // mask for inserting newlines every 4 bytes and shuffling
   __m256i shuffling_mask = _mm256_setr_epi8(
       0, 1, 2, 3, 4, 5, 6, 7, 0xFF,
       8, 9, 10, 11, 12, 13, 14, // 15,
