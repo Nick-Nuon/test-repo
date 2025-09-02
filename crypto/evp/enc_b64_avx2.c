@@ -269,7 +269,7 @@ static inline __m256i shift_left_zeros(__m256i v, int n) {
     }
 }
 
-size_t insert_nl_gt16(
+static inline size_t insert_nl_gt16(
     const __m256i v0,
     uint8_t* output,
     int steps_per_lap, // I use the analogy of a racing track where the length of a "lap" is the number of bytes between newlines
@@ -365,7 +365,7 @@ size_t insert_nl_gt16(
 
 
 
-size_t insert_nl_2nd_vec_stride_12(
+static inline size_t insert_nl_2nd_vec_stride_12(
     const __m256i v0,
     uint8_t* output ,
     int dummy_stride,
@@ -432,7 +432,7 @@ size_t insert_newlines_4avx2(__m256i v0, __m256i v1, __m256i v2, __m256i v3,
     return out_idx;
 }
 
-__m256i insert_newlines_by_mask(__m256i data, __m256i mask) {
+static inline __m256i insert_newlines_by_mask(__m256i data, __m256i mask) {
     __m256i newline = _mm256_set1_epi8('\n');
 
     return _mm256_or_si256(
@@ -442,7 +442,7 @@ __m256i insert_newlines_by_mask(__m256i data, __m256i mask) {
 }
 
 
-__m256i make_newline_every_5th_byte_mask() {
+static inline __m256i make_newline_every_5th_byte_mask() {
     uint8_t mask_bytes[32];
     for (int i = 0; i < 32; ++i) {
         mask_bytes[i] = (i % 5 == 4) ? 0xFF : 0x00;
@@ -451,7 +451,7 @@ __m256i make_newline_every_5th_byte_mask() {
 }
 
 
-size_t insert_nl_str4(
+static inline size_t insert_nl_str4(
     const __m256i v0,
     uint8_t* output
 ) {
@@ -516,7 +516,7 @@ size_t insert_nl_str4(
 }
 
 
-size_t insert_nl_str8(
+static inline size_t insert_nl_str8(
     const __m256i v0,
     uint8_t* output         // at least 160 bytes to be safe
 ) {
@@ -856,8 +856,6 @@ size_t static inline off_nl_out(
         int stride = ctx_length / 3 * 4; 
         int steps_mod_lap = 0;  
         const int use_srp = ctx && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET);
-        // lookup_fn lookup_pshufb = use_srp ? lookup_pshufb_srp : lookup_pshufb_std;
-
 
         // Define shuffle mask for AVX2
         const __m256i shuf = _mm256_set_epi8(

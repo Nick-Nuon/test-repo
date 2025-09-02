@@ -36,7 +36,7 @@ gcc -O3 -mavx2 -I./include \
     -o ./util/perf_basic -lcrypto
 
 # # === Setup log file ===
-LOGFILE="./benchmark_results/base64_benchmark_clang_$(date +'%Y-%m-%d_%H-%M-%S').log"
+LOGFILE="./benchmark_results/base64_benchmark_gcc_$(date +'%Y-%m-%d_%H-%M-%S').log"
 exec > >(tee -a "$LOGFILE") 2>&1
 
 echo "📝 Logging to $LOGFILE"
@@ -52,7 +52,7 @@ sudo ./util/perf_basic util/benchmark_data/Mula_img
 echo " "
 
 make clean
-echo "🛠️  Configuring and building OpenSSL with Clang and -march=native -mtune=native..."
+echo "🛠️  Configuring and building OpenSSL with gcc and -march=native -mtune=native..."
 
 echo "✅ Benchmarks complete at $(date)"
 echo "Results logged to: $LOGFILE"
