@@ -862,6 +862,8 @@ size_t static inline off_nl_out(
             10, 11, 9, 10, 7, 8, 6, 7, 4, 5, 3, 4, 1, 2, 0, 1,
             10, 11, 9, 10, 7, 8, 6, 7, 4, 5, 3, 4, 1, 2, 0, 1);
 
+        int base = 0;
+
         // Process 96 bytes at a time
         for (; i + 100 <= srclen; i += 96) {
             // We shave off 4 bytes from the beginning and the end
@@ -975,7 +977,8 @@ size_t static inline off_nl_out(
             else if (stride == 12) {          
                 typedef size_t (*InsertFn)(__m256i vec, uint8_t* out, int stride, int* steps_mod_lap);
 
-                int base = (i /96) % 3;
+                // int base = (i /96) % 3;
+                //  base = (i /96) % 3;
 
                 // attempt #1
                 // Benchmark ran 50000 iterations (40000 used after warmup)
@@ -993,22 +996,25 @@ size_t static inline off_nl_out(
                 //     Instructions per cycle:   5.6121
                 //     Throughput:              1.66 GB/s
 
-                static const uint8_t seq[3][4] = {
-                    {0,1,2,0},
-                    {1,2,0,1},
-                    {2,0,1,2}
-                };
+                // static const uint8_t seq[3][4] = {
+                //     {0,1,2,0},
+                //     {1,2,0,1},
+                //     {2,0,1,2}
+                // };
 
-                InsertFn fns[3] = {
-                    insert_nl_gt16,
-                    insert_nl_2nd_vec_stride_12,
-                    insert_nl_gt16
-                };
+                // InsertFn fns[3] = {
+                //     insert_nl_gt16,
+                //     insert_nl_2nd_vec_stride_12,
+                //     insert_nl_gt16
+                // };
 
-                out += fns[ seq[base][0] ](vec0, out, stride, &steps_mod_lap);
-                out += fns[ seq[base][1] ](vec1, out, stride, &steps_mod_lap);
-                out += fns[ seq[base][2] ](vec2, out, stride, &steps_mod_lap);
-                out += fns[ seq[base][3] ](vec3, out, stride, &steps_mod_lap);
+                // out += fns[ seq[base][0] ](vec0, out, stride, &steps_mod_lap);
+                // out += fns[ seq[base][1] ](vec1, out, stride, &steps_mod_lap);
+                // out += fns[ seq[base][2] ](vec2, out, stride, &steps_mod_lap);
+                // out += fns[ seq[base][3] ](vec3, out, stride, &steps_mod_lap);
+
+                // base = (base == 2) ? 0 : base + 1;  // 0→1→2→0…
+
 
 
                 // attempt #2
@@ -1026,13 +1032,62 @@ size_t static inline off_nl_out(
                 // out += insert_fns[(base + 3) % 3](vec3, out, stride, &steps_mod_lap);
             
                 // attempt #3
+
+                // ***** Benchmarking EVP_EncodeUpdate *****:
+                // Benchmark ran 50000 iterations (40000 used after warmup)
+                // Total elapsed (wall):     5.628161 s
+                // CPU cycles (avg):         606264
+                // Instructions (avg):       2420874
+                // Instructions per cycle:   3.9931
+                // Throughput:              4.97 GB/s
+
                 // base must be 0,1,2 (e.g., carried across iterations: if (++base==3) base=0)
+                switch (base) {
+                case 0:
+                    
+                    int steps_mod_lap_1 = 0;
+                    int steps_mod_lap_2 = 0;
+                    int steps_mod_lap_3 = 0;
+                    int steps_mod_lap_4 = 0;
+
+                    out += insert_nl_gt16(vec0, out, stride, &steps_mod_lap);
+                    out += insert_nl_2nd_vec_stride_12(vec1, out, stride, &steps_mod_lap);
+                    out += insert_nl_gt16(vec2, out, stride, &steps_mod_lap);
+                    out += insert_nl_gt16(vec3, out, stride, &steps_mod_lap);
+                    break;
+                case 1:
+                    out += insert_nl_2nd_vec_stride_12(vec0, out, stride, &steps_mod_lap);
+                    out += insert_nl_gt16(vec1, out, stride, &steps_mod_lap);
+                    out += insert_nl_gt16(vec2, out, stride, &steps_mod_lap);
+                    out += insert_nl_2nd_vec_stride_12(vec3, out, stride, &steps_mod_lap);
+                    break;
+                default: /* base == 2 */
+                    out += insert_nl_gt16(vec0, out, stride, &steps_mod_lap);
+                    out += insert_nl_gt16(vec1, out, stride, &steps_mod_lap);
+                    out += insert_nl_2nd_vec_stride_12(vec2, out, stride, &steps_mod_lap);
+                    out += insert_nl_gt16(vec3, out, stride, &steps_mod_lap);
+                    break;
+                }
+
+                // advance phase cheaply (avoid % 3)
+                if (++base == 3) base = 0;
+
                 // switch (base) {
                 // case 0:
-                //     out += insert_nl_gt16(vec0, out, stride, &steps_mod_lap);
-                //     out += insert_nl_2nd_vec_stride_12(vec1, out, stride, &steps_mod_lap);
-                //     out += insert_nl_gt16(vec2, out, stride, &steps_mod_lap);
-                //     out += insert_nl_gt16(vec3, out, stride, &steps_mod_lap);
+                    
+                //     // int steps_mod_lap_1 = 0;
+                //     // int steps_mod_lap_2 = 0;
+                //     // int steps_mod_lap_3 = 0;
+                //     // int steps_mod_lap_4 = 0;
+
+                //     insert_nl_gt16(vec0, out, stride, &steps_mod_lap);
+                //     out += 32 + 1;
+                //     insert_nl_2nd_vec_stride_12(vec1, out, stride, &steps_mod_lap);
+                //     out += 32 + 5;
+                //     insert_nl_gt16(vec2, out, stride, &steps_mod_lap);
+                //     out += 32 + 1;
+                //     insert_nl_gt16(vec3, out, stride, &steps_mod_lap);
+                //     out += 32 + 1;
                 //     break;
                 // case 1:
                 //     out += insert_nl_2nd_vec_stride_12(vec0, out, stride, &steps_mod_lap);
@@ -1050,6 +1105,7 @@ size_t static inline off_nl_out(
 
                 // // advance phase cheaply (avoid % 3)
                 // if (++base == 3) base = 0;
+
                 
             }
             else if ( 16 <= stride   ){
