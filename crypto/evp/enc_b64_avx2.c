@@ -269,6 +269,315 @@ static inline __m256i shift_left_zeros(__m256i v, int n) {
     }
 }
 
+// Precomputed shuffle masks for K = 1 to 16
+ const uint8_t shuffle_masks[16][16] = {
+    {0x80, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14},
+    {0, 0x80, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14},
+    {0, 1, 0x80, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14},
+    {0, 1, 2, 0x80, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14},
+    {0, 1, 2, 3, 0x80, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14},
+    {0, 1, 2, 3, 4, 0x80, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14},
+    {0, 1, 2, 3, 4, 5, 0x80, 6, 7, 8, 9, 10, 11, 12, 13, 14},
+    {0, 1, 2, 3, 4, 5, 6, 0x80, 7, 8, 9, 10, 11, 12, 13, 14},
+    {0, 1, 2, 3, 4, 5, 6, 7, 0x80, 8, 9, 10, 11, 12, 13, 14},
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 0x80, 9, 10, 11, 12, 13, 14},
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0x80, 10, 11, 12, 13, 14},
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0x80, 11, 12, 13, 14},
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0x80, 12, 13, 14},
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 0x80, 13, 14},
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0x80, 14},
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0x80}};
+/**
+
+// ------------------------------------------------------------------
+// Stub for your AVX2 routine. Replace with your actual implementation.
+// N = byte index where newline should be inserted (0..31).
+/**
+ * Insert a line feed character in the 64-byte input at index K in [0,32).
+ */
+/**
+ * Insert a line feed character in the 64-byte input at index K in [0,32).
+ */
+static inline __m256i insert_line_feed32(__m256i input, int K) {
+  __m256i line_feed_vector = _mm256_set1_epi8('\n');
+  __m128i identity =
+      _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+  if (K >= 16) {
+    __m128i maskhi = _mm_loadu_si128((__m128i *)shuffle_masks[K - 16]);
+    __m256i mask = _mm256_set_m128i(maskhi, identity);
+    __m256i lf_pos = _mm256_cmpeq_epi8(mask, _mm256_set1_epi8(0x80));
+    __m256i shuffled = _mm256_shuffle_epi8(input, mask);
+    __m256i result = _mm256_blendv_epi8(shuffled, line_feed_vector, lf_pos);
+    return result;
+  }
+  // Shift input right by 1 byte
+  __m256i shift = _mm256_alignr_epi8(
+      input, _mm256_permute2x128_si256(input, input, 0x21), 15);
+  input = _mm256_blend_epi32(input, shift, 0xF0);
+  __m128i masklo = _mm_loadu_si128((__m128i *)shuffle_masks[K]);
+  __m256i mask = _mm256_set_m128i(identity, masklo);
+  __m256i lf_pos = _mm256_cmpeq_epi8(mask, _mm256_set1_epi8(0x80));
+  __m256i shuffled = _mm256_shuffle_epi8(input, mask);
+  __m256i result = _mm256_blendv_epi8(shuffled, line_feed_vector, lf_pos);
+  return result;
+}
+
+
+// Attempt to cut down on dependency chains and modulo operations
+// -----------------------Custom ctx->lengths mode: 78---------------------------
+
+//  ***** Benchmarking EVP_EncodeUpdate *****:
+// Benchmark ran 50000 iterations (40000 used after warmup)
+// Total elapsed (wall):     1.763151 s
+// CPU cycles (avg):         163572
+// Instructions (avg):       775245
+// Instructions per cycle:   4.7395
+// Throughput:              8.31 GB/s
+
+
+//  ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+// Benchmark ran 50000 iterations (40000 used after warmup)
+// Total elapsed (wall):     6.735597 s
+// CPU cycles (avg):         711197
+// Instructions (avg):       3958882
+// Instructions per cycle:   5.5665
+// Throughput:              2.17 GB/s
+
+
+// // ---- branchless "add 32 mod stride" (valid when stride > 32) ----
+// // returns (s + 32) % stride without % or /, with at most one wrap
+// static inline int add32_wrap_gt32(int s, int stride) {
+//     // t = s + 32 - stride
+//     int t = s + 32 - stride;
+//     // if t < 0 -> no wrap -> return s+32
+//     // if t >= 0 -> did wrap -> return t
+//     int mask = t >> 31;             // 0xFFFFFFFF if t<0, else 0
+//     return (t & ~mask) | ((s + 32) & mask);
+//     // same as: return (t < 0) ? (s + 32) : t;
+// }
+
+// // ---- emit one block, stride > 32 => at most one LF per 32B block ----
+// static inline size_t emit_block_gt32_nomod(
+//     __m256i v, uint8_t* dst, int stride, int until_nl /* = stride - s, in [1..stride] */)
+// {
+//     if (until_nl > 32) {               // no newline inside
+//         _mm256_storeu_si256((__m256i*)dst, v);
+//         return 32;
+//     }
+//     if (until_nl == 32) {              // boundary newline (after 32 bytes)
+//         _mm256_storeu_si256((__m256i*)dst, v);
+//         dst[32] = '\n';
+//         return 33;
+//     }
+//     // in-block newline at K = 1..31
+//     uint8_t last = (uint8_t)_mm256_extract_epi8(v, 31); // keep displaced last byte
+//     __m256i with_lf = insert_line_feed32(v, until_nl);  // your AVX2 primitive
+//     _mm256_storeu_si256((__m256i*)dst, with_lf);
+//     dst[32] = last;
+//     return 33;
+// }
+
+// // ---- process 4 blocks without pointer dependency & without modulo ----
+// static inline size_t ins_nl_gt32_4_nochain_nomod(
+//     __m256i v0, __m256i v1, __m256i v2, __m256i v3,
+//     uint8_t* out, int stride, int* steps_mod_lap)
+// {
+//     // contract: stride > 32 (this path guarantees ≤1 LF per 32B block)
+//     // assert(stride > 32);
+
+//     // per-block starting states (no %; at most one wrap each)
+//     const int s0 = *steps_mod_lap;
+//     const int s1 = add32_wrap_gt32(s0, stride);
+//     const int s2 = add32_wrap_gt32(s1, stride);
+//     const int s3 = add32_wrap_gt32(s2, stride);
+//     const int s4 = add32_wrap_gt32(s3, stride); // final state after 4 blocks
+
+//     // until next LF for each block (in [1..stride]); no special-case needed
+//     const int k0 = stride - s0;
+//     const int k1 = stride - s1;
+//     const int k2 = stride - s2;
+//     const int k3 = stride - s3;
+
+//     // predict bytes per block: 32 + (k <= 32 ? 1 : 0)
+//     const size_t w0 = 32 + (k0 <= 32);
+//     const size_t w1 = 32 + (k1 <= 32);
+//     const size_t w2 = 32 + (k2 <= 32);
+//     const size_t w3 = 32 + (k3 <= 32);
+
+//     // independent destinations (no out += ... chain)
+//     const size_t off0 = 0;
+//     const size_t off1 = off0 + w0;
+//     const size_t off2 = off1 + w1;
+//     const size_t off3 = off2 + w2;
+//     const size_t total = off3 + w3;
+
+//     // emit
+//     (void)emit_block_gt32_nomod(v0, out + off0, stride, k0);
+//     (void)emit_block_gt32_nomod(v1, out + off1, stride, k1);
+//     (void)emit_block_gt32_nomod(v2, out + off2, stride, k2);
+//     (void)emit_block_gt32_nomod(v3, out + off3, stride, k3);
+
+//     *steps_mod_lap = s4;  // already wrapped without %
+//     return total;
+// }
+
+// An older attempt to break dependency chains
+// Slower by about 1 Gb/s than the next version without modulo
+// // assumes you have: static inline __m256i insert_line_feed32(__m256i v, int K);
+
+// static inline size_t emit_one_block_planned(
+//     __m256i v, uint8_t* dst, int stride, int until_nl /* 1..∞ */)
+// {
+//     // no LF inside this 32B block
+//     if (until_nl > 32) {
+//         _mm256_storeu_si256((__m256i*)dst, v);
+//         return 32;
+//     }
+
+//     // boundary LF (exactly after 32 bytes)
+//     if (until_nl == 32) {
+//         _mm256_storeu_si256((__m256i*)dst, v);
+//         dst[32] = '\n';
+//         return 33;
+//     }
+
+//     // first LF inside at K1 ∈ [1..31]
+//     uint8_t last = (uint8_t)_mm256_extract_epi8(v, 31);
+//     __m256i with1 = insert_line_feed32(v, until_nl);
+//     _mm256_storeu_si256((__m256i*)dst, with1);
+//     size_t written = 32;
+//     dst[written++] = last; // keep displaced last byte
+
+//     // possible second LF inside at K2 = K1 + stride
+//     const int K2 = until_nl + stride;
+//     if (K2 <= 32) {
+//         const size_t pos2 = (size_t)K2 + 1; // +1 because stream already shifted by first insert
+//         const size_t tail = written - pos2;
+//         memmove(dst + pos2 + 1, dst + pos2, tail);
+//         dst[pos2] = '\n';
+//         ++written;
+//     }
+//     return written; // 33 or 34
+// }
+
+// // Process 4 blocks WITHOUT an out-pointer dependency chain.
+// // Returns total bytes written and updates *steps_mod_lap to state after 4 blocks.
+// static inline size_t ins_nl_gt32_4_nochain(
+//     __m256i v0, __m256i v1, __m256i v2, __m256i v3,
+//     uint8_t* out, int stride, int* steps_mod_lap)
+// {
+//     // Preconditions (Option A policy)
+//     // assert(stride > 0);
+
+//     // Precompute per-block starting state (independent of how many LFs we insert)
+//     const int s0 = *steps_mod_lap;
+//     const int s1 = (s0 + 32) % stride;
+//     const int s2 = (s1 + 32) % stride;
+//     const int s3 = (s2 + 32) % stride;
+
+//     // until next LF for each block (1..stride)
+//     int k0 = stride - s0; if (k0 == 0) k0 = stride;
+//     int k1 = stride - s1; if (k1 == 0) k1 = stride;
+//     int k2 = stride - s2; if (k2 == 0) k2 = stride;
+//     int k3 = stride - s3; if (k3 == 0) k3 = stride;
+
+//     // Predict bytes written per block:
+//     // base 32 + 1 if k<=32 (includes boundary) + 1 if k+stride<=32 (2nd LF)
+//     size_t w0 = 32 + (k0 <= 32) + (k0 + stride <= 32);
+//     size_t w1 = 32 + (k1 <= 32) + (k1 + stride <= 32);
+//     size_t w2 = 32 + (k2 <= 32) + (k2 + stride <= 32);
+//     size_t w3 = 32 + (k3 <= 32) + (k3 + stride <= 32);
+
+//     // Prefix-sum offsets (destinations are now independent)
+//     size_t off0 = 0;
+//     size_t off1 = off0 + w0;
+//     size_t off2 = off1 + w1;
+//     size_t off3 = off2 + w2;
+//     size_t total = off3 + w3;
+
+//     // Emit with independent destinations
+//     (void)emit_one_block_planned(v0, out + off0, stride, k0);
+//     (void)emit_one_block_planned(v1, out + off1, stride, k1);
+//     (void)emit_one_block_planned(v2, out + off2, stride, k2);
+//     (void)emit_one_block_planned(v3, out + off3, stride, k3);
+
+//     // Final lap-state after 4 blocks
+//     *steps_mod_lap = (s3 + 32) % stride; // equivalently (s0 + 128) % stride
+//     return total;
+// }
+
+// Takes a single 256-bit vector as input (32 bytes)
+// Writes to `out`, updates steps_mod_lap, and returns bytes written (32 or 33).
+// static inline size_t ins_nl_gt32(
+//     __m256i v, uint8_t* out, int stride, int* steps_mod_lap)
+// {
+//     // Option A contract: stride must be > 0
+//     // assert(stride > 0 && "stride must be > 0");
+//     // printf("insert_block_with_lf32_wrapper: stride=%d steps_mod_lap=%d\n",
+//     //        stride, *steps_mod_lap);
+    
+//     // bytes until the next newline (relative to start of this 32-byte block)
+//     int until_nl = stride - *steps_mod_lap;
+
+//     // Case A: no newline inside this block
+//     if (until_nl > 32) {
+//         _mm256_storeu_si256((__m256i*)out, v);
+//         *steps_mod_lap = (*steps_mod_lap + 32) % stride;  // canonical update
+//         return 32;
+//     }
+
+//     // Case B: newline exactly at the end (boundary; not inside the 32 bytes)
+//     if (until_nl == 32) {
+//         _mm256_storeu_si256((__m256i*)out, v);
+//         out[32] = '\n';
+//         *steps_mod_lap = 0;
+//         return 33;
+//     }
+
+//     // Case C: exactly one newline falls inside the block at index [0..31]
+//     // Keep the displaced last byte so total written remains 33.
+//     uint8_t last = (uint8_t)_mm256_extract_epi8(v, 31);
+//     __m256i with_lf = insert_line_feed32(v, until_nl); // K in [0..31]
+//     _mm256_storeu_si256((__m256i*)out, with_lf);
+//     out[32] = last;
+
+//     // After inserting at 'until_nl', remaining bytes consumed in this block are (32 - until_nl)
+//     *steps_mod_lap = 32 - until_nl;
+//     return 33;
+// }
+
+static inline size_t ins_nl_gt32(
+    __m256i v, uint8_t* out, int stride, int* steps_mod_lap)
+{
+    const int until_nl = stride - *steps_mod_lap;
+
+    // A) No newline in this block
+    if (until_nl > 32) {
+        _mm256_storeu_si256((__m256i*)out, v);
+        *steps_mod_lap += 32;              // no wrap possible by the if-condition
+        return 32;
+    }
+
+    // B) Newline exactly at end
+    if (until_nl == 32) {
+        _mm256_storeu_si256((__m256i*)out, v);
+        out[32] = '\n';
+        *steps_mod_lap = 0;
+        return 33;
+    }
+
+    // C) One newline inside [0..31]
+    const uint8_t last = (uint8_t)_mm256_extract_epi8(v, 31);
+    const __m256i with_lf = insert_line_feed32(v, until_nl);
+    _mm256_storeu_si256((__m256i*)out, with_lf);
+    out[32] = last;
+
+    *steps_mod_lap = 32 - until_nl;        // in [1..31]
+    return 33;
+}
+
+
+
 static inline size_t insert_nl_gt16(
     const __m256i v0,
     uint8_t* output,
@@ -553,302 +862,6 @@ static inline size_t insert_nl_str8(
     return written;
 }
 
-
-// This is one benchmark for  encode_base64_avx2_alt for ctx-> length = 75
-// The ctx->lengths = 12 and 27 are similarly bad
-// This simply sets the pointer of the next AVX2 vector to right next to a newline, thus 
-// avoiding the need to shift the remainder bytes in a lane around
-// The code is correct for these lengths but buggy for others. 
-// Due to poor performance, I decided against polishing this approach.
-
-//  ***** Benchmarking EVP_EncodeUpdate *****:
-// Benchmark ran 50000 iterations (40000 used after warmup)
-// Total elapsed (wall):     2.902526 s
-// CPU cycles (avg):         297305
-// Instructions (avg):       1154794
-// Instructions per cycle:   3.8842
-// Throughput:              5.05 GB/s
-
-
-//  ***** Benchmarking EVP_EncodeUpdate_openssl *****:
-// Benchmark ran 50000 iterations (40000 used after warmup)
-// Total elapsed (wall):     6.560334 s
-// CPU cycles (avg):         704037
-// Instructions (avg):       3965875
-// Instructions per cycle:   5.6330
-// Throughput:              2.23 GB/s
-
-
-size_t static inline off_nl_in(
-    int steps_per_lap_in,
-    int *steps_mod_lap_in
-) {
-    int b_lane = 24;
-    int steps_until_nl = steps_per_lap_in - *steps_mod_lap_in;
-
-    if (steps_until_nl >= b_lane) {
-        *steps_mod_lap_in += b_lane;
-        return 0;
-    }
-
-    *steps_mod_lap_in = 0; 
-    
-    return b_lane - steps_until_nl; 
-}
-
-size_t static inline off_nl_out(
-    uint8_t* output,
-    int steps_per_lap_out,
-    int *steps_mod_lap_out
-) {
-    int b_lane = 32;
-    int steps_until_nl = steps_per_lap_out - *steps_mod_lap_out;
-    int whitespace = 1;
-
-    if (steps_until_nl > b_lane) {
-        *steps_mod_lap_out += b_lane;
-        return 0;
-    }
-
-    *steps_mod_lap_out = 0; 
-    
-    output[steps_until_nl] = '\n';
-    int remaining = b_lane - (steps_until_nl + whitespace);
-
-    return remaining; 
-}
-
-    // same as its brethren but has nl insertion at the beginning
-    int encode_base64_avx2_alt(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen, int *final_steps_mod_lap) {
-        const uint8_t *input = (const uint8_t *)src;
-        uint8_t *out = (uint8_t *)dst;
-        size_t i = 0;
-        int stride_in = ctx->length;
-        int stride_out = ctx->length / 3 * 4; 
-        int steps_mod_lap_in = 0;  
-        int steps_mod_lap_out = 0;  
-        const int use_srp = ctx && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET);
-
-        // Define shuffle mask for AVX2
-        const __m256i shuf = _mm256_set_epi8(
-            10, 11, 9, 10, 7, 8, 6, 7, 4, 5, 3, 4, 1, 2, 0, 1,
-            10, 11, 9, 10, 7, 8, 6, 7, 4, 5, 3, 4, 1, 2, 0, 1);
-
-        int off_in = 0; // offset for newline insertion in input
-        int off_out = 0; // offset for newline insertion in output
-
-        // Process 96 bytes at a time
-        for (; i + 100 <= srclen; i += 96 - off_in) {
-            off_in = 0;
-            off_out = 0;
-            
-            const __m128i lo0 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 0 - off_in));
-
-
-            const __m128i hi0 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 1 - off_in));
-            off_in += off_nl_in(stride_in, &steps_mod_lap_in);
-
-            const __m128i lo1 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 2 - off_in));
-
-
-            const __m128i hi1 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 3 - off_in));
-            off_in += off_nl_in(stride_in, &steps_mod_lap_in);
-
-            const __m128i lo2 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 4 - off_in));
-
-            const __m128i hi2 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 5 - off_in));
-            off_in += off_nl_in(stride_in, &steps_mod_lap_in);
-
-            const __m128i lo3 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 6 - off_in));
-
-            const __m128i hi3 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 7 - off_in));
-            off_in += off_nl_in(stride_in, &steps_mod_lap_in);
-
-
-
-
-            // ******************* EXPANDING 6 bits to more bits***************************
-            // Fig . 1 in the paper
-            __m256i in0 = _mm256_shuffle_epi8(_mm256_set_m128i(hi0, lo0), shuf);
-            __m256i in1 = _mm256_shuffle_epi8(_mm256_set_m128i(hi1, lo1), shuf);
-            __m256i in2 = _mm256_shuffle_epi8(_mm256_set_m128i(hi2, lo2), shuf);
-            __m256i in3 = _mm256_shuffle_epi8(_mm256_set_m128i(hi3, lo3), shuf);
-
-
-            const __m256i t0_0 = _mm256_and_si256(in0, _mm256_set1_epi32(0x0fc0fc00));
-            const __m256i t0_1 = _mm256_and_si256(in1, _mm256_set1_epi32(0x0fc0fc00));
-            const __m256i t0_2 = _mm256_and_si256(in2, _mm256_set1_epi32(0x0fc0fc00));
-            const __m256i t0_3 = _mm256_and_si256(in3, _mm256_set1_epi32(0x0fc0fc00));
-
-            const __m256i t1_0 = _mm256_mulhi_epu16(t0_0, _mm256_set1_epi32(0x04000040));
-            const __m256i t1_1 = _mm256_mulhi_epu16(t0_1, _mm256_set1_epi32(0x04000040));
-            const __m256i t1_2 = _mm256_mulhi_epu16(t0_2, _mm256_set1_epi32(0x04000040));
-            const __m256i t1_3 = _mm256_mulhi_epu16(t0_3, _mm256_set1_epi32(0x04000040));
-
-            const __m256i t2_0 = _mm256_and_si256(in0, _mm256_set1_epi32(0x003f03f0));
-            const __m256i t2_1 = _mm256_and_si256(in1, _mm256_set1_epi32(0x003f03f0));
-            const __m256i t2_2 = _mm256_and_si256(in2, _mm256_set1_epi32(0x003f03f0));
-            const __m256i t2_3 = _mm256_and_si256(in3, _mm256_set1_epi32(0x003f03f0));
-
-            const __m256i t3_0 = _mm256_mullo_epi16(t2_0, _mm256_set1_epi32(0x01000010));
-            const __m256i t3_1 = _mm256_mullo_epi16(t2_1, _mm256_set1_epi32(0x01000010));
-            const __m256i t3_2 = _mm256_mullo_epi16(t2_2, _mm256_set1_epi32(0x01000010));
-            const __m256i t3_3 = _mm256_mullo_epi16(t2_3, _mm256_set1_epi32(0x01000010));
-
-            const __m256i input0 = _mm256_or_si256(t1_0, t3_0);
-            const __m256i input1 = _mm256_or_si256(t1_1, t3_1);
-            const __m256i input2 = _mm256_or_si256(t1_2, t3_2);
-            const __m256i input3 = _mm256_or_si256(t1_3, t3_3);
-
-
-
-            // ******************* END EXPANDING 6 bits to more bits***************************
-            lookup_fn lookup_pshufb = use_srp ? lookup_pshufb_srp : lookup_pshufb_std;
-
-            const __m256i vec0 = lookup_pshufb(input0);
-            const __m256i vec1 = lookup_pshufb(input1);
-            const __m256i vec2 = lookup_pshufb(input2);
-            const __m256i vec3 = lookup_pshufb(input3);
-
-            if (stride_out == 0) {
-                _mm256_storeu_si256((__m256i *)out, vec0);
-                out += 32;
-                _mm256_storeu_si256((__m256i *)out, vec1);
-                out += 32;
-                _mm256_storeu_si256((__m256i *)out, vec2);
-                out += 32;
-                _mm256_storeu_si256((__m256i *)out, vec3);
-                out += 32;
-            }  else if (stride_out == 64) {
-                _mm256_storeu_si256((__m256i *)out, vec0);
-                out += 32;
-                _mm256_storeu_si256((__m256i *)out, vec1);
-                out += 32;
-                *(out++) = '\n';
-
-                _mm256_storeu_si256((__m256i *)out, vec2);
-                out += 32;
-
-                _mm256_storeu_si256((__m256i *)out, vec3);
-                out += 32;
-
-                *(out++) = '\n';
-            }
-            else if (stride_out == 4) {
-
-                int out_idx = 0;
-                out_idx += insert_nl_str4(vec0, out + out_idx);
-                out_idx += insert_nl_str4(vec1, out + out_idx);
-                out_idx += insert_nl_str4(vec2, out + out_idx);
-                out_idx += insert_nl_str4(vec3, out + out_idx);
-
-                out += out_idx; 
-            }
-            else if (stride_out == 8) {          
-
-                out += insert_nl_str8(
-                    vec0, out );
-                out += insert_nl_str8(
-                    vec1, out );
-                out += insert_nl_str8(
-                    vec2, out );
-                out += insert_nl_str8(
-                    vec3, out );
-
-            }
-            else if (stride_out == 12) {          
-                typedef size_t (*InsertFn)(__m256i vec, uint8_t* out, int stride, int* steps_mod_lap);
-
-                int base = (i /96) % 3;
-
-                InsertFn insert_fns[3] = {
-                    insert_nl_gt16,
-                    insert_nl_2nd_vec_stride_12,
-                    insert_nl_gt16,
-                    insert_nl_gt16
-                };
-
-
-                out += insert_fns[(base + 0) % 3](vec0, out, stride_out, &steps_mod_lap_out);
-                out += insert_fns[(base + 1) % 3](vec1, out, stride_out, &steps_mod_lap_out);
-                out += insert_fns[(base + 2) % 3](vec2, out, stride_out, &steps_mod_lap_out);
-                out += insert_fns[(base + 3) % 3](vec3, out, stride_out, &steps_mod_lap_out);
-            
-                
-            }
-            else if ( 16<= stride_out   ){
-                _mm256_storeu_si256((__m256i *)out, vec0);
-                out += 32 - off_nl_out(out, stride_out, &steps_mod_lap_out);
-                _mm256_storeu_si256((__m256i *)out, vec1);
-                out += 32 - off_nl_out(out, stride_out, &steps_mod_lap_out);
-                _mm256_storeu_si256((__m256i *)out, vec2);
-                out += 32 - off_nl_out(out, stride_out, &steps_mod_lap_out);
-                _mm256_storeu_si256((__m256i *)out, vec3);
-                out += 32 - off_nl_out(out, stride_out, &steps_mod_lap_out);
-            }
-            else if ( 16 < stride_out   ){
-                out += insert_nl_gt16(
-                    vec0, out, stride_out, &steps_mod_lap_out);
-                out += insert_nl_gt16(
-                    vec1, out, stride_out, &steps_mod_lap_out);
-                out += insert_nl_gt16(
-                    vec2, out, stride_out, &steps_mod_lap_out);
-                out += insert_nl_gt16(
-                    vec3, out, stride_out, &steps_mod_lap_out);
-            }
-            else {
-                // outside of multiple of threes for ctx->length, 
-                // the function doesn't seem to return correct results
-                // e.g. inserts padding too early and often. 
-                // I doubt anyone uses these lengths
-                printf("Unsupported stride: %d\n", stride_out);
-
-                // int out_idx = 0;
-                // int newlines_inserted = 0;
-                // out_idx = insert_newlines_4avx2(vec0, 
-                //                     vec1, 
-                //                     vec2, 
-                //                     vec3, out, stride, &newlines_inserted);
-
-                // out += out_idx; 
-
-            }
-
-        }
-
-        if (stride_out == 0) {
-            // Process remaining 24-byte chunks
-            for (; i + 28 <= srclen; i += 24) {
-                // lo = [xxxx|DDDC|CCBB|BAAA]
-                // hi = [xxxx|HHHG|GGFF|FEEE]
-                const __m128i lo = _mm_loadu_si128((const __m128i *)(input + i));
-                const __m128i hi = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3));
-                
-                // bytes from groups A, B and C are needed in separate 32-bit lanes
-                // in = [0HHH|0GGG|0FFF|0EEE[0DDD|0CCC|0BBB|0AAA]
-                __m256i in = _mm256_shuffle_epi8(_mm256_set_m128i(hi, lo), shuf);
-                
-                // See comments in C++ SSE code and/or paper
-                const __m256i t0 = _mm256_and_si256(in, _mm256_set1_epi32(0x0fc0fc00));
-                const __m256i t1 = _mm256_mulhi_epu16(t0, _mm256_set1_epi32(0x04000040));
-                const __m256i t2 = _mm256_and_si256(in, _mm256_set1_epi32(0x003f03f0));
-                const __m256i t3 = _mm256_mullo_epi16(t2, _mm256_set1_epi32(0x01000010));
-                const __m256i indices = _mm256_or_si256(t1, t3);
-
-                _mm256_storeu_si256(
-                    (__m256i *)out,
-                    (use_srp ? lookup_pshufb_srp : lookup_pshufb_std)(indices)
-                );
-                out += 32;
-            }
-        }
-
-        // Return number of bytes written
-        return (size_t)(out - (uint8_t *)dst) +
-                + evp_encode_scalar_nl_int(ctx, out, src + i, srclen - i, &steps_mod_lap_out);
-    }
-
-
     int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen, int ctx_length, int *final_steps_mod_lap) {
         const uint8_t *input = (const uint8_t *)src;
         uint8_t *out = (uint8_t *)dst;
@@ -1045,10 +1058,10 @@ size_t static inline off_nl_out(
                 switch (base) {
                 case 0:
                     
-                    int steps_mod_lap_1 = 0;
-                    int steps_mod_lap_2 = 0;
-                    int steps_mod_lap_3 = 0;
-                    int steps_mod_lap_4 = 0;
+                    // int steps_mod_lap_1 = 0;
+                    // int steps_mod_lap_2 = 0;
+                    // int steps_mod_lap_3 = 0;
+                    // int steps_mod_lap_4 = 0;
 
                     out += insert_nl_gt16(vec0, out, stride, &steps_mod_lap);
                     out += insert_nl_2nd_vec_stride_12(vec1, out, stride, &steps_mod_lap);
@@ -1107,6 +1120,20 @@ size_t static inline off_nl_out(
                 // if (++base == 3) base = 0;
 
                 
+            }
+            else if ( 32 <= stride   ){
+                out += ins_nl_gt32(
+                    vec0, out, stride, &steps_mod_lap);
+                out += ins_nl_gt32(
+                    vec1, out, stride, &steps_mod_lap);
+                out += ins_nl_gt32(
+                    vec2, out, stride, &steps_mod_lap);
+                out += ins_nl_gt32(
+                    vec3, out, stride, &steps_mod_lap);
+
+                // size_t produced = ins_nl_gt32_4_nochain_nomod(vec0, vec1, vec2, vec3, out, stride, &steps_mod_lap);
+                // out += produced;  // single increment at the end
+
             }
             else if ( 16 <= stride   ){
                 out += insert_nl_gt16(
