@@ -1,0 +1,552 @@
+📝 Logging to util/benchmark_results/base64_benchmark_gcc_2025-09-14_23-27-21.log
+Benchmark started at Sun 14 Sep 2025 11:27:21 PM EDT
+========================================================
+Configuring OpenSSL version 3.6.0-dev for target linux-x86_64
+Using os-specific seed configuration
+Created configdata.pm
+Running configdata.pm
+Created Makefile.in
+Created Makefile
+
+**********************************************************************
+***                                                                ***
+***   OpenSSL has been successfully configured                     ***
+***                                                                ***
+***   If you encounter a problem while building, please open an    ***
+***   issue on GitHub <https://github.com/openssl/openssl/issues>  ***
+***   and include the output from the following command:           ***
+***                                                                ***
+***       perl configdata.pm --dump                                ***
+***                                                                ***
+***   (If you are new to OpenSSL, you might want to consult the    ***
+***   'Troubleshooting' section in the INSTALL.md file first)      ***
+***                                                                ***
+**********************************************************************
+🛠️  Building OpenSSL quietly...
+🧪 Compiling base64_encoding_benchmark.c with GCC...
+./crypto/evp/encode.c:25:12: warning: ‘evp_encode_scalar_nl_int’ used but never defined
+   25 | static int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
+      |            ^~~~~~~~~~~~~~~~~~~~~~~~
+📝 Logging to ./benchmark_results/base64_benchmark_gcc_2025-09-14_23-28-41.log
+📂 Benchmark: Enron email files
+-----------------------DISABLE NEWLINES/NO_NL mode---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     1.631974 s
+CPU cycles (avg):         153940
+Instructions (avg):       628845
+Instructions per cycle:   4.0850
+Throughput:              17.14 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     12.762859 s
+CPU cycles (avg):         1377225
+Instructions (avg):       7710457
+Instructions per cycle:   5.5985
+Throughput:              2.19 GB/s
+-----------------------PEM mode---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     1.767038 s
+CPU cycles (avg):         169747
+Instructions (avg):       673780
+Instructions per cycle:   3.9693
+Throughput:              15.83 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     12.847885 s
+CPU cycles (avg):         1389008
+Instructions (avg):       7768665
+Instructions per cycle:   5.5930
+Throughput:              2.18 GB/s
+-----------------------Custom ctx->lengths mode: 3---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     2.907786 s
+CPU cycles (avg):         296651
+Instructions (avg):       1159467
+Instructions per cycle:   3.9085
+Throughput:              9.62 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     26.163499 s
+CPU cycles (avg):         2853604
+Instructions (avg):       15855163
+Instructions per cycle:   5.5562
+Throughput:              1.07 GB/s
+-----------------------Custom ctx->lengths mode: 6---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     3.320493 s
+CPU cycles (avg):         343554
+Instructions (avg):       969940
+Instructions per cycle:   2.8232
+Throughput:              8.43 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     19.158833 s
+CPU cycles (avg):         2068582
+Instructions (avg):       11542352
+Instructions per cycle:   5.5798
+Throughput:              1.46 GB/s
+-----------------------Custom ctx->lengths mode: 9---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     5.813963 s
+CPU cycles (avg):         610642
+Instructions (avg):       2449953
+Instructions per cycle:   4.0121
+Throughput:              4.81 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     16.833469 s
+CPU cycles (avg):         1814059
+Instructions (avg):       10105053
+Instructions per cycle:   5.5704
+Throughput:              1.66 GB/s
+-----------------------Custom ctx->lengths mode: 12---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     5.703591 s
+CPU cycles (avg):         600309
+Instructions (avg):       2584985
+Instructions per cycle:   4.3061
+Throughput:              4.90 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     15.410907 s
+CPU cycles (avg):         1661793
+Instructions (avg):       9385913
+Instructions per cycle:   5.6481
+Throughput:              1.82 GB/s
+-----------------------Custom ctx->lengths mode: 15---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     5.983236 s
+CPU cycles (avg):         629546
+Instructions (avg):       2696286
+Instructions per cycle:   4.2829
+Throughput:              4.68 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     15.079233 s
+CPU cycles (avg):         1610960
+Instructions (avg):       8954928
+Instructions per cycle:   5.5587
+Throughput:              1.86 GB/s
+-----------------------Custom ctx->lengths mode: 18---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     5.546993 s
+CPU cycles (avg):         576859
+Instructions (avg):       2478921
+Instructions per cycle:   4.2973
+Throughput:              5.04 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     14.363548 s
+CPU cycles (avg):         1546732
+Instructions (avg):       8667349
+Instructions per cycle:   5.6037
+Throughput:              1.95 GB/s
+-----------------------Custom ctx->lengths mode: 21---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     5.421994 s
+CPU cycles (avg):         568631
+Instructions (avg):       2424443
+Instructions per cycle:   4.2636
+Throughput:              5.16 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     13.784368 s
+CPU cycles (avg):         1493333
+Instructions (avg):       8461995
+Instructions per cycle:   5.6665
+Throughput:              2.03 GB/s
+-----------------------Custom ctx->lengths mode: 24---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     2.534202 s
+CPU cycles (avg):         251540
+Instructions (avg):       898011
+Instructions per cycle:   3.5700
+Throughput:              11.04 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     13.575778 s
+CPU cycles (avg):         1469670
+Instructions (avg):       8307694
+Instructions per cycle:   5.6528
+Throughput:              2.06 GB/s
+-----------------------Custom ctx->lengths mode: 27---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     3.162104 s
+CPU cycles (avg):         320880
+Instructions (avg):       1472831
+Instructions per cycle:   4.5900
+Throughput:              8.85 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     13.385588 s
+CPU cycles (avg):         1450264
+Instructions (avg):       8188225
+Instructions per cycle:   5.6460
+Throughput:              2.09 GB/s
+-----------------------Custom ctx->lengths mode: 30---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     2.884951 s
+CPU cycles (avg):         291946
+Instructions (avg):       1354490
+Instructions per cycle:   4.6395
+Throughput:              9.70 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     13.402321 s
+CPU cycles (avg):         1444078
+Instructions (avg):       8092368
+Instructions per cycle:   5.6038
+Throughput:              2.09 GB/s
+-----------------------Custom ctx->lengths mode: 33---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     2.962148 s
+CPU cycles (avg):         299553
+Instructions (avg):       1381377
+Instructions per cycle:   4.6114
+Throughput:              9.44 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     13.488392 s
+CPU cycles (avg):         1447798
+Instructions (avg):       8013939
+Instructions per cycle:   5.5353
+Throughput:              2.07 GB/s
+-----------------------Custom ctx->lengths mode: 36---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     2.743501 s
+CPU cycles (avg):         272243
+Instructions (avg):       1179950
+Instructions per cycle:   4.3342
+Throughput:              10.20 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     13.163989 s
+CPU cycles (avg):         1416971
+Instructions (avg):       7948578
+Instructions per cycle:   5.6096
+Throughput:              2.13 GB/s
+-----------------------Custom ctx->lengths mode: 39---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     3.003441 s
+CPU cycles (avg):         299064
+Instructions (avg):       1316166
+Instructions per cycle:   4.4009
+Throughput:              9.31 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     13.288235 s
+CPU cycles (avg):         1418076
+Instructions (avg):       7893263
+Instructions per cycle:   5.5662
+Throughput:              2.11 GB/s
+-----------------------Custom ctx->lengths mode: 42---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     2.761737 s
+CPU cycles (avg):         277268
+Instructions (avg):       1243708
+Instructions per cycle:   4.4856
+Throughput:              10.13 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     13.083470 s
+CPU cycles (avg):         1402822
+Instructions (avg):       7845865
+Instructions per cycle:   5.5929
+Throughput:              2.14 GB/s
+-----------------------Custom ctx->lengths mode: 45---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     2.759866 s
+CPU cycles (avg):         276085
+Instructions (avg):       1269314
+Instructions per cycle:   4.5975
+Throughput:              10.14 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     12.961365 s
+CPU cycles (avg):         1393872
+Instructions (avg):       7804936
+Instructions per cycle:   5.5995
+Throughput:              2.16 GB/s
+-----------------------Custom ctx->lengths mode: 48---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     1.796400 s
+CPU cycles (avg):         169661
+Instructions (avg):       673791
+Instructions per cycle:   3.9714
+Throughput:              15.57 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     12.989936 s
+CPU cycles (avg):         1395255
+Instructions (avg):       7768667
+Instructions per cycle:   5.5679
+Throughput:              2.15 GB/s
+-----------------------Custom ctx->lengths mode: 51---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     2.704884 s
+CPU cycles (avg):         270498
+Instructions (avg):       1233407
+Instructions per cycle:   4.5598
+Throughput:              10.34 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     12.702314 s
+CPU cycles (avg):         1370188
+Instructions (avg):       7737130
+Instructions per cycle:   5.6468
+Throughput:              2.20 GB/s
+-----------------------Custom ctx->lengths mode: 54---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     2.733955 s
+CPU cycles (avg):         269110
+Instructions (avg):       1182856
+Instructions per cycle:   4.3954
+Throughput:              10.23 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     12.896182 s
+CPU cycles (avg):         1383392
+Instructions (avg):       7708990
+Instructions per cycle:   5.5725
+Throughput:              2.17 GB/s
+-----------------------Custom ctx->lengths mode: 57---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     2.880218 s
+CPU cycles (avg):         283994
+Instructions (avg):       1204999
+Instructions per cycle:   4.2430
+Throughput:              9.71 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     12.873992 s
+CPU cycles (avg):         1382340
+Instructions (avg):       7683788
+Instructions per cycle:   5.5585
+Throughput:              2.17 GB/s
+-----------------------Custom ctx->lengths mode: 60---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     2.459296 s
+CPU cycles (avg):         244818
+Instructions (avg):       1093623
+Instructions per cycle:   4.4671
+Throughput:              11.38 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     13.025773 s
+CPU cycles (avg):         1382414
+Instructions (avg):       7661049
+Instructions per cycle:   5.5418
+Throughput:              2.15 GB/s
+-----------------------Custom ctx->lengths mode: 63---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     2.847522 s
+CPU cycles (avg):         276307
+Instructions (avg):       1182101
+Instructions per cycle:   4.2782
+Throughput:              9.82 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     12.740893 s
+CPU cycles (avg):         1358825
+Instructions (avg):       7640487
+Instructions per cycle:   5.6229
+Throughput:              2.20 GB/s
+-----------------------Custom ctx->lengths mode: 66---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     2.517980 s
+CPU cycles (avg):         248768
+Instructions (avg):       1143273
+Instructions per cycle:   4.5957
+Throughput:              11.11 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     12.519418 s
+CPU cycles (avg):         1349185
+Instructions (avg):       7621853
+Instructions per cycle:   5.6492
+Throughput:              2.23 GB/s
+-----------------------Custom ctx->lengths mode: 69---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     2.569405 s
+CPU cycles (avg):         255017
+Instructions (avg):       1164173
+Instructions per cycle:   4.5651
+Throughput:              10.89 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     12.476030 s
+CPU cycles (avg):         1344350
+Instructions (avg):       7604780
+Instructions per cycle:   5.6568
+Throughput:              2.24 GB/s
+-----------------------Custom ctx->lengths mode: 72---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     2.246425 s
+CPU cycles (avg):         219312
+Instructions (avg):       966528
+Instructions per cycle:   4.4071
+Throughput:              12.45 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     13.110461 s
+CPU cycles (avg):         1397138
+Instructions (avg):       7589127
+Instructions per cycle:   5.4319
+Throughput:              2.13 GB/s
+-----------------------Custom ctx->lengths mode: 75---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     2.718527 s
+CPU cycles (avg):         262026
+Instructions (avg):       1148359
+Instructions per cycle:   4.3826
+Throughput:              10.29 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     12.998074 s
+CPU cycles (avg):         1379503
+Instructions (avg):       7574854
+Instructions per cycle:   5.4910
+Throughput:              2.15 GB/s
+-----------------------Custom ctx->lengths mode: 78---------------------------
+
+ ***** Benchmarking EVP_EncodeUpdate *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     2.516973 s
+CPU cycles (avg):         246674
+Instructions (avg):       1114670
+Instructions per cycle:   4.5188
+Throughput:              11.11 GB/s
+
+
+ ***** Benchmarking EVP_EncodeUpdate_openssl *****:
+Benchmark ran 50000 iterations (40000 used after warmup)
+Total elapsed (wall):     12.531017 s
+CPU cycles (avg):         1342353
+Instructions (avg):       7561488
+Instructions per cycle:   5.6330
+Throughput:              2.23 GB/s
+
+
+Processed files:
+File: enron7.txt.decoded (247296 bytes)
+File: enron12.txt.decoded (36552 bytes)
+File: enron13.txt.decoded (59904 bytes)
+File: enron10.txt.decoded (34773 bytes)
+File: enron9.txt.decoded (58368 bytes)
+File: enron11.txt.decoded (57696 bytes)
+File: enron14.txt.decoded (35328 bytes)
+File: enron2.txt.decoded (38400 bytes)
+File: enron4.txt.decoded (72192 bytes)
+File: enron15.txt.decoded (32760 bytes)
+File: enron3.txt.decoded (26112 bytes)
+ 
+🖼️  Benchmark: Mula JPG files
+sudo: a password is required
