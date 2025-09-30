@@ -179,122 +179,6 @@ void EVP_EncodeInit(EVP_ENCODE_CTX *ctx)
     ctx->flags = 0;
 }
 
-static int evp_encode_switch(EVP_ENCODE_CTX *ctx, unsigned char *t,
-    const unsigned char *f, int dlen,    int *steps_mod_lap) {
-    
-    // uncommenting this will drop performance by 3 GB/s!
-    // if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0 && 75 == ctx->length) {
-    //     int newlines = ctx-> length;
-    //     // printf("ctx length: %d\n", ctx->length);
-    //     return encode_base64_avx2_alt(ctx, (char *)t, (const char *)f, dlen, newlines,steps_mod_lap);
-    // }
-
-    if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) != 0) {
-        int newlines = 0;
-        return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, newlines,steps_mod_lap);
-    }
-
-    if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
-        int newlines = ctx-> length;
-        return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, newlines, steps_mod_lap);
-    }
-
-
-    return evp_encode_scalar_nl_int(ctx, t, f, dlen, steps_mod_lap);
-}
-
-int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,  
-                      const unsigned char *in, int inl)
-{
-    int i, j;
-    size_t total = 0;
-    int in_start = *in;
-
-    // OPENSSL_assert(ctx->length == 48); <- this doesn't fail the OpenSSL thus indicating that OpenSSL expects a specific length for the encoding context.
-    // this is in spite that the code allows for different lengths
-
-    // Initialize output length
-    *outl = 0;
-    if (inl <= 0)
-        return 0;
-
-    // Verify context buffer size
-    OPENSSL_assert(ctx->length <= (int)sizeof(ctx->enc_data));
-
-    // If remaining space in context buffer can hold all input
-    if (ctx->length - ctx->num > inl) {
-        memcpy(&(ctx->enc_data[ctx->num]), in, inl);
-        ctx->num += inl;
-        return 1;
-    }
-
-    // If context buffer has pending data that needs to be processed
-    if (ctx->num != 0) {
-        // Fill remaining space in context buffer
-        i = ctx->length - ctx->num;
-        memcpy(&(ctx->enc_data[ctx->num]), in, i);
-        in += i;
-        inl -= i;
-
-        // Encode complete block from context buffer
-        // a difference between this and the OpenSSL version is that
-        // the responsability for adding a newline is handled insede tho 
-        // evp_encode_scalar_nl_int function instead of here. 
-        int steps_mod_lap = 0; // Reset steps_mod_lap before encoding
-        j = evp_encode_scalar_nl_int(ctx, out, ctx->enc_data, ctx->length,&steps_mod_lap);
-        ctx->num = 0;
-        out += j;
-        total = j;
-
-        *out = '\0';
-    }
-
-    int steps_mod_lap = 0; // Reset steps_mod_lap before encoding
-
-    #if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
-        j = evp_encode_switch(ctx, out, in, inl - (inl % ctx->length), &steps_mod_lap);
-    #else
-        j = evp_encode_scalar_nl_int(ctx, out, in, inl - (inl % ctx->length), &steps_mod_lap);
-    #endif
-    in += inl - (inl % ctx->length);
-    inl -= inl - (inl % ctx->length);
-    out += j;
-    total += j;
-
-    // printf("After main loop: total: %zu, inl: %d, steps_mod_lap: %d\n", total, inl, steps_mod_lap);
-
-    int steps_mod_lap_by_input = steps_mod_lap / 4 * 3; // Adjust steps_mod_lap for the next call
-    *out = '\0';
-
-    // Check for output overflow
-    if (total > INT_MAX) {
-        *outl = 0;
-        return 0;
-    }
-
-    // Store remaining partial block in context
-    if (inl != 0)
-        memcpy(&(ctx->enc_data[0]), in, inl);
-    ctx->num = inl;
-    *outl = (int)total;
-
-    return 1;
-}
-
-void EVP_EncodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
-{
-    unsigned int ret = 0;
-    
-    int steps_mod_lap = 0; // Reset steps_mod_lap before final encoding
-    if (ctx->num != 0) {
-        ret = evp_encode_scalar_nl_int(ctx, out, ctx->enc_data, ctx->num, &steps_mod_lap);
-        if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)
-            out[ret++] = '\n';
-        out[ret] = '\0';
-        ctx->num = 0;
-    }
-    *outl = ret;
-}
 
 // TODO: temporary functions only for benchmarking purposes
 static int evp_encodeblock_int_openssl(EVP_ENCODE_CTX *ctx, unsigned char *t,
@@ -335,6 +219,155 @@ static int evp_encodeblock_int_openssl(EVP_ENCODE_CTX *ctx, unsigned char *t,
     return ret;
 }
 
+
+// static int evp_encode_switch(EVP_ENCODE_CTX *ctx, unsigned char *t,
+//     const unsigned char *f, int dlen,    int *steps_mod_lap) {
+    
+//     // uncommenting this will drop performance by 3 GB/s!
+//     // if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0 && 75 == ctx->length) {
+//     //     int newlines = ctx-> length;
+//     //     // printf("ctx length: %d\n", ctx->length);
+//     //     return encode_base64_avx2_alt(ctx, (char *)t, (const char *)f, dlen, newlines,steps_mod_lap);
+//     // }
+
+//     if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) != 0) {
+//         int newlines = 0;
+//         return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, newlines,steps_mod_lap);
+//     }
+
+//     if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
+//         int newlines = ctx-> length;
+//         return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, newlines, steps_mod_lap);
+//     }
+
+
+//     return evp_encode_scalar_nl_int(ctx, t, f, dlen, steps_mod_lap);
+// }
+
+int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,  
+                      const unsigned char *in, int inl)
+{
+    int i, j;
+    size_t total = 0;
+    int in_start = *in;
+
+    // OPENSSL_assert(ctx->length == 48); <- this doesn't fail the OpenSSL thus indicating that OpenSSL expects a specific length for the encoding context.
+    // this is in spite that the code allows for different lengths
+
+    // Initialize output length
+    *outl = 0;
+    if (inl <= 0)
+        return 0;
+
+    // Verify context buffer size
+    OPENSSL_assert(ctx->length <= (int)sizeof(ctx->enc_data));
+
+    // If remaining space in context buffer can hold all input
+    if (ctx->length - ctx->num > inl) {
+        memcpy(&(ctx->enc_data[ctx->num]), in, inl);
+        ctx->num += inl;
+        return 1;
+    }
+
+    // If context buffer has pending data that needs to be processed
+    if (ctx->num != 0) {
+        // Fill remaining space in context buffer
+        i = ctx->length - ctx->num;
+        memcpy(&(ctx->enc_data[ctx->num]), in, i);
+        in += i;
+        inl -= i;
+
+        // Encode complete block from context buffer
+        // a difference between this and the OpenSSL version is that
+        // the responsability for adding a newline is handled inside tho 
+        // evp_encode_scalar_nl_int function instead of here. 
+        int steps_mod_lap = 0; // Reset steps_mod_lap before encoding
+        j = evp_encode_scalar_nl_int(ctx, out, ctx->enc_data, ctx->length,&steps_mod_lap);
+        ctx->num = 0;
+        out += j;
+        total = j;
+
+        *out = '\0';
+    }
+
+    int steps_mod_lap = 0; // Reset steps_mod_lap before encoding
+    if (ctx-> length % 3 != 0) {
+            // j = evp_encode_scalar_nl_int(ctx, out, in, inl - (inl % ctx->length), &steps_mod_lap);
+                while (inl >= ctx->length && total <= INT_MAX) {
+                    // j = evp_encode_scalar_nl_int(ctx, out, in, ctx->length, &steps_mod_lap);
+                    #if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
+                        j = encode_base64_avx2(ctx, out, in, ctx->length, &steps_mod_lap);
+                    #else
+                        j = evp_encode_scalar_nl_int(ctx, out, in, ctx->length, &steps_mod_lap);
+                    #endif
+                    in += ctx->length;
+                    inl -= ctx->length;
+                    out += j;
+                    total += j;
+                    // if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
+                    //     *(out++) = '\n';
+                    //     total++;
+                    // }
+                    *out = '\0';
+                }
+                if (total > INT_MAX) {
+                    /* Too much output data! */
+                    *outl = 0;
+                    return 0;
+                }
+                if (inl != 0)
+                    memcpy(&(ctx->enc_data[0]), in, inl);
+                ctx->num = inl;
+                *outl = total;
+
+                return 1;
+    }
+    else {
+        #if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
+            j = encode_base64_avx2(ctx, out, in, inl - (inl % ctx->length), &steps_mod_lap);
+        #else
+            j = evp_encode_scalar_nl_int(ctx, out, in, inl - (inl % ctx->length), &steps_mod_lap);
+        #endif
+    }
+    in += inl - (inl % ctx->length);
+    inl -= inl - (inl % ctx->length);
+    out += j;
+    total += j;
+
+    // printf("After main loop: total: %zu, inl: %d, steps_mod_lap: %d\n", total, inl, steps_mod_lap);
+
+    int steps_mod_lap_by_input = steps_mod_lap / 4 * 3; // Adjust steps_mod_lap for the next call
+    *out = '\0';
+
+    // Check for output overflow
+    if (total > INT_MAX) {
+        *outl = 0;
+        return 0;
+    }
+
+    // Store remaining partial block in context
+    if (inl != 0)
+        memcpy(&(ctx->enc_data[0]), in, inl);
+    ctx->num = inl;
+    *outl = (int)total;
+
+    return 1;
+}
+
+void EVP_EncodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
+{
+    unsigned int ret = 0;
+    
+    int steps_mod_lap = 0; // Reset steps_mod_lap before final encoding
+    if (ctx->num != 0) {
+        ret = evp_encode_scalar_nl_int(ctx, out, ctx->enc_data, ctx->num, &steps_mod_lap);
+        if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)
+            out[ret++] = '\n';
+        out[ret] = '\0';
+        ctx->num = 0;
+    }
+    *outl = ret;
+}
 
 int EVP_EncodeUpdate_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                       const unsigned char *in, int inl)
