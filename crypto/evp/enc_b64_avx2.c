@@ -20,7 +20,6 @@
     // That equals input + ('a' - 26).
     // Example: input=26 → 26+('a'-26)=97='a'; input=27→98='b'.
     // static __m256i lookup_pshufb_std(__m256i input, int is_srp) {
-
     // }
 
     typedef __m256i (*lookup_fn)(__m256i v);
@@ -126,55 +125,6 @@ static __m256i lookup_pshufb_model(__m256i input) {
 //   62     → '.'
 //   63     → '/'
 
-// static __m256i lookup_pshufb_srp(__m256i input) {
-//     // === Build a small per-byte class index (0..4) ===
-//     // idx = 0 for  0..9    (digits)
-//     // idx = 1 for 10..35   (uppercase)
-//     // idx = 2 for 36..61   (lowercase)
-//     // idx = 3 for 62       ('.')
-//     // idx = 4 for 63       ('/')
-
-//     __m256i idx = _mm256_setzero_si256();
-
-//     // if (input >= 10) idx += 1
-//     __m256i ge10 = _mm256_cmpgt_epi8(input, _mm256_set1_epi8(9));
-//     idx = _mm256_sub_epi8(idx, ge10); // subtract 0xFF = add 1 where true
-
-//     // if (input >= 36) idx += 1
-//     __m256i ge36 = _mm256_cmpgt_epi8(input, _mm256_set1_epi8(35));
-//     idx = _mm256_sub_epi8(idx, ge36);
-
-//     // if (input == 62) idx = 3
-//     __m256i eq62 = _mm256_cmpeq_epi8(input, _mm256_set1_epi8(62));
-//     idx = _mm256_blendv_epi8(idx, _mm256_set1_epi8(3), eq62);
-
-//     // if (input == 63) idx = 4
-//     __m256i eq63 = _mm256_cmpeq_epi8(input, _mm256_set1_epi8(63));
-//     idx = _mm256_blendv_epi8(idx, _mm256_set1_epi8(4), eq63);
-
-//     // === LUT of additive ASCII shifts selected by idx ===
-//     // For each class, we store (ASCII_base - class_start_value), so that:
-//     //   final_char = input + shift[idx]
-//     //
-//     // idx 0 (digits 0..9):      shift = '0' - 0
-//     // idx 1 (A..Z, 10..35):     shift = 'A' - 10
-//     // idx 2 (a..z, 36..61):     shift = 'a' - 36
-//     // idx 3 ('.', 62):          shift = '.' - 62
-//     // idx 4 ('/', 63):          shift = '/' - 63
-//     //
-//     // Duplicate per 128-bit lane because pshufb is lane-local.
-//     const __m256i shift_LUT = _mm256_setr_epi8(
-//         '0' - 0,    'A' - 10,   'a' - 36,   '.' - 62,   '/' - 63,  0,0,0,0,0,0,0,0,0,0,0,
-//         '0' - 0,    'A' - 10,   'a' - 36,   '.' - 62,   '/' - 63,  0,0,0,0,0,0,0,0,0,0,0
-//     );
-
-//     // Select the shift per byte
-//     __m256i shift = _mm256_shuffle_epi8(shift_LUT, idx);
-
-//     // Add the shift to get ASCII codes in SRP alphabet
-//     return _mm256_add_epi8(shift, input);
-// }
-
 static inline __m256i lookup_pshufb_srp(__m256i input) {
     const __m256i zero = _mm256_setzero_si256();
     const __m256i hi   = _mm256_set1_epi8((char)0x80);
@@ -202,10 +152,6 @@ static inline __m256i lookup_pshufb_srp(__m256i input) {
 
     __m256i shift = _mm256_shuffle_epi8(shift_LUT, idx);
     __m256i ascii = _mm256_add_epi8(shift, input);
-
-    // Optional (if downstream expects zeros on invalid lanes):
-    // ascii = _mm256_blendv_epi8(ascii, zero, invalid);
-
     return ascii;
 }
 
@@ -222,8 +168,7 @@ static void dump_bytes(const char *label, const uint8_t *buf, size_t len) {
 }
 
 
-// these particular intrinsics requires immediate values, this is a hack
-// In C++, I probably would have used a template, but I'm not sure if it's worth it with branch prediction
+// these particular intrinsics requires immediate values, this is arguably a hack
 static inline __m256i shift_right_zeros(__m256i v, int n) {
     switch (n) {
         case 0:  return v;
@@ -289,12 +234,6 @@ static inline __m256i shift_left_zeros(__m256i v, int n) {
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0x80}};
 /**
 
-// ------------------------------------------------------------------
-// Stub for your AVX2 routine. Replace with your actual implementation.
-// N = byte index where newline should be inserted (0..31).
-/**
- * Insert a line feed character in the 64-byte input at index K in [0,32).
- */
 /**
  * Insert a line feed character in the 64-byte input at index K in [0,32).
  */
@@ -321,6 +260,62 @@ static inline __m256i insert_line_feed32(__m256i input, int K) {
   __m256i result = _mm256_blendv_epi8(shuffled, line_feed_vector, lf_pos);
   return result;
 }
+
+typedef struct {
+  __m256i vec;     // 32B with '\n' inserted in requested lanes
+  uint8_t spill[2];// bytes that fell off the right; write after the 32B
+  int nspill;      // 0..2
+} insert_lf32_dual_result;
+
+// Precondition: shuffle_masks[K] (K=0..15) is a 16B table where
+//   - mask[K] contains 0x80 at index K (newline slot)
+//   - other entries select source bytes to effect a 1-byte right shift from K..15
+// extern const uint8_t shuffle_masks[16][16];
+
+static inline insert_lf32_dual_result
+insert_line_feeds32_dual(__m256i input, int k_lo, int k_hi)
+{
+  insert_lf32_dual_result r;
+  r.nspill = 0;
+
+  const __m128i lo128 = _mm256_castsi256_si128(input);
+  const __m128i hi128 = _mm256_extracti128_si256(input, 1);
+
+  // If we insert in the low lane, that pushes one byte into the high lane:
+  // high_base = [ lo[15], hi[0], hi[1], ..., hi[14] ]
+  const __m128i hi_base = (k_lo >= 0) ? _mm_alignr_epi8(hi128, lo128, 15) : hi128;
+
+  // Spills (bytes that fall off the right end after the insertions)
+  if (k_lo >= 0) {
+    // With a low-lane insertion, the overall last byte that disappears is original input[31].
+    r.spill[r.nspill++] = (uint8_t)_mm_extract_epi8(hi128, 15);
+  }
+  if (k_hi >= 0) {
+    // After building hi_base, a high-lane insertion drops hi_base[15]:
+    //   = input[30] if low lane also inserted, else = input[31].
+    r.spill[r.nspill++] = (uint8_t)_mm_extract_epi8(hi_base, 15);
+  }
+
+  // Build per-lane shuffle masks (0x80 marks the '\n' position)
+  const __m128i identity = _mm_setr_epi8(
+      0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15);
+  const __m128i mask_lo = (k_lo >= 0)
+      ? _mm_loadu_si128((const __m128i*)shuffle_masks[k_lo])
+      : identity;
+  const __m128i mask_hi = (k_hi >= 0)
+      ? _mm_loadu_si128((const __m128i*)shuffle_masks[k_hi])
+      : identity;
+
+  const __m256i src   = _mm256_set_m128i(hi_base, lo128);
+  const __m256i mask  = _mm256_set_m128i(mask_hi, mask_lo);
+  const __m256i is_lf = _mm256_cmpeq_epi8(mask, _mm256_set1_epi8((char)0x80));
+  const __m256i shuf  = _mm256_shuffle_epi8(src, mask);
+  const __m256i lfvec = _mm256_set1_epi8('\n');
+
+  r.vec = _mm256_blendv_epi8(shuf, lfvec, is_lf);
+  return r;
+}
+
 
 
 // Attempt to cut down on dependency chains and modulo operations
@@ -546,6 +541,152 @@ static inline __m256i insert_line_feed32(__m256i input, int K) {
 //     return 33;
 // }
 
+
+#include <immintrin.h>
+#include <stdint.h>
+
+// --- helpers ---------------------------------------------------------------
+
+// Extract the last byte (index 31) from a 256-bit vector
+static inline uint8_t extract_last_byte(__m256i v) {
+    __m128i hi = _mm256_extracti128_si256(v, 1);
+    return (uint8_t)_mm_extract_epi8(hi, 15);
+}
+
+// Prepend 1 byte in front of a 32B vector, dropping the original last byte.
+// Result: [carry, v[0], v[1], ..., v[30]].
+static inline __m256i prepend_byte32(__m256i v, uint8_t carry) {
+    // Shift right by 1 across the full 32B (with cross-lane carry)
+    __m256i swapped = _mm256_permute2x128_si256(v, v, 0x21);
+    __m256i shifted = _mm256_alignr_epi8(v, swapped, 15);   // [v[31], v[0], ..., v[30]]
+
+    // Overwrite byte 0 with 'carry'
+    __m128i lo = _mm256_castsi256_si128(shifted);
+    lo = _mm_insert_epi8(lo, carry, 0);
+    shifted = _mm256_inserti128_si256(shifted, lo, 0);
+    return shifted;
+}
+
+// Your existing routine that inserts '\n' at byte offset k (0..32) inside a 32B block,
+// shifting bytes [k..31) right by 1 and dropping the last (pre-insertion) byte.
+// Must return exactly 32 bytes.
+extern __m256i insert_line_feed32(__m256i v, int k);
+
+// --- main: process 4 vectors with carry chaining ---------------------------
+//
+// Guarantees:
+//   - Emits exactly four 32-byte stores for vec0..vec3.
+//   - Emits at most two tiny tail bytes *after* vec3 (a '\n' and/or one data carry).
+// Notes:
+//   - With typical Base64 line lengths (64 or 76), the “fallback” branch never runs,
+//     so there are NO tiny stores until after vec3.
+//
+static inline size_t ins_nl_gt32_4_carry(
+    __m256i v0, __m256i v1, __m256i v2, __m256i v3,
+    uint8_t* out, int stride, int* steps_mod_lap)
+{
+    __m256i v[4] = { v0, v1, v2, v3 };
+    size_t w = 0;
+
+    // carry of a single data byte between vectors
+    uint8_t carry = 0;
+    int have_carry = 0;
+
+    for (int i = 0; i < 4; ++i) {
+        __m256i x = v[i];
+
+        // How many data bytes until the next newline should appear?
+        int until = stride - *steps_mod_lap;     // can be 0..(>32)
+
+        // If a newline is due *before any data* and we also have a pending data carry,
+        // correctness demands emitting the newline first.
+        if (have_carry && until == 0) {
+            // Rare corner (only if the previous 32B block ended exactly at a boundary).
+            out[w++] = '\n';
+            *steps_mod_lap = 0;
+            until = stride; // recompute logical position after the newline
+        }
+
+        // If we have a pending data carry but the upcoming newline would fall
+        // *inside* the next 32 bytes, we’d need 33B this vector.
+        // Fallback: flush the one-byte carry now, then continue normally.
+        // With stride >= 64 this never triggers.
+        if (have_carry && until <= 31) {
+            out[w++] = carry;
+            (*steps_mod_lap)++;   // emitted one data byte
+            have_carry = 0;
+            until = stride - *steps_mod_lap;
+        }
+
+        // Prepend carry (if any) so we can still store 32B exactly.
+        uint8_t next_carry = 0;
+        if (have_carry) {
+            x = prepend_byte32(x, carry);        // [carry, v[i][0..30]]
+            next_carry = extract_last_byte(v[i]); // stash original v[i][31]
+        }
+
+        // Recheck distance to newline after any updates
+        until = stride - *steps_mod_lap;
+
+        if (until > 32) {
+            // A) No newline in this 32B
+            _mm256_storeu_si256((__m256i*)(out + w), x);
+            w += 32;
+            *steps_mod_lap += 32;
+            // carry persists only if we had one (it advances to v[i][31])
+            if (have_carry) carry = next_carry;
+        }
+        else if (until == 32) {
+            // B) Newline logically at the end: defer writing '\n' (keep SIMD-only here).
+            _mm256_storeu_si256((__m256i*)(out + w), x);
+            w += 32;
+            *steps_mod_lap += 32;  // now equals 'stride' → will force until==0 next time
+            if (have_carry) carry = next_carry;
+        }
+        else { // 1..31
+            // C) One newline inside this 32B
+            // IMPORTANT: This path only happens when have_carry==0 (see fallback above),
+            // so the dropped byte is v[i][31], which becomes the new data carry.
+            __m256i with_lf = insert_line_feed32(x, until);
+            _mm256_storeu_si256((__m256i*)(out + w), with_lf);
+            w += 32;
+
+            *steps_mod_lap = 31 - until;   // bytes written after the newline
+            have_carry = 1;
+            carry = extract_last_byte(x);  // original last byte (v[i][31])
+        }
+
+        // If we got here with no newline inserted and no prior carry,
+        // ensure have_carry stays coherent.
+        if ((until > 32 || until == 32) && !have_carry) {
+            // no carry is active
+        } else {
+            // have_carry already set appropriately above
+        }
+    }
+
+    // After vec3: flush any pending newline *first* (if exactly at boundary),
+    // then flush one pending data carry (if any).
+    if (*steps_mod_lap == stride) {
+        out[w++] = '\n';
+        *steps_mod_lap = 0;
+    }
+    if (have_carry) {
+        out[w++] = carry;
+        (*steps_mod_lap)++;  // we emitted one more data byte
+        if (*steps_mod_lap >= stride) {
+            // extremely rare: if that byte itself completes a line, immediately emit NL
+            out[w++] = '\n';
+            *steps_mod_lap = 0;
+        }
+    }
+
+    return w;
+}
+
+
+
+// GOOOOD!******************************* */
 static inline size_t ins_nl_gt32(
     __m256i v, uint8_t* out, int stride, int* steps_mod_lap)
 {
@@ -558,6 +699,8 @@ static inline size_t ins_nl_gt32(
         return 32;
     }
 
+    // I can probably get rid of this by being more careful at the end. 
+    // But deleting it outright doesn't seem to make a difference in performance.
     // B) Newline exactly at end
     if (until_nl == 32) {
         _mm256_storeu_si256((__m256i*)out, v);
@@ -576,7 +719,58 @@ static inline size_t ins_nl_gt32(
     return 33;
 }
 
+// ********************************************
 
+// static inline void store33_simd(uint8_t* out, __m256i v, uint8_t tail_byte) {
+//     _mm256_storeu_si256((__m256i*)out, v);
+//     __m128i tail = _mm_cvtsi32_si128((int)tail_byte); // byte in lane 0, zeros elsewhere
+//     _mm_storeu_si128((__m128i*)(out + 32), tail);     // safe overlapped tail
+// }
+
+// static inline uint8_t last_byte(__m256i v) {
+//     __m128i hi = _mm256_extracti128_si256(v, 1);      // upper 16B
+//     return (uint8_t)_mm_extract_epi8(hi, 15);         // last byte
+// }
+
+// static inline size_t ins_nl_gt32_simd(
+//     __m256i v, uint8_t* out, int stride, int* steps_mod_lap)
+// {
+//     const int until_nl = stride - *steps_mod_lap;
+
+//     // A) No newline in this block
+//     if (until_nl > 32) {
+//         _mm256_storeu_si256((__m256i*)out, v);
+//         *steps_mod_lap += 32;                 // no wrap
+//         return 32;
+//     }
+
+//     // B) Newline exactly at end
+//     if (until_nl == 32) {
+//         store33_simd(out, v, (uint8_t)'\n');
+//         *steps_mod_lap = 0;
+//         return 33;
+//     }
+
+//     // C) One newline inside [0..31]
+//     const uint8_t tail = last_byte(v);        // the byte that overflows after insertion
+//     const __m256i with_lf = insert_line_feed32(v, until_nl);
+//     store33_simd(out, with_lf, tail);
+//     *steps_mod_lap = 32 - until_nl;           // in [1..31]
+//     return 33;
+// }
+
+// // 4-at-a-time wrapper (drop-in for your call site)
+// static inline size_t ins_nl_gt32_4(
+//     __m256i v0, __m256i v1, __m256i v2, __m256i v3,
+//     uint8_t* out, int stride, int* steps_mod_lap)
+// {
+//     size_t w = 0;
+//     w += ins_nl_gt32_simd(v0, out + w, stride, steps_mod_lap);
+//     w += ins_nl_gt32_simd(v1, out + w, stride, steps_mod_lap);
+//     w += ins_nl_gt32_simd(v2, out + w, stride, steps_mod_lap);
+//     w += ins_nl_gt32_simd(v3, out + w, stride, steps_mod_lap);
+//     return w;
+// }
 
 static inline size_t insert_nl_gt16(
     const __m256i v0,
@@ -1130,6 +1324,11 @@ static inline size_t insert_nl_str8(
                     vec2, out, stride, &steps_mod_lap);
                 out += ins_nl_gt32(
                     vec3, out, stride, &steps_mod_lap);
+
+                // out += ins_nl_gt32_4_carry(vec0, vec1, vec2, vec3, out, stride, &steps_mod_lap);
+
+
+                // out += ins_nl_gt32_4(vec0, vec1, vec2, vec3, out, stride, &steps_mod_lap);
 
                 // size_t produced = ins_nl_gt32_4_nochain_nomod(vec0, vec1, vec2, vec3, out, stride, &steps_mod_lap);
                 // out += produced;  // single increment at the end
