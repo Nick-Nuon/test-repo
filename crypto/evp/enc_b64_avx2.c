@@ -1056,11 +1056,11 @@ static inline size_t insert_nl_str8(
     return written;
 }
 
-    int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen, int ctx_length, int *final_steps_mod_lap) {
+    int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen, int *final_steps_mod_lap) {
         const uint8_t *input = (const uint8_t *)src;
         uint8_t *out = (uint8_t *)dst;
         size_t i = 0;
-        int stride = ctx_length / 3 * 4; 
+        int stride = ctx->length / 3 * 4; 
         int steps_mod_lap = 0;  
         const int use_srp = ctx && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET);
 
