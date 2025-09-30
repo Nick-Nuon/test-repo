@@ -161,8 +161,6 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
         }
     }
 
-    // *steps_mod_lap = steps_mod_lap_by_input; // Update steps_mod_lap for the next call
-
     switch (dlen - i) {
     case 0:
         break;
