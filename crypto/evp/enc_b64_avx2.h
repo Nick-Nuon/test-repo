@@ -4,6 +4,6 @@
 #include <openssl/evp.h>
 
 int encode_base64_avx2(EVP_ENCODE_CTX *ctx,
-                       unsigned char *out, const unsigned char *src, int srclen,  int *steps_mod_lap);
+                       unsigned char *out, const unsigned char *src, int srclen, int newlines, int *steps_mod_lap);
 
 #endif
