@@ -84,9 +84,17 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
 
         unsigned char *file_content = malloc(st.st_size);
         // --- NO_NL mode -- this is very defensive, but I got tired of eating segfaults
+        // size_t encoded_len = 4 * ((st.st_size + 2) / 3);
+        // size_t line_breaks = (encoded_len)/ 3 * 2;  // PEM line :1 newline per 48 bytes by default, but the insertion length might be anything up to 80 bytes
+        // size_t encoded_total = encoded_len + line_breaks + 64;  // final block overhead, the +64 is rather defensive
+
         size_t encoded_len = 4 * ((st.st_size + 2) / 3);
-        size_t line_breaks = (encoded_len)/ 3 * 2;  // PEM line :1 newline per 48 bytes by default, but the insertion length might be anything up to 80 bytes
-        size_t encoded_total = encoded_len + line_breaks + 64;  // final block overhead, the +64 is rather defensive
+        size_t line_breaks = (encoded_len)/ 3 * 2;
+        // size_t encoded_total = encoded_len + line_breaks + 64;
+        size_t enc = 4 * ((st.st_size + 2) / 3);
+        // Worst-case newlines happen at ctx_length = 1 → roughly (st.st_size - 1) newlines.
+        // A simpler safe bound: 2*enc covers all ctx_length≥1.
+        size_t encoded_total = enc * 10 + 64;  // generous headroom
 
         
 
@@ -106,15 +114,15 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
         size_t read = fread(file_content, 1, st.st_size, f);
         fclose(f);
 
-        if (read != st.st_size) {
-            printf("free twice");
+        // if (read != st.st_size) {
+        //     printf("free twice");
 
-            fprintf(stderr, "Warning: incomplete read of %s\n", fullpath);
-            free(file_content);
-            free(encoded_output); // Add this
-            fclose(f); // Technically already closed, but safe to be consistent
-            continue;
-        }
+        //     fprintf(stderr, "Warning: incomplete read of %s\n", fullpath);
+        //     free(file_content);
+        //     free(encoded_output); // Add this
+        //     fclose(f); // Technically already closed, but safe to be consistent
+        //     continue;
+        // }
 
         files[count].filename = strdup(entry->d_name);
         files[count].content = file_content;
@@ -225,6 +233,8 @@ void run_benchmark(const char *name, int fd_cycles, FileData *files, size_t file
     double elapsed_sec = total_elapsed_ns / 1e9;
     double ipc = total_cycles > 0 ? ((double)total_instructions / total_cycles) : 0.0;
     double gb_per_sec = (total_bytes * effective_runs) / (elapsed_sec * 1e9);
+    double instr_per_byte = total_bytes > 0 && effective_runs > 0 ? ((double)total_instructions / (total_bytes * effective_runs)) : 0.0;
+
 
     printf("\n\n ***** Benchmarking %s *****:\n", name);
     printf("Benchmark ran %zu iterations (%zu used after warmup)\n", N, effective_runs);
@@ -232,6 +242,7 @@ void run_benchmark(const char *name, int fd_cycles, FileData *files, size_t file
     printf("CPU cycles (avg):         %llu\n", (unsigned long long)(total_cycles / effective_runs));
     printf("Instructions (avg):       %llu\n", (unsigned long long)(total_instructions / effective_runs));
     printf("Instructions per cycle:   %.4f\n", ipc);
+    printf("Instructions per byte:    %.4f\n", instr_per_byte);
     printf("Throughput:              %.2f GB/s\n", gb_per_sec);
 }
 
@@ -265,6 +276,8 @@ int main(int argc, char **argv) {
     int fd_cycles = perf_event_open(&pe_cycles, 0, -1, -1, 0);
     if (fd_cycles == -1) {
         perror("perf_event_open (cycles)");
+        printf("perf_event_open (cycles)");
+
         return 1;
     }
 
@@ -273,6 +286,7 @@ int main(int argc, char **argv) {
     int fd_instr = perf_event_open(&pe_instr, 0, -1, fd_cycles, 0);
     if (fd_instr == -1) {
         perror("perf_event_open (instructions)");
+        printf("perf_event_open (instructions)");
         return 1;
     }
 
@@ -292,25 +306,13 @@ int main(int argc, char **argv) {
                  EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 0,48);
 
 
-    for (int ctx_len = 3; ctx_len <= 80; ctx_len += 3) {
+    for (int ctx_len = 1; ctx_len <= 80; ctx_len += 1) {
         printf ("-----------------------Custom ctx->lengths mode: %d---------------------------", ctx_len);
         run_benchmark("EVP_EncodeUpdate", fd_cycles, files, file_count, 
                     EVP_EncodeUpdate, EVP_EncodeFinal, 0,ctx_len);
         run_benchmark("EVP_EncodeUpdate_openssl", fd_cycles, files, file_count,
                     EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 0,ctx_len);
     }
-
-
-    // int ctx_len = 75;
-    // printf ("-----------------------Custom ctx->lengths mode: %d---------------------------",ctx_len );
-
-    //     // A newline is inserted after every 47 bytes. 
-    // printf ("-----------------------PEM mode---------------------------");
-    // // // Main benchmarking calls
-    // run_benchmark("EVP_EncodeUpdate", fd_cycles, files, file_count, 
-    //              EVP_EncodeUpdate, EVP_EncodeFinal, 0,ctx_len);
-    // run_benchmark("EVP_EncodeUpdate_openssl", fd_cycles, files, file_count,
-    //              EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 0, ctx_len);
 
     printf("\n\nProcessed files:\n");
 

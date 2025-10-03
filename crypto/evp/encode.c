@@ -407,8 +407,12 @@ int EVP_EncodeBlock(unsigned char *t, const unsigned char *f, int dlen)
 {
     int steps_mod_lap = 0; // Reset steps_mod_lap before encoding
     // return evp_encode_scalar_nl_int(NULL, t, f, dlen, &steps_mod_lap);
-    return encode_base64_avx2(NULL, t, f, dlen, &steps_mod_lap);
-    //TODO: SIMD here
+    // return encode_base64_avx2(NULL, t, f, dlen, &steps_mod_lap);
+        #if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
+            return encode_base64_avx2(NULL, t, f, dlen, &steps_mod_lap);
+        #else
+            return evp_encode_scalar_nl_int(NULL, t, f, dlen, &steps_mod_lap);
+        #endif
 }
 
 void EVP_DecodeInit(EVP_ENCODE_CTX *ctx)
