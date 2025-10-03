@@ -219,40 +219,12 @@ static int evp_encodeblock_int_openssl(EVP_ENCODE_CTX *ctx, unsigned char *t,
     return ret;
 }
 
-
-// static int evp_encode_switch(EVP_ENCODE_CTX *ctx, unsigned char *t,
-//     const unsigned char *f, int dlen,    int *steps_mod_lap) {
-    
-//     // uncommenting this will drop performance by 3 GB/s!
-//     // if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0 && 75 == ctx->length) {
-//     //     int newlines = ctx-> length;
-//     //     // printf("ctx length: %d\n", ctx->length);
-//     //     return encode_base64_avx2_alt(ctx, (char *)t, (const char *)f, dlen, newlines,steps_mod_lap);
-//     // }
-
-//     if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) != 0) {
-//         int newlines = 0;
-//         return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, newlines,steps_mod_lap);
-//     }
-
-//     if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
-//         int newlines = ctx-> length;
-//         return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, newlines, steps_mod_lap);
-//     }
-
-
-//     return evp_encode_scalar_nl_int(ctx, t, f, dlen, steps_mod_lap);
-// }
-
 int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,  
                       const unsigned char *in, int inl)
 {
     int i, j;
     size_t total = 0;
     int in_start = *in;
-
-    // OPENSSL_assert(ctx->length == 48); <- this doesn't fail the OpenSSL thus indicating that OpenSSL expects a specific length for the encoding context.
-    // this is in spite that the code allows for different lengths
 
     // Initialize output length
     *outl = 0;
@@ -292,14 +264,8 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
 
     int steps_mod_lap = 0; // Reset steps_mod_lap before encoding
     if (ctx-> length % 3 != 0) {
-            // j = evp_encode_scalar_nl_int(ctx, out, in, inl - (inl % ctx->length), &steps_mod_lap);
                 while (inl >= ctx->length && total <= INT_MAX) {
-                    // j = evp_encode_scalar_nl_int(ctx, out, in, ctx->length, &steps_mod_lap);
-                    #if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
-                        j = encode_base64_avx2(ctx, out, in, ctx->length, &steps_mod_lap);
-                    #else
-                        j = evp_encode_scalar_nl_int(ctx, out, in, ctx->length, &steps_mod_lap);
-                    #endif
+                    j = evp_encode_scalar_nl_int(ctx, out, in, ctx->length, &steps_mod_lap);
                     in += ctx->length;
                     inl -= ctx->length;
                     out += j;
@@ -333,8 +299,6 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     inl -= inl - (inl % ctx->length);
     out += j;
     total += j;
-
-    // printf("After main loop: total: %zu, inl: %d, steps_mod_lap: %d\n", total, inl, steps_mod_lap);
 
     int steps_mod_lap_by_input = steps_mod_lap / 4 * 3; // Adjust steps_mod_lap for the next call
     *out = '\0';
@@ -442,7 +406,9 @@ void EVP_EncodeFinal_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
 int EVP_EncodeBlock(unsigned char *t, const unsigned char *f, int dlen)
 {
     int steps_mod_lap = 0; // Reset steps_mod_lap before encoding
-    return evp_encode_scalar_nl_int(NULL, t, f, dlen, &steps_mod_lap);
+    // return evp_encode_scalar_nl_int(NULL, t, f, dlen, &steps_mod_lap);
+    return encode_base64_avx2(NULL, t, f, dlen, &steps_mod_lap);
+    //TODO: SIMD here
 }
 
 void EVP_DecodeInit(EVP_ENCODE_CTX *ctx)
@@ -590,6 +556,7 @@ void EVP_Set_length(EVP_ENCODE_CTX *ctx,int length)
     ctx->length = length;
 }
 
+// TODO: move this in test maybe?
 // Fill ctx with a random partial state
 void fuzz_fill_encode_ctx(EVP_ENCODE_CTX *ctx, int max_fill)
 {
@@ -611,9 +578,6 @@ void fuzz_fill_encode_ctx(EVP_ENCODE_CTX *ctx, int max_fill)
 
     // Random current line num (bytes already output in current line)
     ctx->line_num = rand() % (ctx->length + 1);
-
-    // Random flags
-    // ctx->flags = (unsigned int)rand();
 }
 
 
