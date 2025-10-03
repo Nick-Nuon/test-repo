@@ -53,13 +53,6 @@ static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
 
 int evp_encode_switch(EVP_ENCODE_CTX *ctx, unsigned char *t,
     const unsigned char *f, int dlen,    int *steps_mod_lap) {
-    
-    // uncommenting this will drop performance by 3 GB/s!
-    // if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0 && 75 == ctx->length) {
-    //     int newlines = ctx-> length;
-    //     // printf("ctx length: %d\n", ctx->length);
-    //     return encode_base64_avx2_alt(ctx, (char *)t, (const char *)f, dlen, newlines,steps_mod_lap);
-    // }
 
     if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) != 0) {
         int newlines = 0;
