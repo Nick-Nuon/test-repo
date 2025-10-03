@@ -582,8 +582,7 @@ static inline size_t insert_nl_str8(
         const uint8_t *input = (const uint8_t *)src;
         uint8_t *out = (uint8_t *)dst;
         size_t i = 0;
-        int stride = ctx->length / 3 * 4; 
-        int steps_mod_lap = 0;  
+        int stride = (ctx == NULL) ? 0 : ctx->length / 3 * 4; int steps_mod_lap = 0;  
         const int use_srp = ctx && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET);
 
         // Define shuffle mask for AVX2
