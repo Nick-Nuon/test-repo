@@ -199,7 +199,7 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
         break;
     }
 
-*t = '\0'; // Null-terminate after everything
+*t = '\0';
 
 return ret;
 }
