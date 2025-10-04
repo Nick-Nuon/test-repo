@@ -51,7 +51,7 @@ static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
 //     return evp_encode_scalar_nl_int(ctx, t, f, dlen, steps_mod_lap);
 // }
 
-int evp_encode_switch(EVP_ENCODE_CTX *ctx, unsigned char *t,
+int evp_encode_chk(EVP_ENCODE_CTX *ctx, unsigned char *t,
     const unsigned char *f, int dlen,    int *steps_mod_lap) {
 
     if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) != 0) {
@@ -64,8 +64,6 @@ int evp_encode_switch(EVP_ENCODE_CTX *ctx, unsigned char *t,
         return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, newlines,  steps_mod_lap);
     }
 
-
-    return evp_encode_scalar_nl_int(ctx, t, f, dlen, steps_mod_lap);
 }
 
 
@@ -319,7 +317,8 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     else
      {
         #if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
-            j = evp_encode_switch(ctx, out, in, inl - (inl % ctx->length), &steps_mod_lap);
+            j = evp_encode_chk(ctx, out, in, inl - (inl % ctx->length), &steps_mod_lap);
+            // j = encode_base64_avx2(ctx, out, in, inl - (inl % ctx->length),ctx->length, &steps_mod_lap);
         #else
             j = evp_encode_scalar_nl_int(ctx, out, in, inl - (inl % ctx->length), &steps_mod_lap);
         #endif
@@ -439,7 +438,9 @@ int EVP_EncodeBlock(unsigned char *t, const unsigned char *f, int dlen)
     return evp_encode_scalar_nl_int(NULL, t, f, dlen, &steps_mod_lap);
     // return encode_base64_avx2(NULL, t, f, dlen, &steps_mod_lap);
     #if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
-        return evp_encode_switch(NULL, t, f, dlen, &steps_mod_lap);
+        return encode_base64_avx2(NULL, t, f, dlen, 0, &steps_mod_lap);
+
+        // return evp_encode_switch(NULL, t, f, dlen, &steps_mod_lap);
     #else
         return evp_encode_scalar_nl_int(NULL, t, f, dlen, &steps_mod_lap);
     #endif
