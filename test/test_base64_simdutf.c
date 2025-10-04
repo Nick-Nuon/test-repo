@@ -26,68 +26,6 @@
     }                                                                \
 } while(0)
 
-#define ASSERT_NOT_EQUAL_INT(actual, expected) do {                      \
-    if ((actual) == (expected)) {                                      \
-        TEST_error(RED_TEXT("Assertion failed: %s == %s, got %d, didn't want %d"), \
-                   #actual, #expected, (int)(actual), (int)(expected));\
-        OPENSSL_free(buffer);                                                    \
-        return 0;                                                    \
-    }                                                                \
-} while(0)
-
-/* Macro with an extra message */
-#define ASSERT_EQUAL_INT_MSG(actual, expected, msg) do {                   \
-    if ((actual) != (expected)) {                                          \
-        TEST_error(RED_TEXT("Assertion failed: %s != %s, got %d, expected %d. %s"), \
-                   #actual, #expected, (int)(actual), (int)(expected), msg);  \
-        return 0;                                                        \
-    }                                                                    \
-} while(0)
-
-/* ASSERT_EQUAL for size_t values */
-#define ASSERT_EQUAL_SIZE(actual, expected) do {                     \
-    if ((actual) != (expected)) {                                      \
-        TEST_error(RED_TEXT("Assertion failed: %s != %s, got %zu, expected %zu"), \
-                   #actual, #expected, (actual), (expected));         \
-        return 0;                                                    \
-    }                                                                \
-} while(0)
-
-/* ASSERT_EQUAL_HEX: for comparing two byte values with an index context */
-#define ASSERT_EQUAL_HEX(idx, actual, expected) do {                 \
-    if ((unsigned int)(actual) != (unsigned int)(expected)) {          \
-        TEST_error(RED_TEXT("Mismatch at index %zu: got %02x, expected %02x"), \
-                   (idx), (unsigned int)(actual), (unsigned int)(expected)); \
-        return 0;                                                    \
-    }                                                                \
-} while(0)
-
-#define ASSERT_TRUE(cond) do {                        \
-    if (!(cond)) {                                    \
-        TEST_error(RED_TEXT("Assertion failed: %s is false at %s:%d"), \
-                   #cond, __FILE__, __LINE__);          \
-        return 0;                                   \
-    }                                               \
-} while(0)
-
-#define PRINT_STRINGS(expected, actual, len) do {                         \
-    size_t _i;                                                            \
-    /* Print as regular strings */                                        \
-    printf("Expected buffer (%s) as string: \"%s\"\n", #expected, (expected)); \
-    printf("Actual buffer   (%s) as string: \"%s\"\n", #actual, (actual));   \
-    /* Print as hexadecimal */                                            \
-    printf("Expected buffer (%s) as hex: ", #expected);                    \
-    for (_i = 0; _i < (len); _i++) {                                       \
-        printf("%02x ", (unsigned int)(expected)[_i]);                    \
-    }                                                                     \
-    printf("\n");                                                         \
-    printf("Actual buffer   (%s) as hex: ", #actual);                      \
-    for (_i = 0; _i < (len); _i++) {                                       \
-        printf("%02x ", (unsigned int)(actual)[_i]);                      \
-    }                                                                     \
-    printf("\n");                                                         \
-} while(0)
-
 #define ASSERT_MEM_EQUAL(expected, actual, len) do {                              \
     size_t _i, _mismatch_index = (size_t)(-1);                                    \
     for (_i = 0; _i < (len); _i++) {                                              \
@@ -194,7 +132,6 @@ static int test_encode_line_lengths_reinforced(void)
                             // Turn SRP alphabet ON
                             ctx_simd->flags |= EVP_ENCODE_CTX_USE_SRP_ALPHABET;
                             ctx_ref->flags |= EVP_ENCODE_CTX_USE_SRP_ALPHABET;
-
                         }
 
                         int ret_simd = EVP_EncodeUpdate(ctx_simd, out_simd, &outlen_simd, input, (int)inl);
