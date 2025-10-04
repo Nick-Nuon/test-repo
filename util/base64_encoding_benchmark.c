@@ -83,28 +83,17 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
         }
 
         unsigned char *file_content = malloc(st.st_size);
-        // --- NO_NL mode -- this is very defensive, but I got tired of eating segfaults
-        // size_t encoded_len = 4 * ((st.st_size + 2) / 3);
-        // size_t line_breaks = (encoded_len)/ 3 * 2;  // PEM line :1 newline per 48 bytes by default, but the insertion length might be anything up to 80 bytes
-        // size_t encoded_total = encoded_len + line_breaks + 64;  // final block overhead, the +64 is rather defensive
-
-        size_t encoded_len = 4 * ((st.st_size + 2) / 3);
-        size_t line_breaks = (encoded_len)/ 3 * 2;
-        // size_t encoded_total = encoded_len + line_breaks + 64;
+        // --- NO_NL mode -- 
         size_t enc = 4 * ((st.st_size + 2) / 3);
-        // Worst-case newlines happen at ctx_length = 1 → roughly (st.st_size - 1) newlines.
-        // A simpler safe bound: 2*enc covers all ctx_length≥1.
-        size_t encoded_total = enc * 10 + 64;  // generous headroom
-
-        
+        size_t encoded_total = enc * 10 + 64;  // very very generous headroom
 
         unsigned char *encoded_output = malloc(encoded_total);
 
         if (!file_content || !encoded_output) {
             printf("free once");
             perror("malloc");
-            free(file_content); // Free file_content if it was allocated successfully
-            free(encoded_output); // Free encoded_output if it was allocated successfully
+            free(file_content);
+            free(encoded_output);
             fclose(f);
             continue;
         }
@@ -114,15 +103,14 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
         size_t read = fread(file_content, 1, st.st_size, f);
         fclose(f);
 
-        // if (read != st.st_size) {
-        //     printf("free twice");
-
-        //     fprintf(stderr, "Warning: incomplete read of %s\n", fullpath);
-        //     free(file_content);
-        //     free(encoded_output); // Add this
-        //     fclose(f); // Technically already closed, but safe to be consistent
-        //     continue;
-        // }
+        // additional checks
+        if (read != st.st_size) {
+            fprintf(stderr, "Warning: incomplete read of %s\n", fullpath);
+            free(file_content);
+            free(encoded_output);
+            fclose(f); 
+            continue;
+        }
 
         files[count].filename = strdup(entry->d_name);
         files[count].content = file_content;
