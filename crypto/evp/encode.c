@@ -26,6 +26,9 @@ static int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int dlen,int *steps_mod_lap);
 static int evp_encode_scalar_nl_nm3(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int dlen,int *steps_mod_lap);
+static int evp_encode_scalar_nl_ctx1(EVP_ENCODE_CTX *ctx, unsigned char *t,
+                               const unsigned char *f, int dlen,int *steps_mod_lap);
+
 
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n, int eof);
@@ -273,6 +276,36 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     }
 
     int steps_mod_lap = 0; // Reset steps_mod_lap before encoding
+    if (ctx->length == 1){
+            while (inl >= ctx->length && total <= INT_MAX) {
+                j = evp_encode_scalar_nl_ctx1(ctx, out, in, inl - (inl % ctx->length), &steps_mod_lap);
+                in += inl - (inl % ctx->length);
+                inl -= inl - (inl % ctx->length);
+                out += j;
+                total += j;
+
+                int steps_mod_lap_by_input = steps_mod_lap / 4 * 3; // Adjust steps_mod_lap for the next call
+                if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
+                    *(out++) = '\n';
+                    total++;
+                }
+                *out = '\0';
+
+                // Check for output overflow
+                if (total > INT_MAX) {
+                    *outl = 0;
+                    return 0;
+                }
+
+                // Store remaining partial block in context
+                if (inl != 0)
+                    memcpy(&(ctx->enc_data[0]), in, inl);
+                ctx->num = inl;
+                *outl = total;
+
+                return 1;
+            }
+    }
     if (ctx-> length % 3 != 0) {
                 // while (inl >= ctx->length && total <= INT_MAX) {
                 //     j = evp_encode_scalar_nl_nm3(ctx, out, in, ctx->length, &steps_mod_lap);
