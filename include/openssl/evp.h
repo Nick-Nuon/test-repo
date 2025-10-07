@@ -918,12 +918,12 @@ void EVP_EncodeInit(EVP_ENCODE_CTX *ctx);
 int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                      const unsigned char *in, int inl);
 void EVP_EncodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl);
-// TODO: Only for benchmarking/testing purpose, remove when all is said and done ***********************
+// TODO????: Only for benchmarking/testing purpose, remove when all is said and done ***********************
 OPENSSL_EXPORT int EVP_EncodeUpdate_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     const unsigned char *in, int inl);
 OPENSSL_EXPORT void EVP_EncodeFinal_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl);
 OPENSSL_EXPORT void evp_encode_ctx_set_flags(EVP_ENCODE_CTX *ctx, unsigned int flags);
-// TODO: This is a workaround for the fact that EVP_ENCODE_CTX is opaque for testing purposes
+// TODO: This is a workaround for the fact that EVP_ENCODE_CTX is opaque for testing purposes. Maybe there is a more elegant way to handle this?
 void EVP_Set_length(EVP_ENCODE_CTX *ctx,int length);
 void fuzz_fill_encode_ctx(EVP_ENCODE_CTX *ctx, int max_fill);
 
