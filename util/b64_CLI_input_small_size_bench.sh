@@ -1,4 +1,6 @@
 #!/bin/bash
+# Benchmark randomly generated files with sizes 1 → 2,000,000 bytes in steps of 10,000.
+# Also benches PEM mode/disable newlines/etc. 
 set -e
 
 if [[ "$(uname -s)" != "Linux" ]]; then

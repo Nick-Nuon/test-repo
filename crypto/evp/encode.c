@@ -194,44 +194,6 @@ void EVP_EncodeInit(EVP_ENCODE_CTX *ctx)
     ctx->flags = 0;
 }
 
-static int evp_encodeblock_int_openssl(EVP_ENCODE_CTX *ctx, unsigned char *t,
-                               const unsigned char *f, int dlen)
-{
-    int i, ret = 0;
-    unsigned long l;
-    const unsigned char *table;
-
-    if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0)
-        table = srpdata_bin2ascii;
-    else
-        table = data_bin2ascii;
-
-    for (i = dlen; i > 0; i -= 3) {
-        if (i >= 3) {
-            l = (((unsigned long)f[0]) << 16L) |
-                (((unsigned long)f[1]) << 8L) | f[2];
-            *(t++) = conv_bin2ascii(l >> 18L, table);
-            *(t++) = conv_bin2ascii(l >> 12L, table);
-            *(t++) = conv_bin2ascii(l >> 6L, table);
-            *(t++) = conv_bin2ascii(l, table);
-        } else {
-            l = ((unsigned long)f[0]) << 16L;
-            if (i == 2)
-                l |= ((unsigned long)f[1] << 8L);
-
-            *(t++) = conv_bin2ascii(l >> 18L, table);
-            *(t++) = conv_bin2ascii(l >> 12L, table);
-            *(t++) = (i == 1) ? '=' : conv_bin2ascii(l >> 6L, table);
-            *(t++) = '=';
-        }
-        ret += 4;
-        f += 3;
-    }
-
-    *t = '\0';
-    return ret;
-}
-
 int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,  
                       const unsigned char *in, int inl)
 {
@@ -404,6 +366,45 @@ void EVP_EncodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
     *outl = ret;
 }
 
+
+static int evp_encodeblock_int_openssl(EVP_ENCODE_CTX *ctx, unsigned char *t,
+                               const unsigned char *f, int dlen)
+{
+    int i, ret = 0;
+    unsigned long l;
+    const unsigned char *table;
+
+    if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0)
+        table = srpdata_bin2ascii;
+    else
+        table = data_bin2ascii;
+
+    for (i = dlen; i > 0; i -= 3) {
+        if (i >= 3) {
+            l = (((unsigned long)f[0]) << 16L) |
+                (((unsigned long)f[1]) << 8L) | f[2];
+            *(t++) = conv_bin2ascii(l >> 18L, table);
+            *(t++) = conv_bin2ascii(l >> 12L, table);
+            *(t++) = conv_bin2ascii(l >> 6L, table);
+            *(t++) = conv_bin2ascii(l, table);
+        } else {
+            l = ((unsigned long)f[0]) << 16L;
+            if (i == 2)
+                l |= ((unsigned long)f[1] << 8L);
+
+            *(t++) = conv_bin2ascii(l >> 18L, table);
+            *(t++) = conv_bin2ascii(l >> 12L, table);
+            *(t++) = (i == 1) ? '=' : conv_bin2ascii(l >> 6L, table);
+            *(t++) = '=';
+        }
+        ret += 4;
+        f += 3;
+    }
+
+    *t = '\0';
+    return ret;
+}
+
 int EVP_EncodeUpdate_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                       const unsigned char *in, int inl)
 {
@@ -478,12 +479,8 @@ void EVP_EncodeFinal_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
 int EVP_EncodeBlock(unsigned char *t, const unsigned char *f, int dlen)
 {
     int steps_mod_lap = 0; // Reset steps_mod_lap before encoding
-    return evp_encode_scalar_nl_int(NULL, t, f, dlen, &steps_mod_lap);
-    // return encode_base64_avx2(NULL, t, f, dlen, &steps_mod_lap);
     #if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
         return encode_base64_avx2(NULL, t, f, dlen, 0, &steps_mod_lap);
-
-        // return evp_encode_switch(NULL, t, f, dlen, &steps_mod_lap);
     #else
         return evp_encode_scalar_nl_int(NULL, t, f, dlen, &steps_mod_lap);
     #endif
