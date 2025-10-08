@@ -402,14 +402,11 @@ static int b64_write(BIO *b, const char *in, int inl)
 
     unsigned char *encoded = ctx->encoded_buf;
 
-
     if (encoded == NULL) {
        ERR_raise(ERR_LIB_BIO, ERR_R_MALLOC_FAILURE);
     return -1;
     }
-
     int n_bytes_enc =0;
-
     if (!EVP_EncodeUpdate(ctx->base64, encoded, &n_bytes_enc,
                             (unsigned char *)in, inl)) {
         return ret == 0 ? -1 : ret;
@@ -419,7 +416,6 @@ static int b64_write(BIO *b, const char *in, int inl)
     if (i <= 0) {
         BIO_copy_next_retry(b);
         return ret == 0 ? i : ret;
-    
         ctx->buf_len = 0;
         ctx->buf_off = 0;
     }
