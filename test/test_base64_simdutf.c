@@ -77,6 +77,28 @@ static void dump_bytes(const char *label, const uint8_t *buf, size_t len) {
         printf("\n");
 }
 
+void fuzz_fill_encode_ctx(EVP_ENCODE_CTX *ctx, int max_fill)
+{
+    // Seed RNG (if not seeded elsewhere)
+    static int seeded = 0;
+    if (!seeded) { srand((unsigned)time(NULL)); seeded = 1; }
+
+    // Pick how many bytes are "already in the buffer" (0..max_fill)
+    int num = rand() % (max_fill + 1);
+    ctx->num = num;
+
+    // Fill enc_data[0..num-1] with random junk
+    for (int i = 0; i < num; i++) {
+        ctx->enc_data[i] = (unsigned char)(rand() & 0xFF);
+    }
+
+    // Random line length (multiple of 4 makes sense for base64, but we can fuzz)
+    ctx->length = (rand() % 80) + 1;
+
+    // Random current line num (bytes already output in current line)
+    ctx->line_num = rand() % (ctx->length + 1);
+}
+
 static int test_encode_line_lengths_reinforced(void)
 {
     const int trials = 50;
@@ -120,8 +142,8 @@ static int test_encode_line_lengths_reinforced(void)
                     // Initialize both contexts and set identical line lengths
                     EVP_EncodeInit(ctx_simd);
                     EVP_EncodeInit(ctx_ref);
-                    EVP_Set_length(ctx_simd, ctx_len);
-                    EVP_Set_length(ctx_ref,  ctx_len);
+                    ctx_simd->length = ctx_len;
+                    ctx_ref->length = ctx_len;
 
                     for (int i = 0; i < 2; i++){
                         if (i % 2 == 0) {
