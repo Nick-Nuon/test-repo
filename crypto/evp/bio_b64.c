@@ -21,7 +21,7 @@ static long b64_ctrl(BIO *h, int cmd, long arg1, void *arg2);
 static int b64_new(BIO *h);
 static int b64_free(BIO *data);
 static long b64_callback_ctrl(BIO *h, int cmd, BIO_info_cb *fp);
-#define B64_BLOCK_SIZE  8192 //1024 16384
+#define B64_BLOCK_SIZE  1024
 #define B64_BLOCK_SIZE2 768
 #define B64_NONE        0
 #define B64_ENCODE      1
@@ -41,7 +41,6 @@ typedef struct b64_struct {
     EVP_ENCODE_CTX *base64;
     unsigned char buf[EVP_ENCODE_LENGTH(B64_BLOCK_SIZE) + 10];
     unsigned char tmp[B64_BLOCK_SIZE];
-
     unsigned char *encoded_buf;     // persistent malloc'd buffer
     size_t encoded_buf_len;         // size of allocated buffer
 } BIO_B64_CTX;
@@ -332,8 +331,9 @@ static int b64_read(BIO *b, char *out, int outl)
 
 static int b64_write(BIO *b, const char *in, int inl)
 {
-    int ret = 0; 
-    int n, i; // n = number of bytes to process in this iteration, i = number of bytes written
+    int ret = 0;
+    int n;
+    int i;
     BIO_B64_CTX *ctx;
     BIO *next;
 
@@ -349,34 +349,39 @@ static int b64_write(BIO *b, const char *in, int inl)
         ctx->buf_len = 0;
         ctx->buf_off = 0;
         ctx->tmp_len = 0;
-        EVP_EncodeInit(ctx->base64);  // Reinitialize base64 encoder
+        EVP_EncodeInit(ctx->base64);
     }
-
-    // Internal sanity checks to prevent buffer overflows or underflows
-    if (!ossl_assert(ctx->buf_off < (int)sizeof(ctx->buf)) ||
-        !ossl_assert(ctx->buf_len <= (int)sizeof(ctx->buf)) ||
-        !ossl_assert(ctx->buf_len >= ctx->buf_off)) {
+    if (!ossl_assert(ctx->buf_off < (int)sizeof(ctx->buf))) {
         ERR_raise(ERR_LIB_BIO, ERR_R_INTERNAL_ERROR);
         return -1;
     }
-
-    // Write any remaining buffered data from a previous call
+    if (!ossl_assert(ctx->buf_len <= (int)sizeof(ctx->buf))) {
+        ERR_raise(ERR_LIB_BIO, ERR_R_INTERNAL_ERROR);
+        return -1;
+    }
+    if (!ossl_assert(ctx->buf_len >= ctx->buf_off)) {
+        ERR_raise(ERR_LIB_BIO, ERR_R_INTERNAL_ERROR);
+        return -1;
+    }
     n = ctx->buf_len - ctx->buf_off;
     while (n > 0) {
         i = BIO_write(next, &(ctx->buf[ctx->buf_off]), n);
         if (i <= 0) {
-            BIO_copy_next_retry(b);  // Propagate retry status
+            BIO_copy_next_retry(b);
             return i;
         }
         ctx->buf_off += i;
-        if (!ossl_assert(ctx->buf_off <= (int)sizeof(ctx->buf)) ||
-            !ossl_assert(ctx->buf_len >= ctx->buf_off)) {
+        if (!ossl_assert(ctx->buf_off <= (int)sizeof(ctx->buf))) {
+            ERR_raise(ERR_LIB_BIO, ERR_R_INTERNAL_ERROR);
+            return -1;
+        }
+        if (!ossl_assert(ctx->buf_len >= ctx->buf_off)) {
             ERR_raise(ERR_LIB_BIO, ERR_R_INTERNAL_ERROR);
             return -1;
         }
         n -= i;
     }
-
+    /* at this point all pending data has been written */
     ctx->buf_off = 0;
     ctx->buf_len = 0;
 
@@ -409,15 +414,15 @@ static int b64_write(BIO *b, const char *in, int inl)
                             (unsigned char *)in, inl)) {
         return ret == 0 ? -1 : ret;
     }
-
     ret += inl;
-
     i = BIO_write(next, encoded, n_bytes_enc);
     if (i <= 0) {
-        BIO_copy_next_retry(b);  // Propagate retry status
+        BIO_copy_next_retry(b);
         return ret == 0 ? i : ret;
+    
+        ctx->buf_len = 0;
+        ctx->buf_off = 0;
     }
-
     return ret;
 }
 
