@@ -142,6 +142,32 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
         e2 = base64_std_bin2ascii_2;
     }
 
+    if (ctx->length == 1)
+    {
+        int i = 0;
+        while (i < dlen && ret <= INT_MAX && ctx != NULL){ 
+                        t1 = f[i];
+                        *(t++) = e0[t1];
+                        *(t++) = e1[(t1 & 0x03) << 4];
+                        *(t++) = '=';
+                        *(t++) = '=';
+                        *(t++) = '\n';
+                        
+                        ret += 5;
+                        i++;
+                        // break;
+        }
+
+        *t = '\0';
+        ret --;
+
+        return ret;
+    } 
+    // else if (ctx->length % 3 != 0){
+
+    // }
+
+
       for (i = 0; i + 2 < dlen && ret <= INT_MAX; i += 3) {
 
         t1 = f[i];
@@ -303,7 +329,7 @@ return ret;
 }
 
 
-// this now optionally take care of newlines insertion also!
+// // this now optionally take care of newlines insertion also!
 int evp_encode_scalar_nl_ctx1(EVP_ENCODE_CTX *ctx, unsigned char *t,
   const unsigned char *f, int dlen, int *steps_mod_lap)
 {
@@ -312,7 +338,6 @@ int evp_encode_scalar_nl_ctx1(EVP_ENCODE_CTX *ctx, unsigned char *t,
     const unsigned char *e0, *e1, *e2;
     int srp = (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0);
     int steps_mod_lap_by_input = *steps_mod_lap / 4 * 3;
-    int input_steps_mod_lap = 0;//steps_mod_lap_by_input;
 
     if (srp) {
         e0 = base64_srp_bin2ascii_0;
@@ -325,22 +350,22 @@ int evp_encode_scalar_nl_ctx1(EVP_ENCODE_CTX *ctx, unsigned char *t,
     }
 
     i = 0;
-    while (i < dlen && ret <= INT_MAX && ctx != NULL){ 
-                    t1 = f[i];
-                    *(t++) = e0[t1];
-                    *(t++) = e1[(t1 & 0x03) << 4];
-                    *(t++) = '=';
-                    *(t++) = '=';
-                    *(t++) = '\n';
-                    
-                    ret += 5;
-                    i++;
-                    // break;
-    }
+        while (i < dlen && ret <= INT_MAX && ctx != NULL){ 
+                        t1 = f[i];
+                        *(t++) = e0[t1];
+                        *(t++) = e1[(t1 & 0x03) << 4];
+                        *(t++) = '=';
+                        *(t++) = '=';
+                        *(t++) = '\n';
+                        
+                        ret += 5;
+                        i++;
+                        // break;
+        }
 
-*t = '\0';
-ret --;
+    *t = '\0';
+    ret --;
 
-return ret;
+    return ret;
 
 }
