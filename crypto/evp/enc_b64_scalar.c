@@ -155,7 +155,6 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                         
                         ret += 5;
                         i++;
-                        // break;
         }
 
         *t = '\0';
@@ -163,28 +162,76 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
 
         return ret;
     } 
-    // else if (ctx->length % 3 != 0){
+    else if (ctx->length % 3 != 0){
+        i = 0;
+        int wrap_cnt = 0;
+        while (i + 2 < dlen && ret <= INT_MAX) {
+                if (ctx != NULL){
+                    if ((wrap_cnt < ctx->length && (wrap_cnt + 3 + steps_mod_lap_by_input) > ctx->length) && ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
 
-    // }
-
-
-    for (i = 0; i + 2 < dlen && ret <= INT_MAX; i += 3) {
-
-        t1 = f[i];
-        t2 = f[i + 1];
-        t3 = f[i + 2];
-        *(t++) = e0[t1];
-        *(t++) = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
-        *(t++) = e1[((t2 & 0x0F) << 2) | ((t3 >> 6) & 0x03)];
-        *(t++) = e2[t3];
-        ret += 4;
-
-        if (ctx != NULL){
-            if ((i + 3 + steps_mod_lap_by_input) % ctx->length == 0 && 
-                ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) &&
-                ctx->length % 3 == 0 ) {
+                    switch (ctx->length % 3) {
+                    case 0:
+                        break;
+                    case 1:
+                        t1 = f[i];
+                        *(t++) = e0[t1];
+                        *(t++) = e1[(t1 & 0x03) << 4];
+                        *(t++) = '=';
+                        *(t++) = '=';
+                        
+                        ret += 4;
+                        i++;
+                        break;
+                    case 2:
+                        t1 = f[i];
+                        t2 = f[i + 1];
+                        *(t++) = e0[t1];
+                        *(t++) = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
+                        *(t++) = e2[(t2 & 0x0F) << 2];
+                        *(t++) = '=';
+                        i += 2;
+                        ret += 4;
+                        break;
+                    }
                     *(t++) = '\n';
                     ret++;
+                    wrap_cnt = 0;
+                }
+            }
+
+            if (ctx->length >= 4 && i + 2 < dlen) {
+                t1 = f[i];
+                t2 = f[i + 1];
+                t3 = f[i + 2];
+                *(t++) = e0[t1];
+                *(t++) = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
+                *(t++) = e1[((t2 & 0x0F) << 2) | ((t3 >> 6) & 0x03)];
+                *(t++) = e2[t3];
+                ret += 4;
+                wrap_cnt += 3;
+                i += 3;
+            }
+        }
+
+    } else {
+        for (i = 0; i + 2 < dlen && ret <= INT_MAX; i += 3) {
+
+            t1 = f[i];
+            t2 = f[i + 1];
+            t3 = f[i + 2];
+            *(t++) = e0[t1];
+            *(t++) = e1[((t1 & 0x03) << 4) | ((t2 >> 4) & 0x0F)];
+            *(t++) = e1[((t2 & 0x0F) << 2) | ((t3 >> 6) & 0x03)];
+            *(t++) = e2[t3];
+            ret += 4;
+
+            if (ctx != NULL){
+                if ((i + 3 + steps_mod_lap_by_input) % ctx->length == 0 && 
+                    ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) &&
+                    ctx->length % 3 == 0 ) {
+                        *(t++) = '\n';
+                        ret++;
+                }
             }
         }
     }
