@@ -180,9 +180,11 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
         ret += 4;
 
         if (ctx != NULL){
-            if ((i + 3 + steps_mod_lap_by_input) % ctx->length == 0 && ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
-                *(t++) = '\n';
-                ret++;
+            if ((i + 3 + steps_mod_lap_by_input) % ctx->length == 0 && 
+                ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) &&
+                ctx->length % 3 == 0 ) {
+                    *(t++) = '\n';
+                    ret++;
             }
         }
     }
@@ -200,7 +202,9 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
         ret += 4;
 
         if (ctx != NULL){
-            if ((i + 1 + steps_mod_lap_by_input) % ctx->length == 0 && ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
+            if ((i + 1 + steps_mod_lap_by_input) % ctx->length == 0 && 
+                ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) && 
+                ctx->length % 3 == 0 ) {
                 *(t++) = '\n';
                 ret++;
             }
@@ -217,9 +221,11 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
         ret += 4;
 
         if (ctx != NULL){
-            if ((i + 2 + steps_mod_lap_by_input) % ctx->length == 0 && ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
-                *(t++) = '\n';
-                ret++;
+            if ((i + 2 + steps_mod_lap_by_input) % ctx->length == 0 && 
+                ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) &&
+                ctx->length % 3 == 0 ) {
+                    *(t++) = '\n';
+                    ret++;
             }
         }
         break;
