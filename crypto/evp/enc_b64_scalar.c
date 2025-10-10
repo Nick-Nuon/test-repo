@@ -123,13 +123,13 @@ const char base64_std_bin2ascii_0[256] = {
 
 
 int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
-  const unsigned char *f, int dlen, int *steps_mod_lap)
+  const unsigned char *f, int dlen, int *wrap_cnt)
 {
     int i, ret = 0;
     uint8_t t1, t2, t3;
     const unsigned char *e0, *e1, *e2;
     int srp = (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0);
-    int steps_mod_lap_by_input = *steps_mod_lap / 4 * 3;
+    int wrap_cnt_by_input = *wrap_cnt / 4 * 3;
     const int ctx_length = (ctx != NULL) ? ctx->length : 0;
 
     if (srp) {
@@ -164,10 +164,10 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
     } 
     else if (ctx_length % 3 != 0){
         i = 0;
-        int wrap_cnt = 0;
+        int wrap_cnt_nm3 = 0;
         while (i + 2 < dlen && ret <= INT_MAX) {
                 if (ctx != NULL){
-                    if ((wrap_cnt < ctx->length && (wrap_cnt + 3 + steps_mod_lap_by_input) > ctx->length) && ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
+                    if ((wrap_cnt_nm3 < ctx->length && (wrap_cnt_nm3 + 3 + wrap_cnt_by_input) > ctx->length) && ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
 
                     switch (ctx->length % 3) {
                     case 0:
@@ -195,7 +195,7 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                     }
                     *(t++) = '\n';
                     ret++;
-                    wrap_cnt = 0;
+                    wrap_cnt_nm3 = 0;
                 }
             }
 
@@ -208,7 +208,7 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                 *(t++) = e1[((t2 & 0x0F) << 2) | ((t3 >> 6) & 0x03)];
                 *(t++) = e2[t3];
                 ret += 4;
-                wrap_cnt += 3;
+                wrap_cnt_nm3 += 3;
                 i += 3;
             }
         }
@@ -225,7 +225,7 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
             ret += 4;
 
             if (ctx != NULL){
-                if ((i + 3 + steps_mod_lap_by_input) % ctx->length == 0 && 
+                if ((i + 3 + wrap_cnt_by_input) % ctx->length == 0 && 
                     ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) &&
                     ctx->length % 3 == 0 ) {
                         *(t++) = '\n';
@@ -248,7 +248,7 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
         ret += 4;
 
         if (ctx != NULL){
-            if ((i + 1 + steps_mod_lap_by_input) % ctx->length == 0 && 
+            if ((i + 1 + wrap_cnt_by_input) % ctx->length == 0 && 
                 ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) && 
                 ctx->length % 3 == 0 ) {
                 *(t++) = '\n';
@@ -267,7 +267,7 @@ int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
         ret += 4;
 
         if (ctx != NULL){
-            if ((i + 2 + steps_mod_lap_by_input) % ctx->length == 0 && 
+            if ((i + 2 + wrap_cnt_by_input) % ctx->length == 0 && 
                 ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) &&
                 ctx->length % 3 == 0 ) {
                     *(t++) = '\n';

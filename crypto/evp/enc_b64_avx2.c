@@ -149,20 +149,20 @@ static inline __m256i insert_line_feed32(__m256i input, int K) {
 }
 
 static inline size_t ins_nl_gt32(
-    __m256i v, uint8_t* out, int stride, int* steps_mod_lap)
+    __m256i v, uint8_t* out, int stride, int* wrap_cnt)
 {
-    const int until_nl = stride - *steps_mod_lap;
+    const int until_nl = stride - *wrap_cnt;
 
     if (until_nl > 32) {
         _mm256_storeu_si256((__m256i*)out, v);
-        *steps_mod_lap += 32;
+        *wrap_cnt += 32;
         return 32;
     }
 
     if (until_nl == 32) {
         _mm256_storeu_si256((__m256i*)out, v);
         out[32] = '\n';
-        *steps_mod_lap = 0;
+        *wrap_cnt = 0;
         return 33;
     }
 
@@ -171,25 +171,25 @@ static inline size_t ins_nl_gt32(
     _mm256_storeu_si256((__m256i*)out, with_lf);
     out[32] = last;
 
-    *steps_mod_lap = 32 - until_nl;
+    *wrap_cnt = 32 - until_nl;
     return 33;
 }
 
 static inline size_t insert_nl_gt16(
     const __m256i v0,
     uint8_t* output,
-    int steps_per_lap, // I use the analogy of a racing track where the length of a "lap" is the number of bytes between newlines
-    int *steps_mod_lap // these are the numbers of steps that have been done so far in the current lap, this is used to determine where to insert the newline
+    int wrap_max,
+    int *wrap_cnt 
 ) {
     int b_lane =  16;
     uint8_t* out = output;
 
-    int steps_until_nl = steps_per_lap - *steps_mod_lap; 
+    int wrap_rem = wrap_max - *wrap_cnt; 
 
     _mm256_storeu_si256((__m256i*)(output),  v0);  
 
-    if (steps_until_nl > 32) { 
-        *steps_mod_lap += 32 ; 
+    if (wrap_rem > 32) { 
+        *wrap_cnt += 32 ; 
         return 32; 
     } 
 
@@ -209,11 +209,11 @@ static inline size_t insert_nl_gt16(
     );
 
     __m256i blended_0L = v0;
-    int surplus_0 =  steps_until_nl < 16 ? 1 : 0;
+    int surplus_0 =  wrap_rem < 16 ? 1 : 0;
     
     if (surplus_0 == 1) {
-        __m256i shifted_0_L = shift_left_zeros(shift_right_zeros(v0,steps_until_nl), steps_until_nl + surplus_0);   
-        __m256i mask_shifted_0_L = shift_left_zeros(all_ff_mask, steps_until_nl + surplus_0);
+        __m256i shifted_0_L = shift_left_zeros(shift_right_zeros(v0,wrap_rem), wrap_rem + surplus_0);   
+        __m256i mask_shifted_0_L = shift_left_zeros(all_ff_mask, wrap_rem + surplus_0);
 
         __m256i mask = _mm256_or_si256(mask_shifted_0_L, mask_second_lane);
 
@@ -223,41 +223,41 @@ static inline size_t insert_nl_gt16(
         blended_0L = _mm256_blendv_epi8(v0, shifted, mask);
 
         _mm256_storeu_si256((__m256i*)(output), blended_0L);
-        steps_until_nl += steps_per_lap; 
+        wrap_rem += wrap_max; 
     }  
 
-    int surplus_1 = (16 <= steps_until_nl && steps_until_nl < 32) ? 1 : 0;
+    int surplus_1 = (16 <= wrap_rem && wrap_rem < 32) ? 1 : 0;
     int last_of_1L = _mm256_extract_epi8(v0, 31); 
 
     if (surplus_1 == 1){
         uint16_t sec_last_of_1L = _mm256_extract_epi8(v0, 30);
 
-        int steps_until_nl_1 = steps_until_nl - 16; // we have already written 16 bytes from input
+        int wrap_rem_1 = wrap_rem - 16; // we have already written 16 bytes from input
 
-        __m256i shifted_1_L = shift_left_zeros(shift_right_zeros(v0,steps_until_nl_1), steps_until_nl_1 + surplus_0 + surplus_1);   
-        __m256i mask_shifted_1_L = shift_left_zeros(all_ff_mask, steps_until_nl_1 + surplus_0 + surplus_1);
+        __m256i shifted_1_L = shift_left_zeros(shift_right_zeros(v0,wrap_rem_1), wrap_rem_1 + surplus_0 + surplus_1);   
+        __m256i mask_shifted_1_L = shift_left_zeros(all_ff_mask, wrap_rem_1 + surplus_0 + surplus_1);
         __m256i mask = _mm256_and_si256(mask_second_lane, mask_shifted_1_L);
         __m256i blended_1L = _mm256_blendv_epi8(blended_0L, shifted_1_L, mask);
 
         _mm256_storeu_si256((__m256i*)(output), blended_1L);
         
-        output[steps_until_nl + surplus_0] = '\n';
+        output[wrap_rem + surplus_0] = '\n';
         output[31 + surplus_0] = sec_last_of_1L; 
         output[31 + surplus_0 + surplus_1] = last_of_1L; 
 
     }
 
     if (surplus_0 == 1) {
-        output[steps_until_nl - steps_per_lap] = '\n';
+        output[wrap_rem - wrap_max] = '\n';
         output[16] = _mm256_extract_epi8(v0, 15);
         output[31 + surplus_0 + surplus_1] = last_of_1L; 
     }
 
-    *steps_mod_lap =  steps_until_nl >32 ? 32 - (steps_until_nl - steps_per_lap): 32 - steps_until_nl;
+    *wrap_cnt =  wrap_rem >32 ? 32 - (wrap_rem - wrap_max): 32 - wrap_rem;
 
     int nl_at_end = 0;
-    if (*steps_mod_lap == steps_per_lap || *steps_mod_lap == 0 )  {
-        *steps_mod_lap = 0; 
+    if (*wrap_cnt == wrap_max || *wrap_cnt == 0 )  {
+        *wrap_cnt = 0; 
         output[32 + surplus_0 + surplus_1] = '\n';
         nl_at_end = 1;
     }
@@ -272,7 +272,7 @@ static inline size_t insert_nl_2nd_vec_stride_12(
     const __m256i v0,
     uint8_t* output ,
     int dummy_stride,
-    int *steps_mod_lap
+    int *wrap_cnt
 ) {
   __m256i shuffling_mask = _mm256_setr_epi8(
       0, 1, 2, 3, 0xFF, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0xFF,
@@ -296,7 +296,7 @@ static inline size_t insert_nl_2nd_vec_stride_12(
     memcpy(out + 15 + 17 +1, &rem_2_L_ext_P2, sizeof(rem_2_L_ext_P2));
 
     out += 32 + 3;
-    *steps_mod_lap = 4;
+    *wrap_cnt = 4;
 
     size_t written = (out - output); 
     return written;
@@ -336,14 +336,15 @@ static inline size_t insert_nl_str4(
     _mm256_storeu_si256((__m256i*)(output + 0),  v0_w_nl);
 
     // Handle cross-lane remainder logic
-    #define B_LANE  16 // bytes per lane
-    #define N_RET_1_L  3 // excess bytes that has been "shifted out" of lane 0 after we insert newlines
-    #define N_RET_2_L  (N_RET_1_L + 4) // excess bytes that has been "shifted out" of lane 1 after we insert newlines
+    // Without macros, _mm256_srli_si256 complains that the last arg must be an 8-bit immediate
+    #define B_LANE  16 // Bytes per lane
+    #define N_RET_1_L  3 // Excess bytes that has been "shifted out" of lane 0 after we insert newlines
+    #define N_RET_2_L  (N_RET_1_L + 4) // Excess bytes that have been "shifted out" of lane 1 after we insert newlines
 
-    // bytes that were shifted out of lane 0
+    // Bytes that were shifted out of lane 0
     __m256i rem_1_L = _mm256_srli_si256(v0, B_LANE - N_RET_1_L);
 
-    // bytes that were shifted out of lane 1, we need to split them into two parts because there is one new line between them
+    // Bytes that were shifted out of lane 1, we need to split them into two parts because there is one new line between them
     __m256i rem_2_L_P1 = _mm256_srli_si256(
         _mm256_slli_si256( 
             _mm256_srli_si256(v0, B_LANE - N_RET_2_L), 
@@ -374,24 +375,22 @@ static inline size_t insert_nl_str4(
     out += 4;
     *out++ = '\n';
 
-    size_t written = (out - output);  // At the end of function
+    size_t written = (out - output);
     return written;
 }
 
 
 static inline size_t insert_nl_str8(
     const __m256i v0,
-    uint8_t* output         // at least 160 bytes to be safe
+    uint8_t* output
 ) {
   __m256i shuffling_mask = _mm256_setr_epi8(
       0, 1, 2, 3, 4, 5, 6, 7, 0xFF,
-      8, 9, 10, 11, 12, 13, 14, // 15,
+      8, 9, 10, 11, 12, 13, 14,
       0xFF, 0xFF, 0, 1, 2, 3, 4, 5, 6,
       7, 0xFF,8, 9 , 10, 11,  12 
-      //,13 ,14, 15 , 0xFF <-- Excess bytes that are memcopied later on
   );
 
-  // Prepare mask and shuffle
     __m256i shuffled_4_bytes = _mm256_shuffle_epi8(v0, shuffling_mask);
 
     _mm256_storeu_si256((__m256i*)(output),  shuffled_4_bytes);
@@ -412,19 +411,18 @@ static inline size_t insert_nl_str8(
     
     out += 32 + 4;
 
-    size_t written = (out - output);  // At the end of function
+    size_t written = (out - output);
     return written;
 }
 
-    int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen, int ctx_length, int *final_steps_mod_lap) {
+    int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen, int ctx_length, int *final_wrap_cnt) {
         const uint8_t *input = (const uint8_t *)src;
         uint8_t *out = (uint8_t *)dst;
         size_t i = 0;
         int stride = (ctx == NULL) ? 0 : ctx_length / 3 * 4; 
-        int steps_mod_lap = 0;  
+        int wrap_cnt = 0;  
         const int use_srp = (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0);
 
-        // Define shuffle mask for AVX2
         const __m256i shuf = _mm256_set_epi8(
             10, 11, 9, 10, 7, 8, 6, 7, 4, 5, 3, 4, 1, 2, 0, 1,
             10, 11, 9, 10, 7, 8, 6, 7, 4, 5, 3, 4, 1, 2, 0, 1);
@@ -443,8 +441,6 @@ static inline size_t insert_nl_str8(
             const __m128i lo3 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 6));
             const __m128i hi3 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 7));
 
-            // ******************* EXPANDING 6 bits to more bits***************************
-            // Fig . 1 in the paper
             __m256i in0 = _mm256_shuffle_epi8(_mm256_set_m128i(hi0, lo0), shuf);
             __m256i in1 = _mm256_shuffle_epi8(_mm256_set_m128i(hi1, lo1), shuf);
             __m256i in2 = _mm256_shuffle_epi8(_mm256_set_m128i(hi2, lo2), shuf);
@@ -475,7 +471,6 @@ static inline size_t insert_nl_str8(
             const __m256i input2 = _mm256_or_si256(t1_2, t3_2);
             const __m256i input3 = _mm256_or_si256(t1_3, t3_3);
 
-            // ******************* END EXPANDING 6 bits to more bits***************************
             __m256i vec0;
             __m256i vec1;
             __m256i vec2;
@@ -542,28 +537,27 @@ static inline size_t insert_nl_str8(
 
             }
             else if (stride == 12) {          
-                typedef size_t (*InsertFn)(__m256i vec, uint8_t* out, int stride, int* steps_mod_lap);
+                typedef size_t (*InsertFn)(__m256i vec, uint8_t* out, int stride, int* wrap_cnt);
 
-                // base must be 0,1,2 (e.g., carried across iterations: if (++base==3) base=0)
                 switch (base) {
                 case 0:
 
-                    out += insert_nl_gt16(vec0, out, stride, &steps_mod_lap);
-                    out += insert_nl_2nd_vec_stride_12(vec1, out, stride, &steps_mod_lap);
-                    out += insert_nl_gt16(vec2, out, stride, &steps_mod_lap);
-                    out += insert_nl_gt16(vec3, out, stride, &steps_mod_lap);
+                    out += insert_nl_gt16(vec0, out, stride, &wrap_cnt);
+                    out += insert_nl_2nd_vec_stride_12(vec1, out, stride, &wrap_cnt);
+                    out += insert_nl_gt16(vec2, out, stride, &wrap_cnt);
+                    out += insert_nl_gt16(vec3, out, stride, &wrap_cnt);
                     break;
                 case 1:
-                    out += insert_nl_2nd_vec_stride_12(vec0, out, stride, &steps_mod_lap);
-                    out += insert_nl_gt16(vec1, out, stride, &steps_mod_lap);
-                    out += insert_nl_gt16(vec2, out, stride, &steps_mod_lap);
-                    out += insert_nl_2nd_vec_stride_12(vec3, out, stride, &steps_mod_lap);
+                    out += insert_nl_2nd_vec_stride_12(vec0, out, stride, &wrap_cnt);
+                    out += insert_nl_gt16(vec1, out, stride, &wrap_cnt);
+                    out += insert_nl_gt16(vec2, out, stride, &wrap_cnt);
+                    out += insert_nl_2nd_vec_stride_12(vec3, out, stride, &wrap_cnt);
                     break;
                 default: /* base == 2 */
-                    out += insert_nl_gt16(vec0, out, stride, &steps_mod_lap);
-                    out += insert_nl_gt16(vec1, out, stride, &steps_mod_lap);
-                    out += insert_nl_2nd_vec_stride_12(vec2, out, stride, &steps_mod_lap);
-                    out += insert_nl_gt16(vec3, out, stride, &steps_mod_lap);
+                    out += insert_nl_gt16(vec0, out, stride, &wrap_cnt);
+                    out += insert_nl_gt16(vec1, out, stride, &wrap_cnt);
+                    out += insert_nl_2nd_vec_stride_12(vec2, out, stride, &wrap_cnt);
+                    out += insert_nl_gt16(vec3, out, stride, &wrap_cnt);
                     break;
                 }
 
@@ -571,28 +565,27 @@ static inline size_t insert_nl_str8(
             }
             else if ( 32 <= stride   ){
                 out += ins_nl_gt32(
-                    vec0, out, stride, &steps_mod_lap);
+                    vec0, out, stride, &wrap_cnt);
                 out += ins_nl_gt32(
-                    vec1, out, stride, &steps_mod_lap);
+                    vec1, out, stride, &wrap_cnt);
                 out += ins_nl_gt32(
-                    vec2, out, stride, &steps_mod_lap);
+                    vec2, out, stride, &wrap_cnt);
                 out += ins_nl_gt32(
-                    vec3, out, stride, &steps_mod_lap);
+                    vec3, out, stride, &wrap_cnt);
             }
             else if ( 16 <= stride   ){
                 out += insert_nl_gt16(
-                    vec0, out, stride, &steps_mod_lap);
+                    vec0, out, stride, &wrap_cnt);
                 out += insert_nl_gt16(
-                    vec1, out, stride, &steps_mod_lap);
+                    vec1, out, stride, &wrap_cnt);
                 out += insert_nl_gt16(
-                    vec2, out, stride, &steps_mod_lap);
+                    vec2, out, stride, &wrap_cnt);
                 out += insert_nl_gt16(
-                    vec3, out, stride, &steps_mod_lap);
+                    vec3, out, stride, &wrap_cnt);
             }
         }
 
         if (stride == 0) {
-            // Process remaining 24-byte chunks
             for (; i + 28 <= srclen; i += 24) {
                 // lo = [xxxx|DDDC|CCBB|BAAA]
                 // hi = [xxxx|HHHG|GGFF|FEEE]
@@ -616,11 +609,10 @@ static inline size_t insert_nl_str8(
                 out += 32;
             }
         }
-        *final_steps_mod_lap = steps_mod_lap;
+        *final_wrap_cnt = wrap_cnt;
 
-        // Return number of bytes written
         return (size_t)(out - (uint8_t *)dst) +
-                + evp_encode_scalar_nl_int(ctx, out, src + i, srclen - i, final_steps_mod_lap);
+                + evp_encode_scalar_nl_int(ctx, out, src + i, srclen - i, final_wrap_cnt);
     }
 
 #endif
