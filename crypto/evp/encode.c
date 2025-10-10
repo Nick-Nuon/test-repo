@@ -24,28 +24,9 @@ static unsigned char conv_ascii2bin(unsigned char a,
                                     const unsigned char *table);
 static int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int dlen,int *steps_mod_lap);
-static int evp_encode_scalar_nl_nm3(EVP_ENCODE_CTX *ctx, unsigned char *t,
-                               const unsigned char *f, int dlen,int *steps_mod_lap);
-static int evp_encode_scalar_nl_ctx1(EVP_ENCODE_CTX *ctx, unsigned char *t,
-                               const unsigned char *f, int dlen,int *steps_mod_lap);
-
 
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n, int eof);
-
-                               #define DEBUG 1 // Set to 1 to enable debug prints, 0 to disable
-
-                               #if DEBUG
-                                   #define DEBUG_PRINT(fmt, ...) \
-                                       do { \
-                                           fprintf(stderr, fmt, __VA_ARGS__); \
-                                           fflush(stderr); \
-                                           fflush(stdout); /* Optional: Flush stdout if you're also printing to it */ \
-                                       } while (0)
-                               #else
-                                   #define DEBUG_PRINT(fmt, ...) do {} while (0)
-                               #endif
-                                                   
 
 int evp_encode_chk(EVP_ENCODE_CTX *ctx, unsigned char *t,
     const unsigned char *f, int dlen,    int *steps_mod_lap) {
@@ -228,7 +209,7 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
         // a difference between this and the OpenSSL version is that
         // the responsability for adding a newline is handled inside 
         // evp_encode_scalar_nl_int function instead of here. 
-        int steps_mod_lap = 0; // Reset steps_mod_lap before encoding
+        int steps_mod_lap = 0;
         j = evp_encode_scalar_nl_int(ctx, out, ctx->enc_data, ctx->length,&steps_mod_lap);
         ctx->num = 0;
         out += j;
@@ -237,40 +218,9 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
         *out = '\0';
     }
 
-    int steps_mod_lap = 0; // Reset steps_mod_lap before encoding
-    if (ctx->length == 1){
-            i = 0 ;
-            // while (inl >= ctx->length && total <= INT_MAX) {
-                // j = evp_encode_scalar_nl_ctx1(ctx, out, in, inl - (inl % ctx->length), &steps_mod_lap);
-                j = evp_encode_scalar_nl_int(ctx, out, in, inl - (inl % ctx->length), &steps_mod_lap);
-                in += inl - (inl % ctx->length);
-                inl -= inl - (inl % ctx->length);
-                out += j;
-                total += j;
-
-                int steps_mod_lap_by_input = steps_mod_lap / 4 * 3; // Adjust steps_mod_lap for the next call
-                if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
-                    *(out++) = '\n';
-                    total++;
-                }
-                *out = '\0';
-
-                // Check for output overflow
-                if (total > INT_MAX) {
-                    *outl = 0;
-                    return 0;
-                }
-
-                // Store remaining partial block in context
-                if (inl != 0)
-                    memcpy(&(ctx->enc_data[0]), in, inl);
-                ctx->num = inl;
-                *outl = total;
-
-                return 1;
-            // }
-    }
-    if (ctx-> length % 3 != 0 && ctx->length != 1){ 
+    int steps_mod_lap = 0;
+    if (ctx-> length % 3 != 0 
+    ){ 
             j = evp_encode_scalar_nl_int(ctx, out, in, inl - (inl % ctx->length), &steps_mod_lap);
     }
     else
@@ -287,8 +237,7 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     total += j;
 
     int steps_mod_lap_by_input = steps_mod_lap / 4 * 3; // Adjust steps_mod_lap for the next call
-    if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0
-        && ctx->length % 3 != 0 && ctx->length != 1) {
+    if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0 && ctx->length % 3 != 0) {
         *(out++) = '\n';
         total++;
     }
