@@ -8,15 +8,10 @@
     #include <stddef.h>
     #include <stdint.h>
     #include "enc_b64_scalar.h"
-
     #include "internal/cryptlib.h"
     #include "crypto/evp.h"
     #include "evp_local.h"
 
-     //example : when index = 0 (lowercase class).
-    // For input in [26..51], you want ASCII = 'a' (97) + (input-26).
-    // That equals input + ('a' - 26).
-    // Example: input=26 → 26+('a'-26)=97='a'; input=27→98='b'.
     typedef __m256i (*lookup_fn)(__m256i v);
     
     static __m256i lookup_pshufb_std(__m256i input) {
@@ -34,106 +29,18 @@
         return _mm256_add_epi8(result, input);
     }
 
-
-    
-
-
-// // Normal Base64 alphabet
-// static const unsigned char data_bin2ascii[65] =
-//     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-// /* SRP uses a different base64 alphabet */
-// static const unsigned char srpdata_bin2ascii[65] =
-//     "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz./";
-
-// Map 6-bit values (0..63) into ASCII Base64 chars using AVX2, branchless.
-// This assumes the input vector contains only values in the range [0..63].
-//
-// Normal Base64 alphabet:
-//   0..25  → 'A'..'Z'
-//   26..51 → 'a'..'z'
-//   52..61 → '0'..'9'
-//   62     → '+'
-//   63     → '/'
-
-// SRP Base64 alphabet:
-//   0..9   → '0'..'9'
-//   10..35 → 'A'..'Z'
-//   36..61 → 'a'..'z'
-//   62     → '.'
-//   63     → '/'
-
-static __m256i lookup_pshufb_model(__m256i input) {
-    // this targets alphanumerical characters
-    // Step 1: For inputs >= 51, produce a small number (input - 51), else 0.
-    //   - _mm256_subs_epu8 = unsigned saturating subtract (never below 0).
-    //   - Example: input=55 → 55-51=4; input=40 → saturates to 0.
-    __m256i result = _mm256_subs_epu8(input, _mm256_set1_epi8(51));
-    
-    // Step 2: Mask where input < 26 (i.e., the 'A'..'Z' range).
-    //   - cmpgt_epi8(26, input) produces 0xFF where 26 > input, else 0x00.
-    const __m256i less = _mm256_cmpgt_epi8(_mm256_set1_epi8(26), input);
-
-    // Step 3: For input < 26, force result index = 13.
-    //   - less & 13 → byte=13 where input < 26, else 0.
-    //   - OR into result so those inputs get class index 13.
-    //     (All other ranges keep the earlier "input-51" or 0.)
-    result = _mm256_or_si256(result, _mm256_and_si256(less, _mm256_set1_epi8(13)));
-
-    // Step 4: Lookup table of additive ASCII offsets for each "class".
-    // Indexed by `result` (0..15 possible, but only certain values used):
-    //   index 0  : 'a' - 26  → lowercase start
-    //   index 1..10 : '0' - 52 → digits start
-    //   index 11 : '+' - 62   → plus sign
-    //   index 12 : '/' - 63   → slash
-    //   index 13 : 'A'        → uppercase start
-    //   rest are 0 or unused.
-    // Duplicated twice for both 128-bit halves (because pshufb works per lane).
-    __m256i shift_LUT = _mm256_setr_epi8(
-        // 0,          1         2,       3,       4,        5,        6,
-        'a' - 26, '0' - 52, '0' - 52, '0' - 52, '0' - 52, '0' - 52, '0' - 52,
-        //                                                             'A' at index 13
-        '0' - 52, '0' - 52, '0' - 52, '0' - 52, '+' - 62, '/' - 63,     'A',      0,       0,
-        'a' - 26, '0' - 52, '0' - 52, '0' - 52, '0' - 52, '0' - 52, '0' - 52,
-        '0' - 52, '0' - 52, '0' - 52, '0' - 52, '+' - 62, '/' - 63,     'A',      0,       0
-    );
-
-    // Step 5: Shuffle the LUT so each byte in `result` picks its offset.
-    //   - For example, if result=13 → shift='A' (65 decimal).
-    //   - If result=0 → shift=('a'-26) = 71 decimal.
-    result = _mm256_shuffle_epi8(shift_LUT, result);
-
-    // Step 6: Add the shift to the original input to get the ASCII char code.
-    //   - For uppercase: 'A' + input (0..25)
-    //   - For lowercase: ('a'-26) + input (26..51)
-    //   - For digits: ('0'-52) + input (52..61)
-    //   - For '+': ('+'-62) + 62
-    //   - For '/': ('/'-63) + 63
-    return _mm256_add_epi8(result, input);
-}
-
-
-// SRP Base64 alphabet:
-//   0..9   → '0'..'9'
-//   10..35 → 'A'..'Z'
-//   36..61 → 'a'..'z'
-//   62     → '.'
-//   63     → '/'
-
 static inline __m256i lookup_pshufb_srp(__m256i input) {
     const __m256i zero = _mm256_setzero_si256();
     const __m256i hi   = _mm256_set1_epi8((char)0x80);
 
-    // invalid if input < 0  or  input > 63
     __m256i invalid = _mm256_or_si256(
-        _mm256_cmpgt_epi8(zero, input),                 // input < 0  (e.g., 0xFF sentinel)
-        _mm256_cmpgt_epi8(input, _mm256_set1_epi8(63))  // input > 63
+        _mm256_cmpgt_epi8(zero, input),
+        _mm256_cmpgt_epi8(input, _mm256_set1_epi8(63))
     );
 
-    // Build class 0..4
     __m256i idx = _mm256_setzero_si256();
-    idx = _mm256_sub_epi8(idx, _mm256_cmpgt_epi8(input, _mm256_set1_epi8(9)));   // >=10
-    idx = _mm256_sub_epi8(idx, _mm256_cmpgt_epi8(input, _mm256_set1_epi8(35)));  // >=36
+    idx = _mm256_sub_epi8(idx, _mm256_cmpgt_epi8(input, _mm256_set1_epi8(9)));
+    idx = _mm256_sub_epi8(idx, _mm256_cmpgt_epi8(input, _mm256_set1_epi8(35)));
     idx = _mm256_blendv_epi8(idx, _mm256_set1_epi8(3), _mm256_cmpeq_epi8(input, _mm256_set1_epi8(62)));
     idx = _mm256_blendv_epi8(idx, _mm256_set1_epi8(4), _mm256_cmpeq_epi8(input, _mm256_set1_epi8(63)));
 
@@ -149,19 +56,6 @@ static inline __m256i lookup_pshufb_srp(__m256i input) {
     __m256i ascii = _mm256_add_epi8(shift, input);
     return ascii;
 }
-
-
-static void dump_bytes(const char *label, const uint8_t *buf, size_t len) {
-    printf("%s:\n", label);
-    for (size_t i = 0; i < len; i++) {
-        printf("%02x ", buf[i]);
-        if ((i + 1) % 16 == 0)
-            printf("\n");
-    }
-    if (len % 16 != 0)
-        printf("\n");
-}
-
 
 static inline __m256i shift_right_zeros(__m256i v, int n) {
     switch (n) {
@@ -181,7 +75,7 @@ static inline __m256i shift_right_zeros(__m256i v, int n) {
         case 13: return _mm256_srli_si256(v, 13);
         case 14: return _mm256_srli_si256(v, 14);
         case 15: return _mm256_srli_si256(v, 15);
-        default: return _mm256_setzero_si256(); // fallback
+        default: return _mm256_setzero_si256();
     }
 }
 
@@ -203,12 +97,11 @@ static inline __m256i shift_left_zeros(__m256i v, int n) {
         case 13: return _mm256_slli_si256(v, 13);
         case 14: return _mm256_slli_si256(v, 14);
         case 15: return _mm256_slli_si256(v, 15);
-        case 16: return _mm256_setzero_si256(); // all bytes shifted out
-        default: return _mm256_setzero_si256(); // fallback for invalid shift
+        case 16: return _mm256_setzero_si256();
+        default: return _mm256_setzero_si256();
     }
 }
 
-// Precomputed shuffle masks for K = 1 to 16
  const uint8_t shuffle_masks[16][16] = {
     {0x80, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14},
     {0, 0x80, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14},
@@ -226,7 +119,7 @@ static inline __m256i shift_left_zeros(__m256i v, int n) {
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 0x80, 13, 14},
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0x80, 14},
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0x80}};
-/**
+
 
 /**
  * Insert a line feed character in the 64-byte input at index K in [0,32).
@@ -255,28 +148,17 @@ static inline __m256i insert_line_feed32(__m256i input, int K) {
   return result;
 }
 
-#include <immintrin.h>
-#include <stdint.h>
-
-// --- helpers ---------------------------------------------------------------
-
-extern __m256i insert_line_feed32(__m256i v, int k);
-
 static inline size_t ins_nl_gt32(
     __m256i v, uint8_t* out, int stride, int* steps_mod_lap)
 {
     const int until_nl = stride - *steps_mod_lap;
 
-    // A) No newline in this block
     if (until_nl > 32) {
         _mm256_storeu_si256((__m256i*)out, v);
-        *steps_mod_lap += 32;              // no wrap possible by the if-condition
+        *steps_mod_lap += 32;
         return 32;
     }
 
-    // B) Newline exactly at end
-    // Technically, SIMD code takes care of it, but deleting outright doesn't seem to make a difference. 
-    // the bottleneck is likely elsehere. 
     if (until_nl == 32) {
         _mm256_storeu_si256((__m256i*)out, v);
         out[32] = '\n';
@@ -284,13 +166,12 @@ static inline size_t ins_nl_gt32(
         return 33;
     }
 
-    // C) One newline inside [0..31]
     const uint8_t last = (uint8_t)_mm256_extract_epi8(v, 31);
     const __m256i with_lf = insert_line_feed32(v, until_nl);
     _mm256_storeu_si256((__m256i*)out, with_lf);
     out[32] = last;
 
-    *steps_mod_lap = 32 - until_nl;        // in [1..31]
+    *steps_mod_lap = 32 - until_nl;
     return 33;
 }
 
@@ -300,7 +181,7 @@ static inline size_t insert_nl_gt16(
     int steps_per_lap, // I use the analogy of a racing track where the length of a "lap" is the number of bytes between newlines
     int *steps_mod_lap // these are the numbers of steps that have been done so far in the current lap, this is used to determine where to insert the newline
 ) {
-    int b_lane =  16; // bytes per lane
+    int b_lane =  16;
     uint8_t* out = output;
 
     int steps_until_nl = steps_per_lap - *steps_mod_lap; 
@@ -328,7 +209,6 @@ static inline size_t insert_nl_gt16(
     );
 
     __m256i blended_0L = v0;
-    // we first check how much surplus bytes due to inserting "\n" in both lanes
     int surplus_0 =  steps_until_nl < 16 ? 1 : 0;
     
     if (surplus_0 == 1) {
@@ -388,21 +268,17 @@ static inline size_t insert_nl_gt16(
     return written;
 }
 
-
-
 static inline size_t insert_nl_2nd_vec_stride_12(
     const __m256i v0,
     uint8_t* output ,
     int dummy_stride,
     int *steps_mod_lap
 ) {
-    // mask for inserting newlines every 4 bytes and shuffling
   __m256i shuffling_mask = _mm256_setr_epi8(
-      0, 1, 2, 3, 0xFF, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0xFF, // 14, 15
-      0xFF, 0xFF, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0xFF, 12 //, 13 , 14, 15
+      0, 1, 2, 3, 0xFF, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0xFF,
+      0xFF, 0xFF, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0xFF, 12
   );
 
-  // Prepare mask and shuffle
     __m256i shuffled = _mm256_shuffle_epi8(v0, shuffling_mask);
 
     _mm256_storeu_si256((__m256i*)(output + 0),  shuffled);
@@ -422,39 +298,8 @@ static inline size_t insert_nl_2nd_vec_stride_12(
     out += 32 + 3;
     *steps_mod_lap = 4;
 
-    size_t written = (out - output);  // At the end of function
+    size_t written = (out - output); 
     return written;
-}
-
-// Accepts 4 AVX2 vectors and inserts '\n' every stride characters
-// output buffer must be at least 128 + (128 / stride) bytes
-size_t insert_newlines_4avx2(__m256i v0, __m256i v1, __m256i v2, __m256i v3,
-                             uint8_t *output, int stride, int *written_so_far) 
-{
-    uint8_t input[128];
-    size_t out_idx = 0;
-    int counter = *written_so_far;
-
-    // Store the 4 vectors into a flat 128-byte array
-    _mm256_storeu_si256((__m256i *)(input +  0), v0);
-    _mm256_storeu_si256((__m256i *)(input + 32), v1);
-    _mm256_storeu_si256((__m256i *)(input + 64), v2);
-    _mm256_storeu_si256((__m256i *)(input + 96), v3);
-
-    // Scalar loop that copies input to output, inserting newlines
-    for (int i = 0; i < 128; i++) {
-        output[out_idx++] = input[i];
-        counter++;
-
-        if (counter == stride) {
-            output[out_idx++] = '\n';
-            counter = 0;
-        }
-    }
-
-    *written_so_far = counter;  // Save updated counter state for next call
-
-    return out_idx;
 }
 
 static inline __m256i insert_newlines_by_mask(__m256i data, __m256i mask) {
@@ -466,36 +311,29 @@ static inline __m256i insert_newlines_by_mask(__m256i data, __m256i mask) {
     );
 }
 
-
-static inline __m256i make_newline_every_5th_byte_mask() {
-    uint8_t mask_bytes[32];
-    for (int i = 0; i < 32; ++i) {
-        mask_bytes[i] = (i % 5 == 4) ? 0xFF : 0x00;
-    }
-    return _mm256_loadu_si256((__m256i*)mask_bytes);
-}
-
-
 static inline size_t insert_nl_str4(
     const __m256i v0,
     uint8_t* output
 ) {
-    // mask for inserting newlines every 4 bytes and shuffling
-  __m256i shuffling_mask = _mm256_setr_epi8(
+
+    __m256i shuffling_mask = _mm256_setr_epi8(
       0, 1, 2, 3, 0xFF, 4, 5, 6, 7, 0xFF,
       8, 9, 10, 11,0xFF, 12, 
-      // 13, 14, 15,0xFF  <-- Excess bytes that are memcopied later on
       0xFF,0xFF,0xFF, 0xFF, 0, 1, 2, 3, 0xFF, 4, 5, 6, 7, 0xFF,
       8, 9  
-      // 10, 11, 0xFF, 12, 13, 14, 15 <-- Excess bytes that are memcopied later on
   );
 
-  // Prepare mask and shuffle
+  __m256i mask_5_bytes = _mm256_setr_epi8(
+        0,0,0,0,(char)0xFF,  0,0,0,0,(char)0xFF,
+        0,0,0,0,(char)0xFF,  0,0,0,0,(char)0xFF,
+        0,0,0,0,(char)0xFF,  0,0,0,0,(char)0xFF,
+        0,0
+    );
+
     __m256i shuffled_4_bytes = _mm256_shuffle_epi8(v0, shuffling_mask);
-    __m256i v0_w_nl = insert_newlines_by_mask(shuffled_4_bytes, make_newline_every_5th_byte_mask());
+    __m256i v0_w_nl = insert_newlines_by_mask(shuffled_4_bytes, mask_5_bytes);
 
     _mm256_storeu_si256((__m256i*)(output + 0),  v0_w_nl);
-
 
     // Handle cross-lane remainder logic
     #define B_LANE  16 // bytes per lane
