@@ -17,7 +17,6 @@
 
 #define RED_TEXT(str)     "\033[31m" str "\033[0m"
 
-/* Example: ASSERT_EQUAL for integers */
 #define ASSERT_EQUAL_INT(actual, expected) do {                      \
     if ((actual) != (expected)) {                                      \
         TEST_error(RED_TEXT("Assertion failed: %s != %s, got %d, expected %d"), \
@@ -133,7 +132,6 @@ static int test_encode_line_lengths_reinforced(void)
                         return 0;
                     }
 
-                    // Initialize both contexts and set identical line lengths
                     EVP_EncodeInit(ctx_simd);
                     EVP_EncodeInit(ctx_ref);
                     ctx_simd->length = ctx_len;

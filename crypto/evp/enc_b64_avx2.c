@@ -612,7 +612,7 @@ static inline size_t insert_nl_str8(
         *final_wrap_cnt = wrap_cnt;
 
         return (size_t)(out - (uint8_t *)dst) +
-                + evp_encode_scalar_nl_int(ctx, out, src + i, srclen - i, final_wrap_cnt);
+                + evp_encodeblock_int_scalar(ctx, out, src + i, srclen - i, final_wrap_cnt);
     }
 
 #endif

@@ -1,5 +1,5 @@
 /*
- * Copyright 1995-2025 The OpenSSL Project Authors. All Rights Reserved.
+ * Copyright 1995-2024 The OpenSSL Project Authors. All Rights Reserved.
  *
  * Licensed under the Apache License 2.0 (the "License").  You may not use
  * this file except in compliance with the License.  You can obtain a copy
@@ -22,20 +22,10 @@
 
 static unsigned char conv_ascii2bin(unsigned char a,
                                     const unsigned char *table);
-static int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
+static int evp_encodeblock_int_scalar(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int dlen,int *wrap_cnt);
-
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n, int eof);
-
-int evp_encode_chk(EVP_ENCODE_CTX *ctx, unsigned char *t,
-    const unsigned char *f, int dlen,    int *wrap_cnt) {
-
-    int newlines = (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) != 0) ? 0 : (ctx != NULL ? ctx->length : 0);
-    return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, newlines, wrap_cnt);
-
-}
-
 
 #ifndef CHARSET_EBCDIC
 # define conv_bin2ascii(a, table)       ((table)[(a)&0x3f])
@@ -180,73 +170,58 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
 {
     int i, j;
     size_t total = 0;
-    int in_start = *in;
+    int wrap_cnt = 0;
 
-    // Initialize output length
     *outl = 0;
     if (inl <= 0)
         return 0;
-
-    // Verify context buffer size
     OPENSSL_assert(ctx->length <= (int)sizeof(ctx->enc_data));
-
-    // If remaining space in context buffer can hold all input
     if (ctx->length - ctx->num > inl) {
         memcpy(&(ctx->enc_data[ctx->num]), in, inl);
         ctx->num += inl;
         return 1;
     }
-
-    // If context buffer has pending data that needs to be processed
     if (ctx->num != 0) {
-        // Fill remaining space in context buffer
         i = ctx->length - ctx->num;
         memcpy(&(ctx->enc_data[ctx->num]), in, i);
         in += i;
         inl -= i;
-
         // the responsability for adding a newline is handled inside 
-        // evp_encode_scalar_nl_int function
+        // evp_encodeblock_int_scalar function
         int wrap_cnt = 0;
-        j = evp_encode_scalar_nl_int(ctx, out, ctx->enc_data, ctx->length,&wrap_cnt);
+        j = evp_encodeblock_int_scalar(ctx, out, ctx->enc_data, ctx->length,&wrap_cnt);
         ctx->num = 0;
         out += j;
         total = j;
-
         *out = '\0';
     }
-
-    int wrap_cnt = 0;
-    if (ctx-> length % 3 != 0 
-    ){ 
-            j = evp_encode_scalar_nl_int(ctx, out, in, inl - (inl % ctx->length), &wrap_cnt);
-    }
-    else
-     {
-        #if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
-            j = evp_encode_chk(ctx, out, in, inl - (inl % ctx->length), &wrap_cnt);
-        #else
-            j = evp_encode_scalar_nl_int(ctx, out, in, inl - (inl % ctx->length), &wrap_cnt);
-        #endif
-    }
-    in += inl - (inl % ctx->length);
-    inl -= inl - (inl % ctx->length);
-    out += j;
-    total += j;
-
-    if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0 && ctx->length % 3 != 0) {
-        *(out++) = '\n';
-        total++;
-    }
-    *out = '\0';
-
-    // Check for output overflow
+        if (ctx-> length % 3 != 0 
+        ){ 
+                j = evp_encodeblock_int_scalar(ctx, out, in, inl - (inl % ctx->length), &wrap_cnt);
+        }
+        else
+        {
+            #if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
+                int newlines = (ctx && !(ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES)) ? ctx->length : 0;
+                j = encode_base64_avx2(ctx, (char *)out, (const char *)in, inl - (inl % ctx->length), newlines, &wrap_cnt);
+            #else
+                j = evp_encodeblock_int_scalar(ctx, out, in, inl - (inl % ctx->length), &wrap_cnt);
+            #endif
+        }
+        in += inl - (inl % ctx->length);
+        inl -= inl - (inl % ctx->length);
+        out += j;
+        total += j;
+        if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0 && ctx->length % 3 != 0) {
+            *(out++) = '\n';
+            total++;
+        }
+        *out = '\0';
     if (total > INT_MAX) {
+        /* Too much output data! */
         *outl = 0;
         return 0;
     }
-
-    // Store remaining partial block in context
     if (inl != 0)
         memcpy(&(ctx->enc_data[0]), in, inl);
     ctx->num = inl;
@@ -258,10 +233,9 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
 void EVP_EncodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
 {
     unsigned int ret = 0;
-    
-    int wrap_cnt = 0; // Reset wrap_cnt before final encoding
+    int wrap_cnt = 0;
     if (ctx->num != 0) {
-        ret = evp_encode_scalar_nl_int(ctx, out, ctx->enc_data, ctx->num, &wrap_cnt);
+        ret = evp_encodeblock_int_scalar(ctx, out, ctx->enc_data, ctx->num, &wrap_cnt);
         if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)
             out[ret++] = '\n';
         out[ret] = '\0';
@@ -269,7 +243,6 @@ void EVP_EncodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
     }
     *outl = ret;
 }
-
 
 static int evp_encodeblock_int_openssl(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int dlen)
@@ -308,7 +281,6 @@ static int evp_encodeblock_int_openssl(EVP_ENCODE_CTX *ctx, unsigned char *t,
     *t = '\0';
     return ret;
 }
-
 int EVP_EncodeUpdate_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                       const unsigned char *in, int inl)
 {
@@ -382,7 +354,7 @@ void EVP_EncodeFinal_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
 
 int EVP_EncodeBlock(unsigned char *t, const unsigned char *f, int dlen)
 {
-    int wrap_cnt = 0; // Reset wrap_cnt before encoding
+    int wrap_cnt = 0;
     #if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
         return encode_base64_avx2(NULL, t, f, dlen, 0, &wrap_cnt);
     #else
@@ -633,4 +605,3 @@ int EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
     } else
         return 1;
 }
-

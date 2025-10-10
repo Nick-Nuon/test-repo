@@ -122,7 +122,7 @@ const char base64_std_bin2ascii_0[256] = {
       '/'};
 
 
-int evp_encode_scalar_nl_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
+int evp_encodeblock_int_scalar(EVP_ENCODE_CTX *ctx, unsigned char *t,
   const unsigned char *f, int dlen, int *wrap_cnt)
 {
     int i, ret = 0;
