@@ -165,13 +165,21 @@ void EVP_EncodeInit(EVP_ENCODE_CTX *ctx)
     ctx->flags = 0;
 }
 
+int evp_encode_chk(EVP_ENCODE_CTX *ctx, unsigned char *t,
+    const unsigned char *f, int dlen,    int *steps_mod_lap) {
+
+    int newlines = (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) != 0) ? 0 : (ctx != NULL ? ctx->length : 0);
+    return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, newlines, steps_mod_lap);
+
+}
+
+
 int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,  
                       const unsigned char *in, int inl)
 {
     int i, j;
     size_t total = 0;
-    int wrap_cnt = 0;
-
+    int in_start = *in;
     *outl = 0;
     if (inl <= 0)
         return 0;
@@ -195,6 +203,7 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
         total = j;
         *out = '\0';
     }
+        int wrap_cnt = 0;
         if (ctx-> length % 3 != 0 
         ){ 
                 j = evp_encodeblock_int_scalar(ctx, out, in, inl - (inl % ctx->length), &wrap_cnt);
@@ -202,8 +211,14 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
         else
         {
             #if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
-                int newlines = (ctx && !(ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES)) ? ctx->length : 0;
-                j = encode_base64_avx2(ctx, (char *)out, (const char *)in, inl - (inl % ctx->length), newlines, &wrap_cnt);
+                const int newlines =
+                    !(ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) ? ctx->length : 0;
+                j = encode_base64_avx2(ctx,
+                                    (char *)out,
+                                    (const char *)in,
+                                    inl - (inl % ctx->length),
+                                    newlines,
+                                    &wrap_cnt);
             #else
                 j = evp_encodeblock_int_scalar(ctx, out, in, inl - (inl % ctx->length), &wrap_cnt);
             #endif
@@ -358,7 +373,7 @@ int EVP_EncodeBlock(unsigned char *t, const unsigned char *f, int dlen)
     #if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
         return encode_base64_avx2(NULL, t, f, dlen, 0, &wrap_cnt);
     #else
-        return evp_encode_scalar_nl_int(NULL, t, f, dlen, &wrap_cnt);
+        return evp_encodeblock_int_scalar(NULL, t, f, dlen, &wrap_cnt);
     #endif
 }
 
