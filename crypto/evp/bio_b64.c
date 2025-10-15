@@ -41,8 +41,8 @@ typedef struct b64_struct {
     EVP_ENCODE_CTX *base64;
     unsigned char buf[EVP_ENCODE_LENGTH(B64_BLOCK_SIZE) + 10];
     unsigned char tmp[B64_BLOCK_SIZE];
-    unsigned char *encoded_buf;     // persistent malloc'd buffer
-    size_t encoded_buf_len;         // size of allocated buffer
+    unsigned char *encoded_buf;
+    size_t encoded_buf_len;    
 } BIO_B64_CTX;
 
 static const BIO_METHOD methods_b64 = {

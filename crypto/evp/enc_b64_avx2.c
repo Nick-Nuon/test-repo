@@ -537,8 +537,6 @@ static inline size_t insert_nl_str8(
 
             }
             else if (stride == 12) {          
-                typedef size_t (*InsertFn)(__m256i vec, uint8_t* out, int stride, int* wrap_cnt);
-
                 switch (base) {
                 case 0:
 

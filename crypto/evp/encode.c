@@ -165,12 +165,10 @@ void EVP_EncodeInit(EVP_ENCODE_CTX *ctx)
     ctx->flags = 0;
 }
 
-int evp_encode_chk(EVP_ENCODE_CTX *ctx, unsigned char *t,
-    const unsigned char *f, int dlen,    int *steps_mod_lap) {
-
-    int newlines = (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) != 0) ? 0 : (ctx != NULL ? ctx->length : 0);
-    return encode_base64_avx2(ctx, (char *)t, (const char *)f, dlen, newlines, steps_mod_lap);
-
+// Temporary: Only for benchmarking purposes
+void benchmark_set_length(EVP_ENCODE_CTX *ctx, int length)
+{
+    ctx->length = length;
 }
 
 
@@ -179,7 +177,6 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
 {
     int i, j;
     size_t total = 0;
-    int in_start = *in;
     *outl = 0;
     if (inl <= 0)
         return 0;
@@ -194,7 +191,7 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
         memcpy(&(ctx->enc_data[ctx->num]), in, i);
         in += i;
         inl -= i;
-        // the responsability for adding a newline is handled inside 
+        // the responsability for adding a newline is now handled inside the
         // evp_encodeblock_int_scalar function
         int wrap_cnt = 0;
         j = evp_encodeblock_int_scalar(ctx, out, ctx->enc_data, ctx->length,&wrap_cnt);

@@ -923,6 +923,7 @@ OPENSSL_EXPORT int EVP_EncodeUpdate_openssl(EVP_ENCODE_CTX *ctx, unsigned char *
     const unsigned char *in, int inl);
 OPENSSL_EXPORT void EVP_EncodeFinal_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl);
 OPENSSL_EXPORT void evp_encode_ctx_set_flags(EVP_ENCODE_CTX *ctx, unsigned int flags);
+OPENSSL_EXPORT void benchmark_set_length(EVP_ENCODE_CTX *ctx, int length);
 
 // ****************************************************************************************
 int EVP_EncodeBlock(unsigned char *t, const unsigned char *f, int n);

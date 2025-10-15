@@ -20,9 +20,9 @@
 #include <openssl/evp.h>
 #include "internal/cryptlib.h"
 #include "crypto/evp.h"
-#include "evp_local.h"
-
 #define EVP_ENCODE_CTX_NO_NEWLINES          1
+#include "../crypto/evp/evp_local.h"
+#include <openssl/evp.h>
 
 static const size_t min_repeats = 5;  
 static const size_t min_time_ns = 1000000000ULL;  // 1 second
@@ -153,7 +153,7 @@ size_t base64_encode_custom(unsigned char *dst, size_t dstlen,
     if (disable_newlines) {
         evp_encode_ctx_set_flags(ctx, EVP_ENCODE_CTX_NO_NEWLINES);
     }
-    ctx->length = ctx_length;
+    benchmark_set_length(ctx, ctx_length);
 
     if (update_fn(ctx, dst, &outlen, src, (int)srclen) < 0) {
         fprintf(stderr, "Error: Custom base64 encoding failed.\n");
