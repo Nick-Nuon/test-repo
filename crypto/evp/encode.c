@@ -165,7 +165,6 @@ void EVP_EncodeInit(EVP_ENCODE_CTX *ctx)
     ctx->flags = 0;
 }
 
-// Temporary: Only for benchmarking purposes
 void benchmark_set_length(EVP_ENCODE_CTX *ctx, int length)
 {
     ctx->length = length;
@@ -191,8 +190,8 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
         memcpy(&(ctx->enc_data[ctx->num]), in, i);
         in += i;
         inl -= i;
-        // the responsability for adding a newline is now handled inside the
-        // evp_encodeblock_int_scalar function
+        /*  the responsability for adding a newline is now handled inside the */
+        /*  evp_encodeblock_int_scalar function */
         int wrap_cnt = 0;
         j = evp_encodeblock_int_scalar(ctx, out, ctx->enc_data, ctx->length,&wrap_cnt);
         ctx->num = 0;
@@ -348,7 +347,6 @@ int EVP_EncodeUpdate_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     return 1;
 }
 
-// TODO: temporary functions only for benchmarking purposes
 void EVP_EncodeFinal_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
 {
     unsigned int ret = 0;

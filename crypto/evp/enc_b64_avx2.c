@@ -44,7 +44,7 @@ static inline __m256i lookup_pshufb_srp(__m256i input) {
     idx = _mm256_blendv_epi8(idx, _mm256_set1_epi8(3), _mm256_cmpeq_epi8(input, _mm256_set1_epi8(62)));
     idx = _mm256_blendv_epi8(idx, _mm256_set1_epi8(4), _mm256_cmpeq_epi8(input, _mm256_set1_epi8(63)));
 
-    // Zero-out invalid lanes via PSHUFB’s high-bit mechanism
+    /*  Zero-out invalid lanes via PSHUFB’s high-bit mechanism */
     idx = _mm256_or_si256(idx, _mm256_and_si256(invalid, hi));
 
     const __m256i shift_LUT = _mm256_setr_epi8(
@@ -136,7 +136,7 @@ static inline __m256i insert_line_feed32(__m256i input, int K) {
     __m256i result = _mm256_blendv_epi8(shuffled, line_feed_vector, lf_pos);
     return result;
   }
-  // Shift input right by 1 byte
+  /*  Shift input right by 1 byte */
   __m256i shift = _mm256_alignr_epi8(
       input, _mm256_permute2x128_si256(input, input, 0x21), 15);
   input = _mm256_blend_epi32(input, shift, 0xF0);
@@ -170,6 +170,30 @@ static inline size_t ins_nl_gt32(
     const __m256i with_lf = insert_line_feed32(v, until_nl);
     _mm256_storeu_si256((__m256i*)out, with_lf);
     out[32] = last;
+
+    *wrap_cnt = 32 - until_nl;
+    return 33;
+}
+
+static inline size_t ins_nl_ge32_ds(__m256i v, uint8_t *out, int stride, int *wrap_cnt) {
+    const int until_nl = stride - *wrap_cnt;
+
+    if (until_nl > 32) {
+        _mm256_storeu_si256((__m256i *)out, v);
+        *wrap_cnt += 32;
+        return 32;
+    }
+
+    if (until_nl == 32) {
+        _mm256_storeu_si256((__m256i *)out, v);
+        out[32] = '\n';
+        *wrap_cnt = 0;
+        return 33;
+    }
+
+    _mm256_storeu_si256((__m256i *)(out + 1), v);
+    __m256i with_lf = insert_line_feed32(v, until_nl);
+    _mm256_storeu_si256((__m256i *)out, with_lf);
 
     *wrap_cnt = 32 - until_nl;
     return 33;
@@ -335,16 +359,16 @@ static inline size_t insert_nl_str4(
 
     _mm256_storeu_si256((__m256i*)(output + 0),  v0_w_nl);
 
-    // Handle cross-lane remainder logic
-    // Without macros, _mm256_srli_si256 complains that the last arg must be an 8-bit immediate
+    /*  Handle cross-lane remainder logic */
+    /*  Without macros, _mm256_srli_si256 complains that the last arg must be an 8-bit immediate */
     #define B_LANE  16 // Bytes per lane
     #define N_RET_1_L  3 // Excess bytes that has been "shifted out" of lane 0 after we insert newlines
     #define N_RET_2_L  (N_RET_1_L + 4) // Excess bytes that have been "shifted out" of lane 1 after we insert newlines
 
-    // Bytes that were shifted out of lane 0
+    /*  Bytes that were shifted out of lane 0 */
     __m256i rem_1_L = _mm256_srli_si256(v0, B_LANE - N_RET_1_L);
 
-    // Bytes that were shifted out of lane 1, we need to split them into two parts because there is one new line between them
+    /*  Bytes that were shifted out of lane 1, we need to split them into two parts because there is one new line between them */
     __m256i rem_2_L_P1 = _mm256_srli_si256(
         _mm256_slli_si256( 
             _mm256_srli_si256(v0, B_LANE - N_RET_2_L), 
@@ -353,7 +377,7 @@ static inline size_t insert_nl_str4(
         B_LANE - 2
     );
 
-    // we isolate the bytes that were shifted out of lane 1 ... but only those after the newline in lane 1
+    /*  we isolate the bytes that were shifted out of lane 1 ... but only those after the newline in lane 1 */
     __m256i rem_2_L_P2 = _mm256_slli_si256( // 
         _mm256_srli_si256(v0, B_LANE - N_RET_2_L + N_RET_1_L), 
         N_RET_1_L);
@@ -429,9 +453,9 @@ static inline size_t insert_nl_str8(
 
         int base = 0;
 
-        // Process 96 bytes at a time
+        /*  Process 96 bytes at a time */
         for (; i + 100 <= srclen; i += 96) {
-            // We shave off 4 bytes from the beginning and the end
+            /*  We shave off 4 bytes from the beginning and the end */
             const __m128i lo0 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 0));
             const __m128i hi0 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 1));
             const __m128i lo1 = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 2));
@@ -562,14 +586,19 @@ static inline size_t insert_nl_str8(
                 if (++base == 3) base = 0;
             }
             else if ( 32 <= stride   ){
-                out += ins_nl_gt32(
-                    vec0, out, stride, &wrap_cnt);
-                out += ins_nl_gt32(
-                    vec1, out, stride, &wrap_cnt);
-                out += ins_nl_gt32(
-                    vec2, out, stride, &wrap_cnt);
-                out += ins_nl_gt32(
-                    vec3, out, stride, &wrap_cnt);
+                // out += ins_nl_gt32(
+                //     vec0, out, stride, &wrap_cnt);
+                // out += ins_nl_gt32(
+                //     vec1, out, stride, &wrap_cnt);
+                // out += ins_nl_gt32(
+                //     vec2, out, stride, &wrap_cnt);
+                // out += ins_nl_gt32(
+                //     vec3, out, stride, &wrap_cnt);
+
+                out += ins_nl_ge32_ds(vec0, out, stride, &wrap_cnt);
+                out += ins_nl_ge32_ds(vec1, out, stride, &wrap_cnt);
+                out += ins_nl_ge32_ds(vec2, out, stride, &wrap_cnt);
+                out += ins_nl_ge32_ds(vec3, out, stride, &wrap_cnt);
             }
             else if ( 16 <= stride   ){
                 out += insert_nl_gt16(
@@ -585,13 +614,13 @@ static inline size_t insert_nl_str8(
 
         if (stride == 0) {
             for (; i + 28 <= srclen; i += 24) {
-                // lo = [xxxx|DDDC|CCBB|BAAA]
-                // hi = [xxxx|HHHG|GGFF|FEEE]
+                /*  lo = [xxxx|DDDC|CCBB|BAAA] */
+                /*  hi = [xxxx|HHHG|GGFF|FEEE] */
                 const __m128i lo = _mm_loadu_si128((const __m128i *)(input + i));
                 const __m128i hi = _mm_loadu_si128((const __m128i *)(input + i + 4 * 3));
                 
-                // bytes from groups A, B and C are needed in separate 32-bit lanes
-                // in = [0HHH|0GGG|0FFF|0EEE[0DDD|0CCC|0BBB|0AAA]
+                /*  bytes from groups A, B and C are needed in separate 32-bit lanes */
+                /*  in = [0HHH|0GGG|0FFF|0EEE[0DDD|0CCC|0BBB|0AAA] */
                 __m256i in = _mm256_shuffle_epi8(_mm256_set_m128i(hi, lo), shuf);
                 
                 const __m256i t0 = _mm256_and_si256(in, _mm256_set1_epi32(0x0fc0fc00));
