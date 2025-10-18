@@ -148,57 +148,6 @@ static inline __m256i insert_line_feed32(__m256i input, int K) {
   return result;
 }
 
-static inline size_t ins_nl_gt32(
-    __m256i v, uint8_t* out, int stride, int* wrap_cnt)
-{
-    const int until_nl = stride - *wrap_cnt;
-
-    if (until_nl > 32) {
-        _mm256_storeu_si256((__m256i*)out, v);
-        *wrap_cnt += 32;
-        return 32;
-    }
-
-    if (until_nl == 32) {
-        _mm256_storeu_si256((__m256i*)out, v);
-        out[32] = '\n';
-        *wrap_cnt = 0;
-        return 33;
-    }
-
-    const uint8_t last = (uint8_t)_mm256_extract_epi8(v, 31);
-    const __m256i with_lf = insert_line_feed32(v, until_nl);
-    _mm256_storeu_si256((__m256i*)out, with_lf);
-    out[32] = last;
-
-    *wrap_cnt = 32 - until_nl;
-    return 33;
-}
-
-static inline size_t ins_nl_ge32_ds(__m256i v, uint8_t *out, int stride, int *wrap_cnt) {
-    const int until_nl = stride - *wrap_cnt;
-
-    if (until_nl > 32) {
-        _mm256_storeu_si256((__m256i *)out, v);
-        *wrap_cnt += 32;
-        return 32;
-    }
-
-    if (until_nl == 32) {
-        _mm256_storeu_si256((__m256i *)out, v);
-        out[32] = '\n';
-        *wrap_cnt = 0;
-        return 33;
-    }
-
-    _mm256_storeu_si256((__m256i *)(out + 1), v);
-    __m256i with_lf = insert_line_feed32(v, until_nl);
-    _mm256_storeu_si256((__m256i *)out, with_lf);
-
-    *wrap_cnt = 32 - until_nl;
-    return 33;
-}
-
 static inline size_t insert_nl_gt16(
     const __m256i v0,
     uint8_t* output,
@@ -586,19 +535,67 @@ static inline size_t insert_nl_str8(
                 if (++base == 3) base = 0;
             }
             else if ( 32 <= stride   ){
-                // out += ins_nl_gt32(
-                //     vec0, out, stride, &wrap_cnt);
-                // out += ins_nl_gt32(
-                //     vec1, out, stride, &wrap_cnt);
-                // out += ins_nl_gt32(
-                //     vec2, out, stride, &wrap_cnt);
-                // out += ins_nl_gt32(
-                //     vec3, out, stride, &wrap_cnt);
 
-                out += ins_nl_ge32_ds(vec0, out, stride, &wrap_cnt);
-                out += ins_nl_ge32_ds(vec1, out, stride, &wrap_cnt);
-                out += ins_nl_ge32_ds(vec2, out, stride, &wrap_cnt);
-                out += ins_nl_ge32_ds(vec3, out, stride, &wrap_cnt);
+                if (wrap_cnt + 32 > stride) {
+                    size_t location_end = (size_t)(stride - wrap_cnt);
+                    size_t to_move      = 32 - location_end;
+
+                    _mm256_storeu_si256((__m256i_u *)(void *)(out + 1), vec0);
+                    __m256i with_lf0 = insert_line_feed32(vec0, (int)location_end);
+                    _mm256_storeu_si256((__m256i_u *)(void *)out, with_lf0);
+
+                    wrap_cnt = (int)to_move;
+                    out += 33;
+                } else {
+                    _mm256_storeu_si256((__m256i_u *)(void *)out, vec0);
+                    wrap_cnt += 32;
+                    out += 32;
+                }
+                if (wrap_cnt + 32 > stride) {
+                    size_t location_end = (size_t)(stride - wrap_cnt);
+                    size_t to_move      = 32 - location_end;
+
+                    _mm256_storeu_si256((__m256i_u *)(void *)(out + 1), vec1);
+                    __m256i with_lf1 = insert_line_feed32(vec1, (int)location_end);
+                    _mm256_storeu_si256((__m256i_u *)(void *)out, with_lf1);
+
+                    wrap_cnt = (int)to_move;
+                    out += 33;
+                } else {
+                    _mm256_storeu_si256((__m256i_u *)(void *)out, vec1);
+                    wrap_cnt += 32;
+                    out += 32;
+                }
+                if (wrap_cnt + 32 > stride) {
+                    size_t location_end = (size_t)(stride - wrap_cnt);
+                    size_t to_move      = 32 - location_end;
+
+                    _mm256_storeu_si256((__m256i_u *)(void *)(out + 1), vec2);
+                    __m256i with_lf2 = insert_line_feed32(vec2, (int)location_end);
+                    _mm256_storeu_si256((__m256i_u *)(void *)out, with_lf2);
+
+                    wrap_cnt = (int)to_move;
+                    out += 33;
+                } else {
+                    _mm256_storeu_si256((__m256i_u *)(void *)out, vec2);
+                    wrap_cnt += 32;
+                    out += 32;
+                }
+                if (wrap_cnt + 32 > stride) { // let stride == 32, 
+                    size_t location_end = (size_t)(stride - wrap_cnt);
+                    size_t to_move      = 32 - location_end;
+
+                    _mm256_storeu_si256((__m256i_u *)(void *)(out + 1), vec3);
+                    __m256i with_lf3 = insert_line_feed32(vec3, (int)location_end);
+                    _mm256_storeu_si256((__m256i_u *)(void *)out, with_lf3);
+
+                    wrap_cnt = (int)to_move;
+                    out += 33;
+                } else {
+                    _mm256_storeu_si256((__m256i_u *)(void *)out, vec3);
+                    wrap_cnt += 32;
+                    out += 32;
+                }
             }
             else if ( 16 <= stride   ){
                 out += insert_nl_gt16(
@@ -637,6 +634,11 @@ static inline size_t insert_nl_str8(
             }
         }
         *final_wrap_cnt = wrap_cnt;
+
+        if ( 32 <= stride && wrap_cnt == stride){
+            wrap_cnt = 0;
+            *out++ = '\n';
+        }
 
         return (size_t)(out - (uint8_t *)dst) +
                 + evp_encodeblock_int_scalar(ctx, out, src + i, srclen - i, final_wrap_cnt);

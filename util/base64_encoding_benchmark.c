@@ -307,7 +307,7 @@ int main(int argc, char **argv) {
         //             EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 0,48, use_srp);
 
 
-        for (int ctx_len = 1; ctx_len <= 80; ctx_len += 1) {
+        for (int ctx_len = 33; ctx_len <= 80; ctx_len += 3) {
             printf ("-----------------------Custom ctx->lengths mode: %d---------------------------", ctx_len);
             run_benchmark("EVP_EncodeUpdate", fd_cycles, files, file_count, 
                         EVP_EncodeUpdate, EVP_EncodeFinal, 0,ctx_len, use_srp);
