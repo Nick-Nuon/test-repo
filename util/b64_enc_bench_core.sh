@@ -21,11 +21,10 @@ echo "========================================================"
 # # === Configure and build OpenSSL with GCC + native CPU tuning ===
 ./config -march=native -mtune=native
 echo "🛠️  Building OpenSSL quietly..."
-# if ! make -j"$(nproc)" > /dev/null 2>&1; then
-#     echo "❌ Build failed!"
-#     exit 1
-# fi
-make -j"$(nproc)"
+if ! make -j"$(nproc)" > /dev/null 2>&1; then
+    echo "❌ Build failed!"
+    exit 1
+fi
 
 # # === Build standalone benchmark binary ===
 echo "🧪 Compiling base64_encoding_benchmark.c with GCC..."
@@ -42,7 +41,7 @@ exec > >(tee -a "$LOGFILE") 2>&1
 
 echo "📝 Logging to $LOGFILE"
 
-# === Run benchmark binary on Enron email files ===
+# # === Run benchmark binary on Enron email files ===
 echo "📂 Benchmark: Enron email files"
 sudo ./util/perf_basic util/benchmark_data/email_bin
 echo " "

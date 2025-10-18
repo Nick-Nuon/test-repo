@@ -1,12 +1,12 @@
 
-/*
- * Copyright 2024 The OpenSSL Project Authors. All Rights Reserved.
- *
- * Licensed under the Apache License 2.0 (the "License").  You may not use
- * this file except in compliance with the License.  You can obtain a copy
- * in the file LICENSE in the source distribution or at
- * https://www.openssl.org/source/license.html
- */
+// /*
+//  * Copyright 2024 The OpenSSL Project Authors. All Rights Reserved.
+//  *
+//  * Licensed under the Apache License 2.0 (the "License").  You may not use
+//  * this file except in compliance with the License.  You can obtain a copy
+//  * in the file LICENSE in the source distribution or at
+//  * https://www.openssl.org/source/license.html
+//  */
 
 #include <stdio.h>
 #include "testutil.h"
@@ -98,13 +98,14 @@ static int test_encode_line_lengths_reinforced(void)
     const int max_input_len = 3000;
     unsigned int seed = 12345;
 
-    /*  Generous output buffers (Update + Final + newlines), plus a guard byte */
+    // Generous output buffers (Update + Final + newlines), plus a guard byte
     unsigned char out_simd[9000 * 2 + 1] = {0};
     unsigned char out_ref [9000 * 2 + 1] = {0};
 
     for (int t = 0; t < trials; t++) {
         int inl = rand_r(&seed) % max_input_len;
 
+        // Fresh random input
         unsigned char input[max_input_len];
         for (int i = 0; i < inl; i++)
             input[i] = (unsigned char)(rand_r(&seed) % 256);
@@ -138,9 +139,11 @@ static int test_encode_line_lengths_reinforced(void)
 
                     for (int i = 0; i < 2; i++){
                         if (i % 2 == 0) {
+                            // Turn SRP alphabet OFF
                             ctx_simd->flags &= ~EVP_ENCODE_CTX_USE_SRP_ALPHABET;
                             ctx_ref->flags &= ~EVP_ENCODE_CTX_USE_SRP_ALPHABET;
                         } else {
+                            // Turn SRP alphabet ON
                             ctx_simd->flags |= EVP_ENCODE_CTX_USE_SRP_ALPHABET;
                             ctx_ref->flags |= EVP_ENCODE_CTX_USE_SRP_ALPHABET;
                         }
