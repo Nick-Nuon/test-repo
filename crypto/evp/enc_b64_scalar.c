@@ -2,8 +2,9 @@
 #include "internal/cryptlib.h"
 #include "crypto/evp.h"
 #include "evp_local.h"
+#include "enc_b64_scalar.h"
 
-const char base64_srp_bin2ascii_0[256] = {
+static const unsigned char base64_srp_bin2ascii_0[256] = {
     '0', '0', '0', '0', '1', '1', '1', '1', '2', '2', '2', '2', '3', '3', '3', '3',
     '4', '4', '4', '4', '5', '5', '5', '5', '6', '6', '6', '6', '7', '7', '7', '7',
     '8', '8', '8', '8', '9', '9', '9', '9', 'A', 'A', 'A', 'A', 'B', 'B', 'B', 'B',
@@ -22,7 +23,7 @@ const char base64_srp_bin2ascii_0[256] = {
     'y', 'y', 'y', 'y', 'z', 'z', 'z', 'z', '.', '.', '.', '.', '/', '/', '/', '/'
   };
   
-  const char base64_srp_bin2ascii_1[256] = {
+  static const unsigned char base64_srp_bin2ascii_1[256] = {
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
     'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
     'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
@@ -41,7 +42,7 @@ const char base64_srp_bin2ascii_0[256] = {
     'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '.', '/'
   };
   
-  const char base64_srp_bin2ascii_2[256] = {
+  static const unsigned char base64_srp_bin2ascii_2[256] = {
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
     'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
     'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
@@ -61,7 +62,7 @@ const char base64_srp_bin2ascii_0[256] = {
   };
   
 
-const char base64_std_bin2ascii_0[256] = {
+static const unsigned char base64_std_bin2ascii_0[256] = {
   'A', 'A', 'A', 'A', 'B', 'B', 'B', 'B', 'C', 'C', 'C', 'C', 'D', 'D', 'D',
   'D', 'E', 'E', 'E', 'E', 'F', 'F', 'F', 'F', 'G', 'G', 'G', 'G', 'H', 'H',
   'H', 'H', 'I', 'I', 'I', 'I', 'J', 'J', 'J', 'J', 'K', 'K', 'K', 'K', 'L',
@@ -81,7 +82,7 @@ const char base64_std_bin2ascii_0[256] = {
   '8', '8', '8', '8', '9', '9', '9', '9', '+', '+', '+', '+', '/', '/', '/',
   '/'};
 
-  const char base64_std_bin2ascii_1[256] = {
+  static const unsigned char base64_std_bin2ascii_1[256] = {
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
     'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd',
     'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
@@ -101,7 +102,7 @@ const char base64_std_bin2ascii_0[256] = {
     'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+',
     '/'};
 
-    const char base64_std_bin2ascii_2[256] = {
+    static const unsigned char base64_std_bin2ascii_2[256] = {
       'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
       'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd',
       'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
@@ -125,7 +126,8 @@ const char base64_std_bin2ascii_0[256] = {
 int evp_encodeblock_int_scalar(EVP_ENCODE_CTX *ctx, unsigned char *t,
   const unsigned char *f, int dlen, int *wrap_cnt)
 {
-    int i, ret = 0;
+    int i = 0;
+    int ret = 0;
     uint8_t t1, t2, t3;
     const unsigned char *e0, *e1, *e2;
     int srp = (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0);
@@ -144,7 +146,6 @@ int evp_encodeblock_int_scalar(EVP_ENCODE_CTX *ctx, unsigned char *t,
 
     if (ctx_length == 1)
     {
-        int i = 0;
         while (i < dlen && ret <= INT_MAX && ctx != NULL){ 
                         t1 = f[i];
                         *(t++) = e0[t1];

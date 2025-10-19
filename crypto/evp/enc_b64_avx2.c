@@ -8,6 +8,7 @@
     #include <stddef.h>
     #include <stdint.h>
     #include "enc_b64_scalar.h"
+    #include "enc_b64_avx2.h"
     #include "internal/cryptlib.h"
     #include "crypto/evp.h"
     #include "evp_local.h"
@@ -102,7 +103,7 @@ static inline __m256i shift_left_zeros(__m256i v, int n) {
     }
 }
 
- const uint8_t shuffle_masks[16][16] = {
+static const uint8_t shuffle_masks[16][16] = {
     {0x80, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14},
     {0, 0x80, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14},
     {0, 1, 0x80, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14},
@@ -181,7 +182,6 @@ static inline size_t insert_nl_gt16(
     int wrap_max,
     int *wrap_cnt 
 ) {
-    int b_lane =  16;
     uint8_t* out = output;
 
     int wrap_rem = wrap_max - *wrap_cnt; 
@@ -194,12 +194,6 @@ static inline size_t insert_nl_gt16(
     } 
 
     __m256i all_ff_mask = _mm256_set1_epi8((char)0xFF);
-    __m256i mask_first_lane  = _mm256_setr_epi8(
-        0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-        0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-        0,0,0,0,0,0,0,0,
-        0,0,0,0,0,0,0,0
-    );
 
     __m256i mask_second_lane = _mm256_setr_epi8(
         0,0,0,0,0,0,0,0,
@@ -415,10 +409,10 @@ static inline size_t insert_nl_str8(
     return written;
 }
 
-    int encode_base64_avx2(EVP_ENCODE_CTX *ctx,char *dst, const char *src, size_t srclen, int ctx_length, int *final_wrap_cnt) {
+    int encode_base64_avx2(EVP_ENCODE_CTX *ctx,unsigned char *dst, const unsigned char *src, int srclen, int ctx_length, int *final_wrap_cnt) {
         const uint8_t *input = (const uint8_t *)src;
         uint8_t *out = (uint8_t *)dst;
-        size_t i = 0;
+        int i = 0;
         int stride = (ctx == NULL) ? 0 : ctx_length / 3 * 4; 
         int wrap_cnt = 0;  
         const int use_srp = (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0);

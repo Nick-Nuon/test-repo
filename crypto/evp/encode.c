@@ -22,7 +22,7 @@
 
 static unsigned char conv_ascii2bin(unsigned char a,
                                     const unsigned char *table);
-static int evp_encodeblock_int_scalar(EVP_ENCODE_CTX *ctx, unsigned char *t,
+int evp_encodeblock_int_scalar(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int dlen,int *wrap_cnt);
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n, int eof);
@@ -211,8 +211,8 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                 const int newlines =
                     !(ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) ? ctx->length : 0;
                 j = encode_base64_avx2(ctx,
-                                    (char *)out,
-                                    (const char *)in,
+                                    (unsigned char *)out,
+                                    (const unsigned char *)in,
                                     inl - (inl % ctx->length),
                                     newlines,
                                     &wrap_cnt);
@@ -348,7 +348,6 @@ int EVP_EncodeUpdate_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     return 1;
 }
 
-// TODO: temporary functions only for benchmarking purposes
 void EVP_EncodeFinal_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
 {
     unsigned int ret = 0;
