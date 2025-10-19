@@ -20,9 +20,11 @@
 #include <openssl/evp.h>
 #include "internal/cryptlib.h"
 #include "crypto/evp.h"
-#define EVP_ENCODE_CTX_NO_NEWLINES          1
 #include "../crypto/evp/evp_local.h"
 #include <openssl/evp.h>
+
+#define EVP_ENCODE_CTX_NO_NEWLINES          1
+#define EVP_ENCODE_CTX_USE_SRP_ALPHABET     2
 
 static const size_t min_repeats = 5;  
 static const size_t min_time_ns = 1000000000ULL;  // 1 second
@@ -111,7 +113,6 @@ int load_files_from_dir(const char *dirpath, FileData *files, size_t *file_count
             fprintf(stderr, "Warning: incomplete read of %s\n", fullpath);
             free(file_content);
             free(encoded_output);
-            fclose(f); 
             continue;
         }
 
@@ -139,7 +140,8 @@ size_t base64_encode_custom(unsigned char *dst, size_t dstlen,
     encode_update_fn update_fn,
     encode_final_fn final_fn,
     int disable_newlines,
-    int ctx_length) {
+    int ctx_length,
+    int use_srp) {
     EVP_ENCODE_CTX *ctx = EVP_ENCODE_CTX_new();
     if (!ctx) {
         fprintf(stderr, "Failed to allocate EVP_ENCODE_CTX\n");
@@ -152,6 +154,9 @@ size_t base64_encode_custom(unsigned char *dst, size_t dstlen,
     EVP_EncodeInit(ctx);
     if (disable_newlines) {
         evp_encode_ctx_set_flags(ctx, EVP_ENCODE_CTX_NO_NEWLINES);
+    }
+    if (use_srp) {
+        evp_encode_ctx_set_flags(ctx, EVP_ENCODE_CTX_USE_SRP_ALPHABET);
     }
     benchmark_set_length(ctx, ctx_length);
 
@@ -169,7 +174,7 @@ size_t base64_encode_custom(unsigned char *dst, size_t dstlen,
     typedef int (*encode_benchmark_fn)(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                                   const unsigned char *in, int inl);
 void run_benchmark(const char *name, int fd_cycles, FileData *files, size_t file_count,
-                    encode_update_fn update_fn, encode_final_fn final_fn, int NO_NL, int ctx_length) {
+                    encode_update_fn update_fn, encode_final_fn final_fn, int NO_NL, int ctx_length, int use_srp) {
     uint64_t total_cycles = 0, total_instructions = 0, total_elapsed_ns = 0;
     size_t N = min_repeats;
     if (N == 0) N = 1;
@@ -196,7 +201,8 @@ void run_benchmark(const char *name, int fd_cycles, FileData *files, size_t file
                                 update_fn,
                                 final_fn,
                                 NO_NL,
-                                ctx_length);
+                                ctx_length,
+                                use_srp);
         }
 
         ioctl(fd_cycles, PERF_EVENT_IOC_DISABLE, PERF_IOC_FLAG_GROUP);
@@ -281,24 +287,11 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    for (int use_srp = 0; use_srp <= 1; ++use_srp) {
+        const char *alpha = use_srp ? "SRP" : "STD";
 
-    printf ("-----------------------DISABLE NEWLINES/NO_NL mode---------------------------");
-    run_benchmark("EVP_EncodeUpdate", fd_cycles, files, file_count, 
-                EVP_EncodeUpdate, EVP_EncodeFinal, 1,48);
-    run_benchmark("EVP_EncodeUpdate_openssl", fd_cycles, files, file_count,
-                    EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 1,48);
-
-    // A newline is inserted after every 47 bytes. 
-    printf ("-----------------------PEM mode---------------------------");
-    // Main benchmarking calls
-    run_benchmark("EVP_EncodeUpdate", fd_cycles, files, file_count, 
-                 EVP_EncodeUpdate, EVP_EncodeFinal, 0,48);
-    run_benchmark("EVP_EncodeUpdate_openssl", fd_cycles, files, file_count,
-                 EVP_EncodeUpdate_openssl, EVP_EncodeFinal_openssl, 0,48);
-
-
-    for (int ctx_len = 1; ctx_len <= 80; ctx_len += 1) {
-        printf ("-----------------------Custom ctx->lengths mode: %d---------------------------", ctx_len);
+        printf("\n======================= Alphabet: %s =======================\n", alpha);
+        printf ("-----------------------DISABLE NEWLINES/NO_NL mode---------------------------");
         run_benchmark("EVP_EncodeUpdate", fd_cycles, files, file_count, 
                     EVP_EncodeUpdate, EVP_EncodeFinal, 1,48, use_srp);
         //Note : commented out parts used for control
@@ -323,14 +316,15 @@ int main(int argc, char **argv) {
         }
     }
 
-    printf("\n\nProcessed files:\n");
 
-    for (size_t i = 0; i < file_count; i++) {
-        printf("File: %s (%zu bytes)\n", files[i].filename, files[i].size);
-        if (files[i].content) free(files[i].content);
-        if (files[i].filename) free(files[i].filename);
-        if (files[i].encoded) free(files[i].encoded);
-    }
+        printf("\n\nProcessed files:\n");
+
+        for (size_t i = 0; i < file_count; i++) {
+            printf("File: %s (%zu bytes)\n", files[i].filename, files[i].size);
+            if (files[i].content) free(files[i].content);
+            if (files[i].filename) free(files[i].filename);
+            if (files[i].encoded) free(files[i].encoded);
+        }
 
     close(fd_instr);
     close(fd_cycles);
