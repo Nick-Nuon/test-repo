@@ -14,7 +14,7 @@
 #include "crypto/evp.h"
 #include "evp_local.h"
 
-#if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
+#ifdef __AVX2__
     #include "enc_b64_avx2.h"
 #else
     #include "enc_b64_scalar.h"
@@ -207,7 +207,7 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
         }
         else
         {
-            #if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
+            #ifdef __AVX2__
                 const int newlines =
                     !(ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) ? ctx->length : 0;
                 j = encode_base64_avx2(ctx,
@@ -366,7 +366,7 @@ void EVP_EncodeFinal_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
 int EVP_EncodeBlock(unsigned char *t, const unsigned char *f, int dlen)
 {
     int wrap_cnt = 0;
-    #if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
+    #ifdef __AVX2__
         return encode_base64_avx2(NULL, t, f, dlen, 0, &wrap_cnt);
     #else
         return evp_encodeblock_int_scalar(NULL, t, f, dlen, &wrap_cnt);

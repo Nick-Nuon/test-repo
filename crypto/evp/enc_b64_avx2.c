@@ -1,7 +1,7 @@
 
 #include <string.h>
 
-#if (defined(__x86_64__) || defined(_M_AMD64)) && !defined(_M_ARM64EC)
+#ifdef __AVX2__
 
     #include <immintrin.h>
     #include <openssl/evp.h>
