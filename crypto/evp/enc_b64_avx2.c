@@ -2,7 +2,6 @@
 #include <string.h>
 
 #ifdef __AVX2__
-
     #include <immintrin.h>
     #include <openssl/evp.h>
     #include <stddef.h>
@@ -12,8 +11,6 @@
     #include "internal/cryptlib.h"
     #include "crypto/evp.h"
     #include "evp_local.h"
-
-    typedef __m256i (*lookup_fn)(__m256i v);
     
     static __m256i lookup_pshufb_std(__m256i input) {
         __m256i result = _mm256_subs_epu8(input, _mm256_set1_epi8(51));
