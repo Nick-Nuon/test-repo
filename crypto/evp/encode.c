@@ -23,12 +23,12 @@
 static unsigned char conv_ascii2bin(unsigned char a,
                                     const unsigned char *table);
 int evp_encodeblock_int_scalar(EVP_ENCODE_CTX *ctx, unsigned char *t,
-                               const unsigned char *f, int dlen,int *wrap_cnt);
+                               const unsigned char *f, int dlen, int *wrap_cnt);
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n, int eof);
 
 #ifndef CHARSET_EBCDIC
-# define conv_bin2ascii(a, table)       ((table)[(a)&0x3f])
+#define conv_bin2ascii(a, table)       ((table)[(a)& 0x3f])
 #else
 /*
  * We assume that PEM encoded files are EBCDIC files (i.e., printable text
@@ -36,7 +36,7 @@ static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
  * (text) format again. (No need for conversion in the conv_bin2ascii macro,
  * as the underlying textstring data_bin2ascii[] is already EBCDIC)
  */
-# define conv_bin2ascii(a, table)       ((table)[(a)&0x3f])
+#define conv_bin2ascii(a, table)       ((table)[(a)&0x3f])
 #endif
 
 /*-
@@ -47,9 +47,9 @@ static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
  * 2 bytes => xxx=
  * 3 bytes => xxxx
  */
-#define BIN_PER_LINE    (64/4*3)
-#define CHUNKS_PER_LINE (64/4)
-#define CHAR_PER_LINE   (64+1)
+#define BIN_PER_LINE    (64 / 4 * 3)
+#define CHUNKS_PER_LINE (64 / 4)
+#define CHAR_PER_LINE   (64 + 1)
 
 static const unsigned char data_bin2ascii[65] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -57,8 +57,6 @@ static const unsigned char data_bin2ascii[65] =
 /* SRP uses a different base64 alphabet */
 static const unsigned char srpdata_bin2ascii[65] =
     "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz./";
-
-
 /*-
  * 0xF0 is a EOLN
  * 0xF1 is ignore but next needs to be 0xF0 (for \r\n processing).
@@ -72,7 +70,7 @@ static const unsigned char srpdata_bin2ascii[65] =
 #define B64_EOF                 0xF2
 #define B64_WS                  0xE0
 #define B64_ERROR               0xFF
-#define B64_NOT_BASE64(a)       (((a)|0x13) == 0xF3)
+#define B64_NOT_BASE64(a)       (((a) | 0x13) == 0xF3)
 #define B64_BASE64(a)           (!B64_NOT_BASE64(a))
 
 static const unsigned char data_ascii2bin[128] = {
@@ -165,15 +163,13 @@ void EVP_EncodeInit(EVP_ENCODE_CTX *ctx)
     ctx->flags = 0;
 }
 
-// Temporary: Only for benchmarking purposes
+/* TODO: Only for benchmarking purposes*/
 void benchmark_set_length(EVP_ENCODE_CTX *ctx, int length)
 {
     ctx->length = length;
 }
-
-
-int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,  
-                      const unsigned char *in, int inl)
+int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
+                    const unsigned char *in, int inl)
 {
     int i, j;
     size_t total = 0;
@@ -257,7 +253,7 @@ void EVP_EncodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
 }
 
 static int evp_encodeblock_int_openssl(EVP_ENCODE_CTX *ctx, unsigned char *t,
-                               const unsigned char *f, int dlen)
+                                       const unsigned char *f, int dlen)
 {
     int i, ret = 0;
     unsigned long l;
@@ -294,7 +290,7 @@ static int evp_encodeblock_int_openssl(EVP_ENCODE_CTX *ctx, unsigned char *t,
     return ret;
 }
 int EVP_EncodeUpdate_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
-                      const unsigned char *in, int inl)
+                             const unsigned char *in, int inl)
 {
     int i, j;
     size_t total = 0;
@@ -361,11 +357,10 @@ void EVP_EncodeFinal_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
     }
     *outl = ret;
 }
-
-
 int EVP_EncodeBlock(unsigned char *t, const unsigned char *f, int dlen)
 {
     int wrap_cnt = 0;
+
     #ifdef __AVX2__
         return encode_base64_avx2(NULL, t, f, dlen, 0, &wrap_cnt);
     #else
