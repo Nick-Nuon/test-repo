@@ -42,7 +42,7 @@ typedef struct b64_struct {
     unsigned char buf[EVP_ENCODE_LENGTH(B64_BLOCK_SIZE) + 10];
     unsigned char tmp[B64_BLOCK_SIZE];
     unsigned char *encoded_buf;
-    size_t encoded_buf_len;    
+    size_t encoded_buf_len;
 } BIO_B64_CTX;
 
 static const BIO_METHOD methods_b64 = {
@@ -102,7 +102,6 @@ static int b64_free(BIO *a)
     OPENSSL_free(ctx->encoded_buf);
     ctx->encoded_buf = NULL;
     ctx->encoded_buf_len = 0;
-
     EVP_ENCODE_CTX_free(ctx->base64);
     OPENSSL_free(ctx);
     BIO_set_data(a, NULL);
