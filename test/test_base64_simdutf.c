@@ -74,7 +74,10 @@
 static void fuzz_fill_encode_ctx(EVP_ENCODE_CTX *ctx, int max_fill)
 {
     static int seeded = 0;
-    if (!seeded) { srand((unsigned)time(NULL)); seeded = 1; }
+    if (!seeded) {
+        srand((unsigned)time(NULL));
+        seeded = 1;
+    }
 
     int num = rand() % (max_fill + 1);
     ctx->num = num;
@@ -94,8 +97,8 @@ static int test_encode_line_lengths_reinforced(void)
     unsigned int seed = 12345;
 
     // Generous output buffers (Update + Final + newlines), plus a guard byte
-    unsigned char out_simd[9000 * 2 + 1] = {0};
-    unsigned char out_ref [9000 * 2 + 1] = {0};
+    unsigned char out_simd[9000 * 2 + 1] = { 0 };
+    unsigned char out_ref[9000 * 2 + 1] = { 0 };
 
     for (int t = 0; t < trials; t++) {
         int inl = rand_r(&seed) % max_input_len;
@@ -105,20 +108,22 @@ static int test_encode_line_lengths_reinforced(void)
         for (int i = 0; i < inl; i++)
             input[i] = (unsigned char)(rand_r(&seed) % 256);
 
-        for (int partial_ctx_fill = 0; partial_ctx_fill <= 80; partial_ctx_fill += 1) {
+        for (int partial_ctx_fill = 0; partial_ctx_fill <= 80;
+             partial_ctx_fill += 1) {
             for (int ctx_len = 1; ctx_len <= 80; ctx_len += 1) {
-                printf("Trial %d, input length %d, ctx length %d, partial ctx fill %d\n",
-                        t + 1, inl, ctx_len, partial_ctx_fill);
+                printf
+                    ("Trial %d, input length %d, ctx length %d, partial ctx fill %d\n",
+                     t + 1, inl, ctx_len, partial_ctx_fill);
                 EVP_ENCODE_CTX *ctx_simd = EVP_ENCODE_CTX_new();
-                EVP_ENCODE_CTX *ctx_ref  = EVP_ENCODE_CTX_new();
+                EVP_ENCODE_CTX *ctx_ref = EVP_ENCODE_CTX_new();
 
                 fuzz_fill_encode_ctx(ctx_simd, partial_ctx_fill);
 
                 memset(out_simd, 0xCC, sizeof(out_simd)); // poison to catch short writes
-                memset(out_ref,  0xDD, sizeof(out_ref));
+                memset(out_ref, 0xDD, sizeof(out_ref));
 
-                int outlen_simd = 0, outlen_ref = 0;   // bytes produced by Update
-                int finlen_simd = 0, finlen_ref = 0;   // bytes produced by Final
+                int outlen_simd = 0, outlen_ref = 0; // bytes produced by Update
+                int finlen_simd = 0, finlen_ref = 0; // bytes produced by Final
 
                 if (!ctx_simd || !ctx_ref) {
                     EVP_ENCODE_CTX_free(ctx_simd);
@@ -132,7 +137,7 @@ static int test_encode_line_lengths_reinforced(void)
                 ctx_simd->length = ctx_len;
                 ctx_ref->length = ctx_len;
 
-                for (int i = 0; i < 2; i++){
+                for (int i = 0; i < 2; i++) {
                     if (i % 2 == 0) {
                         // Turn SRP alphabet OFF
                         ctx_simd->flags &= ~EVP_ENCODE_CTX_USE_SRP_ALPHABET;
@@ -143,18 +148,23 @@ static int test_encode_line_lengths_reinforced(void)
                         ctx_ref->flags |= EVP_ENCODE_CTX_USE_SRP_ALPHABET;
                     }
 
-                    int ret_simd = EVP_EncodeUpdate(ctx_simd, out_simd, &outlen_simd, input, (int)inl);
-                    int ret_ref = EVP_EncodeUpdate_openssl(ctx_ref, out_ref, &outlen_ref, input, (int)inl);
-
+                    int ret_simd =
+                        EVP_EncodeUpdate(ctx_simd, out_simd, &outlen_simd,
+                                         input, (int)inl);
+                    int ret_ref =
+                        EVP_EncodeUpdate_openssl(ctx_ref, out_ref, &outlen_ref,
+                                                 input, (int)inl);
 
                     ASSERT_EQUAL_INT(ret_simd, ret_ref);
-                    ASSERT_MEM_EQUAL(out_ref,out_simd , outlen_ref);
+                    ASSERT_MEM_EQUAL(out_ref, out_simd, outlen_ref);
                     ASSERT_EQUAL_INT(outlen_simd, outlen_ref);
 
-                    EVP_EncodeFinal(ctx_simd, out_simd + outlen_simd, &finlen_simd);
-                    EVP_EncodeFinal_openssl(ctx_ref, out_ref + outlen_ref, &finlen_ref);
+                    EVP_EncodeFinal(ctx_simd, out_simd + outlen_simd,
+                                    &finlen_simd);
+                    EVP_EncodeFinal_openssl(ctx_ref, out_ref + outlen_ref,
+                                            &finlen_ref);
 
-                    int total_ref  = outlen_ref + finlen_ref;
+                    int total_ref = outlen_ref + finlen_ref;
 
                     ASSERT_EQUAL_INT(finlen_simd, finlen_ref);
                     ASSERT_MEM_EQUAL(out_ref, out_simd, total_ref);
@@ -172,6 +182,6 @@ static int test_encode_line_lengths_reinforced(void)
 int setup_tests(void)
 {
     ADD_TEST(test_encode_line_lengths_reinforced);
-    
+
     return 1;
 }

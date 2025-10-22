@@ -21,9 +21,9 @@ static const unsigned char base64_srp_bin2ascii_0[256] = {
     'q', 'q', 'q', 'q', 'r', 'r', 'r', 'r', 's', 's', 's', 's', 't', 't', 't', 't',
     'u', 'u', 'u', 'u', 'v', 'v', 'v', 'v', 'w', 'w', 'w', 'w', 'x', 'x', 'x', 'x',
     'y', 'y', 'y', 'y', 'z', 'z', 'z', 'z', '.', '.', '.', '.', '/', '/', '/', '/'
-  };
-  
-  static const unsigned char base64_srp_bin2ascii_1[256] = {
+};
+
+static const unsigned char base64_srp_bin2ascii_1[256] = {
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
     'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
     'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
@@ -40,9 +40,9 @@ static const unsigned char base64_srp_bin2ascii_0[256] = {
     'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
     'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
     'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '.', '/'
-  };
-  
-  static const unsigned char base64_srp_bin2ascii_2[256] = {
+};
+
+static const unsigned char base64_srp_bin2ascii_2[256] = {
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
     'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
     'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
@@ -59,30 +59,30 @@ static const unsigned char base64_srp_bin2ascii_0[256] = {
     'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
     'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
     'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '.', '/'
-  };
-  
+};
 
 static const unsigned char base64_std_bin2ascii_0[256] = {
-  'A', 'A', 'A', 'A', 'B', 'B', 'B', 'B', 'C', 'C', 'C', 'C', 'D', 'D', 'D',
-  'D', 'E', 'E', 'E', 'E', 'F', 'F', 'F', 'F', 'G', 'G', 'G', 'G', 'H', 'H',
-  'H', 'H', 'I', 'I', 'I', 'I', 'J', 'J', 'J', 'J', 'K', 'K', 'K', 'K', 'L',
-  'L', 'L', 'L', 'M', 'M', 'M', 'M', 'N', 'N', 'N', 'N', 'O', 'O', 'O', 'O',
-  'P', 'P', 'P', 'P', 'Q', 'Q', 'Q', 'Q', 'R', 'R', 'R', 'R', 'S', 'S', 'S',
-  'S', 'T', 'T', 'T', 'T', 'U', 'U', 'U', 'U', 'V', 'V', 'V', 'V', 'W', 'W',
-  'W', 'W', 'X', 'X', 'X', 'X', 'Y', 'Y', 'Y', 'Y', 'Z', 'Z', 'Z', 'Z', 'a',
-  'a', 'a', 'a', 'b', 'b', 'b', 'b', 'c', 'c', 'c', 'c', 'd', 'd', 'd', 'd',
-  'e', 'e', 'e', 'e', 'f', 'f', 'f', 'f', 'g', 'g', 'g', 'g', 'h', 'h', 'h',
-  'h', 'i', 'i', 'i', 'i', 'j', 'j', 'j', 'j', 'k', 'k', 'k', 'k', 'l', 'l',
-  'l', 'l', 'm', 'm', 'm', 'm', 'n', 'n', 'n', 'n', 'o', 'o', 'o', 'o', 'p',
-  'p', 'p', 'p', 'q', 'q', 'q', 'q', 'r', 'r', 'r', 'r', 's', 's', 's', 's',
-  't', 't', 't', 't', 'u', 'u', 'u', 'u', 'v', 'v', 'v', 'v', 'w', 'w', 'w',
-  'w', 'x', 'x', 'x', 'x', 'y', 'y', 'y', 'y', 'z', 'z', 'z', 'z', '0', '0',
-  '0', '0', '1', '1', '1', '1', '2', '2', '2', '2', '3', '3', '3', '3', '4',
-  '4', '4', '4', '5', '5', '5', '5', '6', '6', '6', '6', '7', '7', '7', '7',
-  '8', '8', '8', '8', '9', '9', '9', '9', '+', '+', '+', '+', '/', '/', '/',
-  '/'};
+    'A', 'A', 'A', 'A', 'B', 'B', 'B', 'B', 'C', 'C', 'C', 'C', 'D', 'D', 'D',
+    'D', 'E', 'E', 'E', 'E', 'F', 'F', 'F', 'F', 'G', 'G', 'G', 'G', 'H', 'H',
+    'H', 'H', 'I', 'I', 'I', 'I', 'J', 'J', 'J', 'J', 'K', 'K', 'K', 'K', 'L',
+    'L', 'L', 'L', 'M', 'M', 'M', 'M', 'N', 'N', 'N', 'N', 'O', 'O', 'O', 'O',
+    'P', 'P', 'P', 'P', 'Q', 'Q', 'Q', 'Q', 'R', 'R', 'R', 'R', 'S', 'S', 'S',
+    'S', 'T', 'T', 'T', 'T', 'U', 'U', 'U', 'U', 'V', 'V', 'V', 'V', 'W', 'W',
+    'W', 'W', 'X', 'X', 'X', 'X', 'Y', 'Y', 'Y', 'Y', 'Z', 'Z', 'Z', 'Z', 'a',
+    'a', 'a', 'a', 'b', 'b', 'b', 'b', 'c', 'c', 'c', 'c', 'd', 'd', 'd', 'd',
+    'e', 'e', 'e', 'e', 'f', 'f', 'f', 'f', 'g', 'g', 'g', 'g', 'h', 'h', 'h',
+    'h', 'i', 'i', 'i', 'i', 'j', 'j', 'j', 'j', 'k', 'k', 'k', 'k', 'l', 'l',
+    'l', 'l', 'm', 'm', 'm', 'm', 'n', 'n', 'n', 'n', 'o', 'o', 'o', 'o', 'p',
+    'p', 'p', 'p', 'q', 'q', 'q', 'q', 'r', 'r', 'r', 'r', 's', 's', 's', 's',
+    't', 't', 't', 't', 'u', 'u', 'u', 'u', 'v', 'v', 'v', 'v', 'w', 'w', 'w',
+    'w', 'x', 'x', 'x', 'x', 'y', 'y', 'y', 'y', 'z', 'z', 'z', 'z', '0', '0',
+    '0', '0', '1', '1', '1', '1', '2', '2', '2', '2', '3', '3', '3', '3', '4',
+    '4', '4', '4', '5', '5', '5', '5', '6', '6', '6', '6', '7', '7', '7', '7',
+    '8', '8', '8', '8', '9', '9', '9', '9', '+', '+', '+', '+', '/', '/', '/',
+    '/'
+};
 
-  static const unsigned char base64_std_bin2ascii_1[256] = {
+static const unsigned char base64_std_bin2ascii_1[256] = {
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
     'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd',
     'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
@@ -100,37 +100,39 @@ static const unsigned char base64_std_bin2ascii_0[256] = {
     'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g',
     'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
     'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+',
-    '/'};
+    '/'
+};
 
-    static const unsigned char base64_std_bin2ascii_2[256] = {
-      'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
-      'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd',
-      'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
-      't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7',
-      '8', '9', '+', '/', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
-      'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-      'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',
-      'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3',
-      '4', '5', '6', '7', '8', '9', '+', '/', 'A', 'B', 'C', 'D', 'E', 'F', 'G',
-      'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
-      'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k',
-      'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-      '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/', 'A', 'B', 'C',
-      'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
-      'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g',
-      'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
-      'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+',
-      '/'};
-
+static const unsigned char base64_std_bin2ascii_2[256] = {
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',
+    'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd',
+    'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
+    't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7',
+    '8', '9', '+', '/', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
+    'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',
+    'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3',
+    '4', '5', '6', '7', '8', '9', '+', '/', 'A', 'B', 'C', 'D', 'E', 'F', 'G',
+    'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
+    'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k',
+    'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/', 'A', 'B', 'C',
+    'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
+    'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g',
+    'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+    'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+',
+    '/'
+};
 
 int evp_encodeblock_int_scalar(EVP_ENCODE_CTX *ctx, unsigned char *t,
-  const unsigned char *f, int dlen, int *wrap_cnt)
+                               const unsigned char *f, int dlen, int *wrap_cnt)
 {
     int i = 0;
     int ret = 0;
     uint8_t t1, t2, t3;
     const unsigned char *e0, *e1, *e2;
-    int srp = (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0);
+    int srp = (ctx != NULL
+               && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0);
     int wrap_cnt_by_input = *wrap_cnt / 4 * 3;
     const int ctx_length = (ctx != NULL) ? ctx->length : 0;
 
@@ -144,31 +146,31 @@ int evp_encodeblock_int_scalar(EVP_ENCODE_CTX *ctx, unsigned char *t,
         e2 = base64_std_bin2ascii_2;
     }
 
-    if (ctx_length == 1)
-    {
-        while (i < dlen && ret <= INT_MAX && ctx != NULL){ 
-                        t1 = f[i];
-                        *(t++) = e0[t1];
-                        *(t++) = e1[(t1 & 0x03) << 4];
-                        *(t++) = '=';
-                        *(t++) = '=';
-                        *(t++) = '\n';
-                        
-                        ret += 5;
-                        i++;
+    if (ctx_length == 1) {
+        while (i < dlen && ret <= INT_MAX && ctx != NULL) {
+            t1 = f[i];
+            *(t++) = e0[t1];
+            *(t++) = e1[(t1 & 0x03) << 4];
+            *(t++) = '=';
+            *(t++) = '=';
+            *(t++) = '\n';
+
+            ret += 5;
+            i++;
         }
 
         *t = '\0';
-        ret --;
+        ret--;
 
         return ret;
-    } 
-    else if (ctx_length % 3 != 0){
+    } else if (ctx_length % 3 != 0) {
         i = 0;
         int wrap_cnt_nm3 = 0;
         while (i + 2 < dlen && ret <= INT_MAX) {
-                if (ctx != NULL){
-                    if ((wrap_cnt_nm3 < ctx->length && (wrap_cnt_nm3 + 3 + wrap_cnt_by_input) > ctx->length) && ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
+            if (ctx != NULL) {
+                if ((wrap_cnt_nm3 < ctx->length
+                     && (wrap_cnt_nm3 + 3 + wrap_cnt_by_input) > ctx->length)
+                    && ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)) {
 
                     switch (ctx->length % 3) {
                     case 0:
@@ -179,7 +181,7 @@ int evp_encodeblock_int_scalar(EVP_ENCODE_CTX *ctx, unsigned char *t,
                         *(t++) = e1[(t1 & 0x03) << 4];
                         *(t++) = '=';
                         *(t++) = '=';
-                        
+
                         ret += 4;
                         i++;
                         break;
@@ -225,12 +227,12 @@ int evp_encodeblock_int_scalar(EVP_ENCODE_CTX *ctx, unsigned char *t,
             *(t++) = e2[t3];
             ret += 4;
 
-            if (ctx != NULL){
-                if ((i + 3 + wrap_cnt_by_input) % ctx->length == 0 && 
+            if (ctx != NULL) {
+                if ((i + 3 + wrap_cnt_by_input) % ctx->length == 0 &&
                     ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) &&
-                    ctx->length % 3 == 0 ) {
-                        *(t++) = '\n';
-                        ret++;
+                    ctx->length % 3 == 0) {
+                    *(t++) = '\n';
+                    ret++;
                 }
             }
         }
@@ -248,10 +250,10 @@ int evp_encodeblock_int_scalar(EVP_ENCODE_CTX *ctx, unsigned char *t,
 
         ret += 4;
 
-        if (ctx != NULL){
-            if ((i + 1 + wrap_cnt_by_input) % ctx->length == 0 && 
-                ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) && 
-                ctx->length % 3 == 0 ) {
+        if (ctx != NULL) {
+            if ((i + 1 + wrap_cnt_by_input) % ctx->length == 0 &&
+                ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) &&
+                ctx->length % 3 == 0) {
                 *(t++) = '\n';
                 ret++;
             }
@@ -267,18 +269,18 @@ int evp_encodeblock_int_scalar(EVP_ENCODE_CTX *ctx, unsigned char *t,
         *(t++) = '=';
         ret += 4;
 
-        if (ctx != NULL){
-            if ((i + 2 + wrap_cnt_by_input) % ctx->length == 0 && 
+        if (ctx != NULL) {
+            if ((i + 2 + wrap_cnt_by_input) % ctx->length == 0 &&
                 ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) &&
-                ctx->length % 3 == 0 ) {
-                    *(t++) = '\n';
-                    ret++;
+                ctx->length % 3 == 0) {
+                *(t++) = '\n';
+                ret++;
             }
         }
         break;
     }
 
-*t = '\0';
+    *t = '\0';
 
-return ret;
+    return ret;
 }
