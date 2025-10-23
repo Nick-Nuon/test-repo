@@ -1,12 +1,11 @@
-
-// /*
-//  * Copyright 2024 The OpenSSL Project Authors. All Rights Reserved.
-//  *
-//  * Licensed under the Apache License 2.0 (the "License").  You may not use
-//  * this file except in compliance with the License.  You can obtain a copy
-//  * in the file LICENSE in the source distribution or at
-//  * https://www.openssl.org/source/license.html
-//  */
+/*
+ * Copyright 2024 The OpenSSL Project Authors. All Rights Reserved.
+ *
+ * Licensed under the Apache License 2.0 (the "License").  You may not use
+ * this file except in compliance with the License.  You can obtain a copy
+ * in the file LICENSE in the source distribution or at
+ * https://www.openssl.org/source/license.html
+ */
 
 #include <stdio.h>
 #include "testutil.h"
@@ -16,7 +15,6 @@
 #include "evp_local.h"
 
 #define RED_TEXT(str)     "\033[31m" str "\033[0m"
-
 #define ASSERT_EQUAL_INT(actual, expected) do {                      \
     if ((actual) != (expected)) {                                      \
         TEST_error(RED_TEXT("Assertion failed: %s != %s, got %d, expected %d"), \
@@ -74,6 +72,7 @@
 static void fuzz_fill_encode_ctx(EVP_ENCODE_CTX *ctx, int max_fill)
 {
     static int seeded = 0;
+
     if (!seeded) {
         srand((unsigned)time(NULL));
         seeded = 1;
@@ -95,16 +94,15 @@ static int test_encode_line_lengths_reinforced(void)
     const int trials = 50;
     const int max_input_len = 3000;
     unsigned int seed = 12345;
-
-    // Generous output buffers (Update + Final + newlines), plus a guard byte
+    /* Generous output buffers (Update + Final + newlines), plus a guard byte */
     unsigned char out_simd[9000 * 2 + 1] = { 0 };
     unsigned char out_ref[9000 * 2 + 1] = { 0 };
 
     for (int t = 0; t < trials; t++) {
         int inl = rand_r(&seed) % max_input_len;
-
-        // Fresh random input
+        /* Fresh random input */
         unsigned char input[max_input_len];
+
         for (int i = 0; i < inl; i++)
             input[i] = (unsigned char)(rand_r(&seed) % 256);
 
@@ -112,18 +110,18 @@ static int test_encode_line_lengths_reinforced(void)
              partial_ctx_fill += 1) {
             for (int ctx_len = 1; ctx_len <= 80; ctx_len += 1) {
                 printf
-                    ("Trial %d, input length %d, ctx length %d, partial ctx fill %d\n",
-                     t + 1, inl, ctx_len, partial_ctx_fill);
+                ("Trial %d, input length %d, ctx length %d, partial ctx fill %d\n",
+                 t + 1, inl, ctx_len, partial_ctx_fill);
                 EVP_ENCODE_CTX *ctx_simd = EVP_ENCODE_CTX_new();
                 EVP_ENCODE_CTX *ctx_ref = EVP_ENCODE_CTX_new();
 
                 fuzz_fill_encode_ctx(ctx_simd, partial_ctx_fill);
 
-                memset(out_simd, 0xCC, sizeof(out_simd)); // poison to catch short writes
+                memset(out_simd, 0xCC, sizeof(out_simd)); /* poison to catch short writes */
                 memset(out_ref, 0xDD, sizeof(out_ref));
 
-                int outlen_simd = 0, outlen_ref = 0; // bytes produced by Update
-                int finlen_simd = 0, finlen_ref = 0; // bytes produced by Final
+                int outlen_simd = 0, outlen_ref = 0; /* bytes produced by Update */
+                int finlen_simd = 0, finlen_ref = 0; /* bytes produced by Final */
 
                 if (!ctx_simd || !ctx_ref) {
                     EVP_ENCODE_CTX_free(ctx_simd);
@@ -139,11 +137,11 @@ static int test_encode_line_lengths_reinforced(void)
 
                 for (int i = 0; i < 2; i++) {
                     if (i % 2 == 0) {
-                        // Turn SRP alphabet OFF
+                        /* Turn SRP alphabet OFF */
                         ctx_simd->flags &= ~EVP_ENCODE_CTX_USE_SRP_ALPHABET;
                         ctx_ref->flags &= ~EVP_ENCODE_CTX_USE_SRP_ALPHABET;
                     } else {
-                        // Turn SRP alphabet ON
+                        /* Turn SRP alphabet ON */
                         ctx_simd->flags |= EVP_ENCODE_CTX_USE_SRP_ALPHABET;
                         ctx_ref->flags |= EVP_ENCODE_CTX_USE_SRP_ALPHABET;
                     }
