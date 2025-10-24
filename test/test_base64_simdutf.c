@@ -92,16 +92,17 @@ static void fuzz_fill_encode_ctx(EVP_ENCODE_CTX *ctx, int max_fill)
 static int test_encode_line_lengths_reinforced(void)
 {
     const int trials = 50;
-    const int max_input_len = 3000;
+    #define MAX_INPUT_LEN 3000
+    // const int max_input_len = 3000;
     unsigned int seed = 12345;
     /* Generous output buffers (Update + Final + newlines), plus a guard byte */
     unsigned char out_simd[9000 * 2 + 1] = { 0 };
     unsigned char out_ref[9000 * 2 + 1] = { 0 };
 
     for (int t = 0; t < trials; t++) {
-        int inl = rand_r(&seed) % max_input_len;
+        int inl = rand_r(&seed) % MAX_INPUT_LEN;
         /* Fresh random input */
-        unsigned char input[max_input_len];
+        unsigned char input[MAX_INPUT_LEN];
 
         for (int i = 0; i < inl; i++)
             input[i] = (unsigned char)(rand_r(&seed) % 256);
