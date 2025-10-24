@@ -93,7 +93,6 @@ static int test_encode_line_lengths_reinforced(void)
 {
     const int trials = 50;
     #define MAX_INPUT_LEN 3000
-    // const int max_input_len = 3000;
     unsigned int seed = 12345;
     /* Generous output buffers (Update + Final + newlines), plus a guard byte */
     unsigned char out_simd[9000 * 2 + 1] = { 0 };
