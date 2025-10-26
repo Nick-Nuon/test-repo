@@ -36,31 +36,34 @@ jobs:
   Fuzzing:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository
+    - name: Checkout
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+
+    - name: Prepare source for cifuzz
+      run: |
+        sudo mkdir -p /src/openssl
+        sudo cp -a . /src/openssl
 
     - name: Build Fuzzers
       uses: google/oss-fuzz/infra/cifuzz/actions/build_fuzzers@master
       with:
         oss-fuzz-project-name: 'openssl'
         language: c
-        project-src-path: /github/workspace
+        project-src-path: /src/openssl
         dry-run: false
 
     - name: Run Fuzzers
       uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@master
       with:
         oss-fuzz-project-name: 'openssl'
-        language: c
-        project-src-path: /github/workspace
         fuzz-seconds: 600
         dry-run: false
 
     - name: Upload Crash
-      if: failure()
       uses: actions/upload-artifact@v4
+      if: failure()
       with:
         name: artifacts
         path: ./out/artifacts
