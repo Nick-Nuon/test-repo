@@ -688,6 +688,7 @@ jobs:
     - name: checkout fuzz/corpora and pkcs11-provider submodule
       run: |
         git config --global --add safe.directory /__w/openssl/openssl
+        git config --global --add safe.directory /__w/test-repo/test-repo
         git submodule update --init --depth 1 fuzz/corpora
         git submodule update --init --depth 1 pkcs11-provider
     - name: config
