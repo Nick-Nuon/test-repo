@@ -297,7 +297,7 @@ int EVP_EncodeUpdate_openssl(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                              const unsigned char *in, int inl)
 {
     int i, j;
-    size_t total = 0;
+    int total = 0;
 
     *outl = 0;
     if (inl <= 0)
