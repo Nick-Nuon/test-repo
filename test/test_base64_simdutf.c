@@ -105,14 +105,12 @@ static int test_encode_line_lengths_reinforced(void)
 
     for (int t = 0; t < trials; t++) {
         uint32_t r = next_u32(&seed);
-        int inl = rand_r(&seed) % MAX_INPUT_LEN;
-        // int inl = r % MAX_INPUT_LEN;
+        int inl = r % MAX_INPUT_LEN;
         /* Fresh random input */
         unsigned char input[MAX_INPUT_LEN];
 
         for (int i = 0; i < inl; i++)
-            input[i] = (unsigned char)(rand_r(&seed) % 256);
-            // input[i] = (unsigned char)(r % 256);
+            input[i] = (unsigned char)(r % 256);
 
         for (int partial_ctx_fill = 0; partial_ctx_fill <= 80;
              partial_ctx_fill += 1) {
