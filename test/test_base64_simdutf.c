@@ -153,7 +153,7 @@ static int evp_encodeblock_int_old(EVP_ENCODE_CTX *ctx, unsigned char *t,
 }
 
 
-int EVP_EncodeUpdate_old(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
+static int evp_encodeupdate_old(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
                              const unsigned char *in, int inl)
 {
     int i, j;
@@ -208,7 +208,7 @@ int EVP_EncodeUpdate_old(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     return 1;
 }
 
-void EVP_EncodeFinal_old(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
+static void evp_encodefinal_old(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
 {
     unsigned int ret = 0;
 
@@ -285,7 +285,7 @@ static int test_encode_line_lengths_reinforced(void)
                         EVP_EncodeUpdate(ctx_simd, out_simd, &outlen_simd,
                                          input, (int)inl);
                     int ret_ref =
-                        EVP_EncodeUpdate_old(ctx_ref, out_ref, &outlen_ref,
+                        evp_encodeupdate_old(ctx_ref, out_ref, &outlen_ref,
                                                  input, (int)inl);
 
                     ASSERT_EQUAL_INT(ret_simd, ret_ref);
@@ -294,7 +294,7 @@ static int test_encode_line_lengths_reinforced(void)
 
                     EVP_EncodeFinal(ctx_simd, out_simd + outlen_simd,
                                     &finlen_simd);
-                    EVP_EncodeFinal_old(ctx_ref, out_ref + outlen_ref,
+                    evp_encodefinal_old(ctx_ref, out_ref + outlen_ref,
                                             &finlen_ref);
 
                     int total_ref = outlen_ref + finlen_ref;
