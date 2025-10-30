@@ -94,6 +94,135 @@ static inline uint32_t next_u32(uint32_t *state) {
     return *state;
 }
 
+static const unsigned char data_bin2ascii[65] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+/* SRP uses a different base64 alphabet */
+static const unsigned char srpdata_bin2ascii[65] =
+    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz./";
+
+
+#ifndef CHARSET_EBCDIC
+# define conv_bin2ascii(a, table)       ((table)[(a)&0x3f])
+#else
+/*
+ * We assume that PEM encoded files are EBCDIC files (i.e., printable text
+ * files). Convert them here while decoding. When encoding, output is EBCDIC
+ * (text) format again. (No need for conversion in the conv_bin2ascii macro,
+ * as the underlying textstring data_bin2ascii[] is already EBCDIC)
+ */
+# define conv_bin2ascii(a, table)       ((table)[(a)&0x3f])
+#endif
+
+static int evp_encodeblock_int_old(EVP_ENCODE_CTX *ctx, unsigned char *t,
+                               const unsigned char *f, int dlen)
+{
+    int i, ret = 0;
+    unsigned long l;
+    const unsigned char *table;
+
+    if (ctx != NULL && (ctx->flags & EVP_ENCODE_CTX_USE_SRP_ALPHABET) != 0)
+        table = srpdata_bin2ascii;
+    else
+        table = data_bin2ascii;
+
+    for (i = dlen; i > 0; i -= 3) {
+        if (i >= 3) {
+            l = (((unsigned long)f[0]) << 16L) |
+                (((unsigned long)f[1]) << 8L) | f[2];
+            *(t++) = conv_bin2ascii(l >> 18L, table);
+            *(t++) = conv_bin2ascii(l >> 12L, table);
+            *(t++) = conv_bin2ascii(l >> 6L, table);
+            *(t++) = conv_bin2ascii(l, table);
+        } else {
+            l = ((unsigned long)f[0]) << 16L;
+            if (i == 2)
+                l |= ((unsigned long)f[1] << 8L);
+
+            *(t++) = conv_bin2ascii(l >> 18L, table);
+            *(t++) = conv_bin2ascii(l >> 12L, table);
+            *(t++) = (i == 1) ? '=' : conv_bin2ascii(l >> 6L, table);
+            *(t++) = '=';
+        }
+        ret += 4;
+        f += 3;
+    }
+
+    *t = '\0';
+    return ret;
+}
+
+
+int EVP_EncodeUpdate_old(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
+                             const unsigned char *in, int inl)
+{
+    int i, j;
+    int total = 0;
+
+    *outl = 0;
+    if (inl <= 0)
+        return 0;
+    OPENSSL_assert(ctx->length <= (int)sizeof(ctx->enc_data));
+    if (ctx->length - ctx->num > inl) {
+        memcpy(&(ctx->enc_data[ctx->num]), in, inl);
+        ctx->num += inl;
+        return 1;
+    }
+    if (ctx->num != 0) {
+        i = ctx->length - ctx->num;
+        memcpy(&(ctx->enc_data[ctx->num]), in, i);
+        in += i;
+        inl -= i;
+        j = evp_encodeblock_int_old(ctx, out, ctx->enc_data, ctx->length);
+        ctx->num = 0;
+        out += j;
+        total = j;
+        if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
+            *(out++) = '\n';
+            total++;
+        }
+        *out = '\0';
+    }
+    while (inl >= ctx->length && total <= INT_MAX) {
+        j = evp_encodeblock_int_old(ctx, out, in, ctx->length);
+        in += ctx->length;
+        inl -= ctx->length;
+        out += j;
+        total += j;
+        if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0) {
+            *(out++) = '\n';
+            total++;
+        }
+        *out = '\0';
+    }
+    if (total > INT_MAX) {
+        /* Too much output data! */
+        *outl = 0;
+        return 0;
+    }
+    if (inl != 0)
+        memcpy(&(ctx->enc_data[0]), in, inl);
+    ctx->num = inl;
+    *outl = total;
+
+    return 1;
+}
+
+void EVP_EncodeFinal_old(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
+{
+    unsigned int ret = 0;
+
+    if (ctx->num != 0) {
+        ret = evp_encodeblock_int_old(ctx, out, ctx->enc_data, ctx->num);
+        if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)
+            out[ret++] = '\n';
+        out[ret] = '\0';
+        ctx->num = 0;
+    }
+    *outl = ret;
+}
+
+
 static int test_encode_line_lengths_reinforced(void)
 {
     const int trials = 50;
@@ -156,7 +285,7 @@ static int test_encode_line_lengths_reinforced(void)
                         EVP_EncodeUpdate(ctx_simd, out_simd, &outlen_simd,
                                          input, (int)inl);
                     int ret_ref =
-                        EVP_EncodeUpdate_openssl(ctx_ref, out_ref, &outlen_ref,
+                        EVP_EncodeUpdate_old(ctx_ref, out_ref, &outlen_ref,
                                                  input, (int)inl);
 
                     ASSERT_EQUAL_INT(ret_simd, ret_ref);
@@ -165,7 +294,7 @@ static int test_encode_line_lengths_reinforced(void)
 
                     EVP_EncodeFinal(ctx_simd, out_simd + outlen_simd,
                                     &finlen_simd);
-                    EVP_EncodeFinal_openssl(ctx_ref, out_ref + outlen_ref,
+                    EVP_EncodeFinal_old(ctx_ref, out_ref + outlen_ref,
                                             &finlen_ref);
 
                     int total_ref = outlen_ref + finlen_ref;
