@@ -14,15 +14,20 @@
 #include "crypto/evp.h"
 #include "evp_local.h"
 
-#define RED_TEXT(str)     "\033[31m" str "\033[0m"
-#define ASSERT_EQUAL_INT(actual, expected) do {                      \
-    if ((actual) != (expected)) {                                      \
-        TEST_error(RED_TEXT("Assertion failed: %s != %s, got %d, expected %d"), \
-                   #actual, #expected, (int)(actual), (int)(expected));\
-        return 0;                                                    \
-    }                                                                \
-} while(0)
-
+#define MAX_INPUT_LEN 3000
+#define RED_TEXT(str) "\033[31m" str "\033[0m"
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+#define ASSERT_EQUAL_INT(actual, expected)                                   \
+    do {                                                                     \
+        if ((actual) != (expected)) {                                        \
+            TEST_error(RED_TEXT("Assertion failed: %s != %s, got %d, "       \
+                                "expected %d"),                              \
+                       STR(actual), STR(expected),                           \
+                       (int)(actual), (int)(expected));                      \
+            return 0;                                                        \
+        }                                                                    \
+    } while (0)
 #define ASSERT_MEM_EQUAL(expected, actual, len)                                          \
     do {                                                                                 \
         const unsigned char *_exp = (const unsigned char *)(expected);                   \
@@ -44,9 +49,11 @@
                     printf("\033[31m%02x\033[0m ", (unsigned)_exp[_i]);                  \
                 else                                                                     \
                     printf("%02x ", (unsigned)_exp[_i]);                                 \
-                if ((_i + 1) % 16 == 0) printf("\n");                                    \
+                if ((_i + 1) % 16 == 0)                                                  \
+                    printf("\n");                                                        \
             }                                                                            \
-            if (_n % 16) printf("\n");                                                   \
+            if (_n % 16)                                                                 \
+                printf("\n");                                                            \
                                                                                          \
             printf("*************************************\n");                           \
             printf("Actual buffer:\n");                                                  \
@@ -55,9 +62,11 @@
                     printf("\033[31m%02x\033[0m ", (unsigned)_act[_i]);                  \
                 else                                                                     \
                     printf("%02x ", (unsigned)_act[_i]);                                 \
-                if ((_i + 1) % 16 == 0) printf("\n");                                    \
+                if ((_i + 1) % 16 == 0)                                                  \
+                    printf("\n");                                                        \
             }                                                                            \
-            if (_n % 16) printf("\n");                                                   \
+            if (_n % 16)                                                                 \
+                printf("\n");                                                            \
                                                                                          \
             if (_mismatch_index != (size_t)-1) {                                         \
                 printf("Mismatch at index %zu: got \033[31m%02x\033[0m, "                \
@@ -81,15 +90,13 @@ static void fuzz_fill_encode_ctx(EVP_ENCODE_CTX *ctx, int max_fill)
     int num = rand() % (max_fill + 1);
     ctx->num = num;
 
-    for (int i = 0; i < num; i++) {
+    for (int i = 0; i < num; i++)
         ctx->enc_data[i] = (unsigned char)(rand() & 0xFF);
-    }
-
     ctx->length = (rand() % 80) + 1;
     ctx->line_num = rand() % (ctx->length + 1);
 }
-
-static inline uint32_t next_u32(uint32_t *state) {
+static inline uint32_t next_u32(uint32_t *state)
+{
     *state = (*state * 1664525u) + 1013904223u;
     return *state;
 }
@@ -100,10 +107,8 @@ static const unsigned char data_bin2ascii[65] =
 /* SRP uses a different base64 alphabet */
 static const unsigned char srpdata_bin2ascii[65] =
     "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz./";
-
-
 #ifndef CHARSET_EBCDIC
-# define conv_bin2ascii(a, table)       ((table)[(a)&0x3f])
+#define conv_bin2ascii(a, table) ((table)[(a)& 0x3f])
 #else
 /*
  * We assume that PEM encoded files are EBCDIC files (i.e., printable text
@@ -111,11 +116,11 @@ static const unsigned char srpdata_bin2ascii[65] =
  * (text) format again. (No need for conversion in the conv_bin2ascii macro,
  * as the underlying textstring data_bin2ascii[] is already EBCDIC)
  */
-# define conv_bin2ascii(a, table)       ((table)[(a)&0x3f])
+#define conv_bin2ascii(a, table) ((table)[(a)& 0x3f])
 #endif
 
 static int evp_encodeblock_int_old(EVP_ENCODE_CTX *ctx, unsigned char *t,
-                               const unsigned char *f, int dlen)
+                                   const unsigned char *f, int dlen)
 {
     int i, ret = 0;
     unsigned long l;
@@ -151,10 +156,8 @@ static int evp_encodeblock_int_old(EVP_ENCODE_CTX *ctx, unsigned char *t,
     *t = '\0';
     return ret;
 }
-
-
 static int evp_encodeupdate_old(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
-                             const unsigned char *in, int inl)
+                                const unsigned char *in, int inl)
 {
     int i, j;
     int total = 0;
@@ -221,12 +224,9 @@ static void evp_encodefinal_old(EVP_ENCODE_CTX *ctx, unsigned char *out, int *ou
     }
     *outl = ret;
 }
-
-
 static int test_encode_line_lengths_reinforced(void)
 {
     const int trials = 50;
-    #define MAX_INPUT_LEN 3000
     uint32_t seed = 12345;
     /* Generous output buffers (Update + Final + newlines), plus a guard byte */
     unsigned char out_simd[9000 * 2 + 1] = { 0 };
@@ -286,7 +286,7 @@ static int test_encode_line_lengths_reinforced(void)
                                          input, (int)inl);
                     int ret_ref =
                         evp_encodeupdate_old(ctx_ref, out_ref, &outlen_ref,
-                                                 input, (int)inl);
+                                             input, (int)inl);
 
                     ASSERT_EQUAL_INT(ret_simd, ret_ref);
                     ASSERT_MEM_EQUAL(out_ref, out_simd, outlen_ref);
@@ -295,7 +295,7 @@ static int test_encode_line_lengths_reinforced(void)
                     EVP_EncodeFinal(ctx_simd, out_simd + outlen_simd,
                                     &finlen_simd);
                     evp_encodefinal_old(ctx_ref, out_ref + outlen_ref,
-                                            &finlen_ref);
+                                        &finlen_ref);
 
                     int total_ref = outlen_ref + finlen_ref;
 
