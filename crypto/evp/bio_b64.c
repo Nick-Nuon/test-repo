@@ -401,13 +401,15 @@ static int b64_write(BIO *b, const char *in, int inl)
     unsigned char *encoded = ctx->encoded_buf;
 
     if (encoded == NULL) {
-       ERR_raise(ERR_LIB_BIO, ERR_R_MALLOC_FAILURE);
-    return -1;
+        ERR_raise(ERR_LIB_BIO, ERR_R_MALLOC_FAILURE);
+        return -1;
     }
-    int n_bytes_enc =0;
+    int n_bytes_enc = 0;
     if (!EVP_EncodeUpdate(ctx->base64, encoded, &n_bytes_enc,
-                            (unsigned char *)in, inl)) {
-        return ret == 0 ? -1 : ret;
+                          (unsigned char *)in, inl)) {
+        if (ret == 0)
+            return -1;
+        return ret;
     }
     ret += inl;
     i = BIO_write(next, encoded, n_bytes_enc);

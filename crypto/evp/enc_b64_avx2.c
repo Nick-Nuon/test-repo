@@ -473,12 +473,10 @@ int encode_base64_avx2(EVP_ENCODE_CTX *ctx, unsigned char *dst,
             _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 6));
         const __m128i hi3 =
             _mm_loadu_si128((const __m128i *)(input + i + 4 * 3 * 7));
-
         __m256i in0 = _mm256_shuffle_epi8(_mm256_set_m128i(hi0, lo0), shuf);
         __m256i in1 = _mm256_shuffle_epi8(_mm256_set_m128i(hi1, lo1), shuf);
         __m256i in2 = _mm256_shuffle_epi8(_mm256_set_m128i(hi2, lo2), shuf);
         __m256i in3 = _mm256_shuffle_epi8(_mm256_set_m128i(hi3, lo3), shuf);
-
         const __m256i t0_0 =
             _mm256_and_si256(in0, _mm256_set1_epi32(0x0fc0fc00));
         const __m256i t0_1 =
@@ -487,7 +485,6 @@ int encode_base64_avx2(EVP_ENCODE_CTX *ctx, unsigned char *dst,
             _mm256_and_si256(in2, _mm256_set1_epi32(0x0fc0fc00));
         const __m256i t0_3 =
             _mm256_and_si256(in3, _mm256_set1_epi32(0x0fc0fc00));
-
         const __m256i t1_0 =
             _mm256_mulhi_epu16(t0_0, _mm256_set1_epi32(0x04000040));
         const __m256i t1_1 =
@@ -496,7 +493,6 @@ int encode_base64_avx2(EVP_ENCODE_CTX *ctx, unsigned char *dst,
             _mm256_mulhi_epu16(t0_2, _mm256_set1_epi32(0x04000040));
         const __m256i t1_3 =
             _mm256_mulhi_epu16(t0_3, _mm256_set1_epi32(0x04000040));
-
         const __m256i t2_0 =
             _mm256_and_si256(in0, _mm256_set1_epi32(0x003f03f0));
         const __m256i t2_1 =
@@ -505,7 +501,6 @@ int encode_base64_avx2(EVP_ENCODE_CTX *ctx, unsigned char *dst,
             _mm256_and_si256(in2, _mm256_set1_epi32(0x003f03f0));
         const __m256i t2_3 =
             _mm256_and_si256(in3, _mm256_set1_epi32(0x003f03f0));
-
         const __m256i t3_0 =
             _mm256_mullo_epi16(t2_0, _mm256_set1_epi32(0x01000010));
         const __m256i t3_1 =
@@ -514,12 +509,10 @@ int encode_base64_avx2(EVP_ENCODE_CTX *ctx, unsigned char *dst,
             _mm256_mullo_epi16(t2_2, _mm256_set1_epi32(0x01000010));
         const __m256i t3_3 =
             _mm256_mullo_epi16(t2_3, _mm256_set1_epi32(0x01000010));
-
         const __m256i input0 = _mm256_or_si256(t1_0, t3_0);
         const __m256i input1 = _mm256_or_si256(t1_1, t3_1);
         const __m256i input2 = _mm256_or_si256(t1_2, t3_2);
         const __m256i input3 = _mm256_or_si256(t1_3, t3_3);
-
         __m256i vec0;
         __m256i vec1;
         __m256i vec2;
@@ -661,8 +654,8 @@ int encode_base64_avx2(EVP_ENCODE_CTX *ctx, unsigned char *dst,
     }
 
     return (size_t)(out - (uint8_t *)dst) +
-        +evp_encodeblock_int_scalar(ctx, out, src + i, srclen - i,
-                                    final_wrap_cnt);
+        +evp_encodeblock_int(ctx, out, src + i, srclen - i,
+                             final_wrap_cnt);
 }
 
 #endif

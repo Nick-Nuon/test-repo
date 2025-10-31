@@ -22,12 +22,10 @@
 
 static unsigned char conv_ascii2bin(unsigned char a,
                                     const unsigned char *table);
-int evp_encodeblock_int_scalar(EVP_ENCODE_CTX *ctx, unsigned char *t,
-                               const unsigned char *f, int dlen, int *wrap_cnt);
+int evp_encodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
+                        const unsigned char *f, int dlen, int *wrap_cnt);
 static int evp_decodeblock_int(EVP_ENCODE_CTX *ctx, unsigned char *t,
                                const unsigned char *f, int n, int eof);
-
-
 /*-
  * 64 char lines
  * pad input with 0
@@ -166,9 +164,10 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
         memcpy(&(ctx->enc_data[ctx->num]), in, i);
         in += i;
         inl -= i;
-        /* ending newline is handled inside evp_encodeblock_int_scalar */
+        /* ending newline is handled inside evp_encodeblock_int */
         int wrap_cnt = 0;
-        j = evp_encodeblock_int_scalar(ctx, out, ctx->enc_data, ctx->length,&wrap_cnt);
+        j = evp_encodeblock_int(ctx, out, ctx->enc_data, ctx->length,
+                                &wrap_cnt);
         ctx->num = 0;
         out += j;
         total = j;
@@ -176,19 +175,20 @@ int EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
     }
     int wrap_cnt = 0;
     if (ctx->length % 3 != 0) {
-        j = evp_encodeblock_int_scalar(ctx, out, in, inl - (inl % ctx->length),
-                                       &wrap_cnt);
+        j = evp_encodeblock_int(ctx, out, in, inl - (inl % ctx->length),
+                                &wrap_cnt);
     } else {
 #ifdef __AVX2__
         const int newlines =
             !(ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) ? ctx->length : 0;
+
         j = encode_base64_avx2(ctx,
                                (unsigned char *)out,
                                (const unsigned char *)in,
                                inl - (inl % ctx->length), newlines, &wrap_cnt);
 #else
-        j = evp_encodeblock_int_scalar(ctx, out, in, inl - (inl % ctx->length),
-                                       &wrap_cnt);
+        j = evp_encodeblock_int(ctx, out, in, inl - (inl % ctx->length),
+                                &wrap_cnt);
 #endif
     }
     in += inl - (inl % ctx->length);
@@ -217,9 +217,10 @@ void EVP_EncodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl)
 {
     unsigned int ret = 0;
     int wrap_cnt = 0;
+
     if (ctx->num != 0) {
-        ret =
-            evp_encodeblock_int_scalar(ctx, out, ctx->enc_data, ctx->num,&wrap_cnt);
+        ret = evp_encodeblock_int(ctx, out, ctx->enc_data, ctx->num,
+                                  &wrap_cnt);
         if ((ctx->flags & EVP_ENCODE_CTX_NO_NEWLINES) == 0)
             out[ret++] = '\n';
         out[ret] = '\0';
@@ -235,7 +236,7 @@ int EVP_EncodeBlock(unsigned char *t, const unsigned char *f, int dlen)
 #ifdef __AVX2__
     return encode_base64_avx2(NULL, t, f, dlen, 0, &wrap_cnt);
 #else
-    return evp_encodeblock_int_scalar(NULL, t, f, dlen, &wrap_cnt);
+    return evp_encodeblock_int(NULL, t, f, dlen, &wrap_cnt);
 #endif
 }
 
@@ -284,7 +285,7 @@ int EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl,
             eof++;
     }
 
-    /* Legacy behaviour: an empty input chunk signals end of input. */
+     /* Legacy behaviour: an empty input chunk signals end of input. */
     if (inl == 0) {
         rv = 0;
         goto end;
