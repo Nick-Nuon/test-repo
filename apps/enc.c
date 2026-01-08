@@ -50,7 +50,8 @@ typedef enum OPTION_choice {
     OPT_A, OPT_Z, OPT_BUFSIZE, OPT_K, OPT_KFILE, OPT_UPPER_K, OPT_NONE,
     OPT_UPPER_S, OPT_IV, OPT_MD, OPT_ITER, OPT_PBKDF2, OPT_CIPHER,
     OPT_SALTLEN, OPT_R_ENUM, OPT_PROV_ENUM,
-    OPT_SKEYOPT, OPT_SKEYMGMT
+    OPT_SKEYOPT, OPT_SKEYMGMT,
+    OPT_UPPER_NL
 } OPTION_CHOICE;
 
 const OPTIONS enc_options[] = {
@@ -62,6 +63,8 @@ const OPTIONS enc_options[] = {
 #endif
     {"e", OPT_E, '-', "Encrypt"},
     {"d", OPT_D, '-', "Decrypt"},
+    {"D",      OPT_D, '-', "Decrypt (alias to -d)"},
+    {"decode", OPT_D, '-', "Decrypt (alias to -d)"},
     {"p", OPT_P, '-', "Print the iv/key"},
     {"P", OPT_UPPER_P, '-', "Print the iv/key and exit"},
 #ifndef OPENSSL_NO_ENGINE
@@ -80,7 +83,9 @@ const OPTIONS enc_options[] = {
     {"a", OPT_A, '-', "Base64 encode/decode, depending on encryption flag"},
     {"base64", OPT_A, '-', "Same as option -a"},
     {"A", OPT_UPPER_A, '-',
-     "Used with -[base64|a] to specify base64 buffer as a single line"},
+     "Used with -[base64|a] to specify base64 buffer as a single line.Deprecated: now the default. The arg itself is kept for backward compatibility but otherwise does nothing."},
+    {"NL", OPT_UPPER_NL, '-',
+     "Used with -[base64|a]. Takes line breaks into account to ensure compability with PEM and S/MIME format"},
 
     OPT_SECTION("Encryption"),
     {"nopad", OPT_NOPAD, '-', "Disable standard block padding"},
@@ -132,7 +137,8 @@ int enc_main(int argc, char **argv)
     const char *ciphername = NULL;
     char mbuf[sizeof(magic) - 1];
     OPTION_CHOICE o;
-    int bsize = BSIZE, verbose = 0, debug = 0, olb64 = 0, nosalt = 0;
+    int bsize = BSIZE, verbose = 0, debug = 0, nosalt = 0;
+    int nl = 0;
     int enc = 1, printkey = 0, i, k;
     int base64 = 0, informat = FORMAT_BINARY, outformat = FORMAT_BINARY;
     int ret = 1, inl, nopad = 0;
@@ -201,7 +207,7 @@ int enc_main(int argc, char **argv)
             goto end;
         case OPT_E:
             enc = 1;
-            break;
+            break;//
         case OPT_IN:
             infile = opt_arg();
             break;
@@ -239,7 +245,9 @@ int enc_main(int argc, char **argv)
             printkey = 2;
             break;
         case OPT_UPPER_A:
-            olb64 = 1;
+            break;
+        case OPT_UPPER_NL:
+            nl = 1;
             break;
         case OPT_A:
             base64 = 1;
@@ -507,7 +515,7 @@ int enc_main(int argc, char **argv)
             BIO_set_callback_ex(b64, BIO_debug_callback_ex);
             BIO_set_callback_arg(b64, (char *)bio_err);
         }
-        if (olb64)
+        if (!nl)
             BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
         if (enc)
             wbio = BIO_push(b64, wbio);
